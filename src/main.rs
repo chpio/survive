@@ -1,9 +1,9 @@
+mod objects;
+
 use avian2d::prelude::*;
 use bevy::{dev_tools::fps_overlay, prelude::*, window};
 use bevy_ecs_tiled::prelude::*;
 use std::time::Duration;
-
-mod objects;
 
 fn main() {
     App::new()
@@ -36,7 +36,11 @@ fn main() {
         .add_plugins(TiledPhysicsPlugin::<TiledPhysicsAvianBackend>::default())
         .add_plugins(PhysicsPlugins::default().with_length_unit(100.0))
         .add_plugins(PhysicsDebugPlugin::default())
-        .add_plugins((objects::well::Plugin, objects::player::Plugin))
+        .add_plugins((
+            objects::enemy::Plugin,
+            objects::player::Plugin,
+            objects::well::Plugin,
+        ))
         .run();
 }
 
@@ -53,10 +57,10 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 
     commands.spawn((
-        RigidBody::Dynamic,
         objects::player::Player,
-        Name::new("PlayerControlledObject (Avian2D physics)"),
-        Collider::circle(10.),
+        Name::new("Player"),
+        Collider::circle(5.),
+        RigidBody::Dynamic,
         LockedAxes::ROTATION_LOCKED,
         Transform::from_xyz(50., -50., 0.),
     ));

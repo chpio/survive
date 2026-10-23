@@ -13,19 +13,19 @@ fn move_player(
     let mut direction = Vec2::ZERO;
 
     if keyboard_input.pressed(KeyCode::KeyD) {
-        direction += Vec2::new(1.0, 0.0);
+        direction.x += 1.;
     }
 
     if keyboard_input.pressed(KeyCode::KeyA) {
-        direction += Vec2::new(-1.0, 0.0);
+        direction.x += -1.;
     }
 
     if keyboard_input.pressed(KeyCode::KeyW) {
-        direction += Vec2::new(0.0, 1.0);
+        direction.y += 1.;
     }
 
     if keyboard_input.pressed(KeyCode::KeyS) {
-        direction += Vec2::new(0.0, -1.0);
+        direction.y += -1.;
     }
 
     let new_vel = direction.normalize_or_zero() * MOVE_SPEED;
