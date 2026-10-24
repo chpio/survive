@@ -1,7 +1,11 @@
 mod objects;
 
 use avian2d::prelude::*;
-use bevy::{dev_tools::fps_overlay, prelude::*, window};
+use bevy::{
+    dev_tools::{fps_overlay, render_debug},
+    prelude::*,
+    window,
+};
 use bevy_ecs_tiled::prelude::*;
 use std::time::Duration;
 
@@ -18,7 +22,9 @@ fn main() {
                     }),
                     ..default()
                 })
-                .set(ImagePlugin::default_nearest()),
+                .set(ImagePlugin::default_nearest())
+                // enabled by the `render_dev_tools` feature (needed for the fps overlay), but requires bevy_pbr
+                .disable::<render_debug::RenderDebugOverlayPlugin>(),
         )
         .add_plugins(fps_overlay::FpsOverlayPlugin {
             config: fps_overlay::FpsOverlayConfig {
@@ -35,7 +41,7 @@ fn main() {
         .insert_resource(Gravity::ZERO)
         .add_plugins(TiledPhysicsPlugin::<TiledPhysicsAvianBackend>::default())
         .add_plugins(PhysicsPlugins::default().with_length_unit(100.0))
-        .add_plugins(PhysicsDebugPlugin::default())
+        .add_plugins(PhysicsDebugPlugin)
         .add_plugins((
             objects::enemy::Plugin,
             objects::player::Plugin,
@@ -89,7 +95,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
                         .or_else(|| {
                             obj.get_tile()
                                 .and_then(|obj_tile| obj_tile.get_tile())
-                                .and_then(|tile| tile.user_type.clone())
+                                .map(|tile| tile.user_type.clone())
                                 .filter(|t| !t.is_empty())
                         });
 
