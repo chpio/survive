@@ -51,10 +51,7 @@ struct UiDocument {
     started: Instant,
     cursor: Vec2,
     buttons: MouseEventButtons,
-    player_health: Signal<Option<Health>>,
-    enemy_count: Signal<usize>,
-    flow_field_grid: Signal<Option<f32>>,
-    show_colliders: Signal<bool>,
+    state: Signal<hud::State>,
     actions: mpsc::Receiver<hud::Action>,
 }
 
@@ -72,21 +69,8 @@ struct VelloRenderer(Mutex<vello::Renderer>);
 fn setup(world: &mut World) {
     let (action_tx, action_rx) = mpsc::channel();
     let vdom = VirtualDom::new(hud::app).with_root_context(action_tx);
-    let (player_health, enemy_count, flow_field_grid, show_colliders) =
-        vdom.in_scope(ScopeId::ROOT, || {
-            (
-                Signal::new(None),
-                Signal::new(0),
-                Signal::new(None),
-                Signal::new(false),
-            )
-        });
-    vdom.provide_root_context(hud::State {
-        player_health,
-        enemy_count,
-        flow_field_grid,
-        show_colliders,
-    });
+    let state = vdom.in_scope(ScopeId::ROOT, || Signal::new(hud::State::default()));
+    vdom.provide_root_context(state);
 
     let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
     doc.initial_build();
@@ -96,10 +80,7 @@ fn setup(world: &mut World) {
         started: Instant::now(),
         cursor: Vec2::ZERO,
         buttons: MouseEventButtons::None,
-        player_health,
-        enemy_count,
-        flow_field_grid,
-        show_colliders,
+        state,
         actions: action_rx,
     });
 
@@ -220,33 +201,20 @@ fn sync_state(
         }
     }
 
-    let health = player.single().ok().copied();
-    let count = enemies.iter().count();
-    let grid = flow_field_debug
-        .grid
-        .and_then(|i| flow_field.grids().get(i))
-        .map(|grid| grid.clearance());
-    let colliders_shown = gizmos.config::<PhysicsGizmos>().0.enabled;
-    let (mut player_health, mut enemy_count, mut flow_field_grid, mut show_colliders) = (
-        ui.player_health,
-        ui.enemy_count,
-        ui.flow_field_grid,
-        ui.show_colliders,
-    );
-    ui.doc.vdom.in_scope(ScopeId::ROOT, || {
-        if *player_health.peek() != health {
-            player_health.set(health);
-        }
-        if *enemy_count.peek() != count {
-            enemy_count.set(count);
-        }
-        if *flow_field_grid.peek() != grid {
-            flow_field_grid.set(grid);
-        }
-        if *show_colliders.peek() != colliders_shown {
-            show_colliders.set(colliders_shown);
-        }
-    });
+    let new_state = hud::State {
+        player_health: player.single().ok().copied(),
+        enemy_count: enemies.iter().count(),
+        flow_field_grid: flow_field_debug
+            .grid
+            .and_then(|i| flow_field.grids().get(i))
+            .map(|grid| grid.clearance()),
+        show_colliders: gizmos.config::<PhysicsGizmos>().0.enabled,
+    };
+    let mut state = ui.state;
+    // only on changes, since setting the signal re-renders the HUD
+    if *state.peek() != new_state {
+        ui.doc.vdom.in_scope(ScopeId::ROOT, || state.set(new_state));
+    }
 }
 
 fn paint_ui(
