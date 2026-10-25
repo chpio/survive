@@ -34,7 +34,7 @@ impl Health {
 #[derive(Component, Clone, Debug)]
 pub struct Attack {
     pub damage: f32,
-    /// Radius in px around the attacker's center. Targets whose collider overlaps it are hit.
+    /// Distance in px from the attacker's center up to which targets' colliders are hit
     pub reach: f32,
     /// Impulse in mass · px/s that pushes each target away from the attacker
     pub knockback: f32,
@@ -56,40 +56,36 @@ impl Attack {
     }
 }
 
-/// Units with `Attacker` hit units with `Target` that are in reach.
+/// Units with `Attacker` hit units with `Target` that are in reach. There are few attackers or
+/// few targets (the player on one side), so checking every pair is cheap.
 fn attack<Attacker: Component, Target: Component>(
     time: Res<Time>,
-    spatial_query: SpatialQuery,
-    mut attackers: Query<(Entity, &Transform, &mut Attack), With<Attacker>>,
-    mut targets: Query<(&Transform, &mut Health, Forces), (With<Target>, Without<Attacker>)>,
+    mut attackers: Query<(&Transform, &mut Attack), With<Attacker>>,
+    mut targets: Query<
+        (&Transform, &Collider, &mut Health, Forces),
+        (With<Target>, Without<Attacker>),
+    >,
 ) {
-    for (entity, transform, mut attack) in &mut attackers {
+    for (transform, mut attack) in &mut attackers {
         attack.cooldown.tick(time.delta());
         if !attack.cooldown.is_finished() {
             continue;
         }
 
         let position = transform.translation.xy();
-        let hits: Vec<_> = spatial_query
-            .shape_intersections(
-                &Collider::circle(attack.reach),
-                position,
-                0.,
-                &SpatialQueryFilter::default().with_excluded_entities([entity]),
-            )
-            .into_iter()
-            .filter(|&hit| targets.contains(hit))
-            .collect();
-        if hits.is_empty() {
-            continue;
-        }
+        for (target_transform, collider, mut health, mut forces) in &mut targets {
+            let target_position = target_transform.translation.xy();
+            // units don't rotate, enemies only turn their visible body
+            let distance =
+                collider.distance_to_point(target_position, Rotation::IDENTITY, position, true);
+            if distance > attack.reach {
+                continue;
+            }
 
-        attack.cooldown.reset();
-        for hit in hits {
-            let (target_transform, mut health, mut forces) = targets.get_mut(hit).unwrap();
+            attack.cooldown.reset();
             health.current = (health.current - attack.damage).max(0.);
             // units on the same spot are pushed in any direction
-            let away = (target_transform.translation.xy() - position)
+            let away = (target_position - position)
                 .try_normalize()
                 .unwrap_or(Vec2::X);
             forces.apply_linear_impulse(away * attack.knockback);
