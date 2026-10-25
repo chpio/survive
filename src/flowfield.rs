@@ -1,8 +1,9 @@
 //! Flow field towards the player, used by enemies to walk around obstacles.
 //!
 //! The map is divided into a grid of square cells. Cells an enemy can't stand in without
-//! overlapping a static, solid collider are blocked. A Dijkstra search from the player's cell stores the walking distance to the player in
-//! every free cell, and units follow the decreasing distance. Units with a free line of sight to
+//! overlapping a static, solid collider are blocked. A Dijkstra search from the player's cell
+//! stores the walking distance to the player in every free cell, and units follow the decreasing
+//! distance. Since larger enemies don't fit through every gap, there is one grid per enemy size. Units with a free line of sight to
 //! the player walk straight towards them instead, since the eight directions between cells would
 //! otherwise bend their path.
 
@@ -13,11 +14,8 @@ use bevy_ecs_tiled::prelude::*;
 use std::{cmp::Reverse, collections::BinaryHeap};
 
 /// Edge length of a cell in pixels (a quarter tile). Small enough that a corridor one tile wide
-/// still has free cells after the obstacles around it are inflated by [`CLEARANCE`].
+/// still has free cells for small enemies after the obstacles around it are inflated.
 pub const CELL_SIZE: f32 = 4.;
-
-/// Distance an enemy's center keeps from obstacles, so paths only lead through gaps it fits in.
-pub const CLEARANCE: f32 = enemy::SHAPE.radius;
 
 /// Cost of a straight and a diagonal step between cells (roughly 1 : √2).
 const STRAIGHT_COST: u32 = 10;
@@ -36,10 +34,13 @@ const NEIGHBORS: [IVec2; 8] = [
 
 #[derive(Resource, Default)]
 pub struct FlowField {
-    grid: Option<Grid>,
+    /// One grid per enemy size, empty until a map is loaded
+    grids: Vec<(enemy::Size, Grid)>,
 }
 
 pub struct Grid {
+    /// Distance a unit's center keeps from obstacles, so paths only lead through gaps it fits in
+    clearance: f32,
     /// World position of the bottom-left corner of the grid
     origin: Vec2,
     size: IVec2,
@@ -53,11 +54,12 @@ pub struct Grid {
 
 impl Grid {
     /// Grid covering the area from `origin` (bottom-left corner) to `origin + world_size`, with
-    /// no obstacles and no target.
-    pub fn new(origin: Vec2, world_size: Vec2) -> Self {
+    /// no obstacles and no target, for units keeping `clearance` from obstacles.
+    pub fn new(origin: Vec2, world_size: Vec2, clearance: f32) -> Self {
         let size = (world_size / CELL_SIZE).ceil().as_ivec2();
         let len = (size.x * size.y) as usize;
         Self {
+            clearance,
             origin,
             size,
             blocked: vec![false; len],
@@ -84,9 +86,9 @@ impl Grid {
         self.index(cell).map_or(u32::MAX, |i| self.distance[i])
     }
 
-    /// Blocks all cells whose center is closer than [`CLEARANCE`] to `obstacle`.
+    /// Blocks all cells whose center is closer than the clearance to `obstacle`.
     pub fn block(&mut self, obstacle: Rect) {
-        let obstacle = obstacle.inflate(CLEARANCE);
+        let obstacle = obstacle.inflate(self.clearance);
         // cells whose center lies in the inflated rect
         let min = ((obstacle.min - self.origin) / CELL_SIZE - 0.5)
             .ceil()
@@ -214,15 +216,16 @@ impl Grid {
 }
 
 impl FlowField {
-    /// Direction to walk at `position` to reach the player. `None` if the position is outside
-    /// the map, at the player, or the player can't be reached from there.
-    pub fn direction(&self, position: Vec2) -> Option<Vec2> {
-        self.grid.as_ref()?.direction(position)
+    /// Direction for an enemy of `size` to walk at `position` to reach the player. `None` if the
+    /// position is outside the map, at the player, or the player can't be reached from there.
+    pub fn direction(&self, position: Vec2, size: enemy::Size) -> Option<Vec2> {
+        let (_, grid) = self.grids.iter().find(|(s, _)| *s == size)?;
+        grid.direction(position)
     }
 }
 
-/// Creates the grid when a map is (re)loaded, covering the whole map.
-fn create_grid(
+/// Creates the grids when a map is (re)loaded, covering the whole map.
+fn create_grids(
     mut map_created: MessageReader<TiledEvent<MapCreated>>,
     maps: Query<(&Transform, &TilemapAnchor)>,
     assets: Res<Assets<TiledMapAsset>>,
@@ -236,10 +239,16 @@ fn create_grid(
         };
         let bottom_left =
             asset.world_space_from_tiled_position(anchor, Vec2::new(0., asset.rect.height()));
-        flow_field.grid = Some(Grid::new(
-            transform.translation.xy() + bottom_left,
-            asset.rect.size(),
-        ));
+        flow_field.grids = enemy::Size::ALL
+            .map(|size| {
+                let grid = Grid::new(
+                    transform.translation.xy() + bottom_left,
+                    asset.rect.size(),
+                    size.radius(),
+                );
+                (size, grid)
+            })
+            .into();
     }
 }
 
@@ -250,26 +259,25 @@ fn update_flow_field(
     obstacles: Query<(Ref<ColliderAabb>, &RigidBody), Without<Sensor>>,
     player: Single<&Transform, With<player::Player>>,
 ) {
-    let grid_created = flow_field.is_changed();
-    let Some(grid) = flow_field.bypass_change_detection().grid.as_mut() else {
-        return;
-    };
-
-    let obstacles_changed = grid_created
+    let grids_created = flow_field.is_changed();
+    let obstacles_changed = grids_created
         || obstacles
             .iter()
             .any(|(aabb, body)| body.is_static() && aabb.is_changed());
-    if obstacles_changed {
-        grid.clear();
-        for (aabb, body) in &obstacles {
-            if body.is_static() {
-                grid.block(Rect::from_corners(aabb.min, aabb.max));
-            }
-        }
-        grid.target = None;
-    }
 
-    grid.set_target(player.translation.xy());
+    for (_, grid) in &mut flow_field.bypass_change_detection().grids {
+        if obstacles_changed {
+            grid.clear();
+            for (aabb, body) in &obstacles {
+                if body.is_static() {
+                    grid.block(Rect::from_corners(aabb.min, aabb.max));
+                }
+            }
+            grid.target = None;
+        }
+
+        grid.set_target(player.translation.xy());
+    }
 }
 
 pub struct Plugin;
@@ -278,6 +286,6 @@ impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         // in PreUpdate, so the field is up to date when enemies move in Update
         app.init_resource::<FlowField>()
-            .add_systems(PreUpdate, (create_grid, update_flow_field).chain());
+            .add_systems(PreUpdate, (create_grids, update_flow_field).chain());
     }
 }

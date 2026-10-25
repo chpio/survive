@@ -189,7 +189,9 @@ fn sync_state(
     for action in ui.actions.try_iter() {
         match action {
             hud::Action::SpawnEnemy => {
-                spawn_enemy.write(enemy::SpawnEnemy);
+                spawn_enemy.write(enemy::SpawnEnemy {
+                    size: enemy::Size::Small,
+                });
             }
         }
     }

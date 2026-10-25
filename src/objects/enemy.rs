@@ -7,8 +7,51 @@ use avian2d::prelude::*;
 use bevy::prelude::*;
 
 #[derive(Default, Clone, Component)]
-#[require(Separation)]
+#[require(Size, Separation)]
 pub struct Enemy;
+
+/// Size of an enemy, which sets its shape, mass, strength and personal space.
+#[derive(Component, Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub enum Size {
+    #[default]
+    Small,
+    Medium,
+    Large,
+}
+
+impl Size {
+    pub const ALL: [Size; 3] = [Size::Small, Size::Medium, Size::Large];
+
+    pub fn radius(self) -> f32 {
+        match self {
+            Size::Small => 5.,
+            Size::Medium => 8.,
+            Size::Large => 12.,
+        }
+    }
+
+    /// Shape of the collider and the placeholder mesh.
+    pub fn shape(self) -> Circle {
+        Circle::new(self.radius())
+    }
+
+    /// Grows with the area, a small enemy weighs 1.
+    pub fn mass(self) -> f32 {
+        (self.radius() / Size::Small.radius()).powi(2)
+    }
+
+    /// Grows with the mass, so all sizes reach full speed in 0.1 s.
+    pub fn strength(self) -> f32 {
+        self.mass() * 1000.
+    }
+
+    pub fn separation(self) -> Separation {
+        Separation {
+            radius: self.radius() + 2.,
+            strength: 2.5,
+        }
+    }
+}
 
 /// Personal space of an enemy. Enemies steer away from each other while their personal spaces
 /// overlap, so a larger radius keeps all other enemies further away.
@@ -22,42 +65,40 @@ pub struct Separation {
 
 impl Default for Separation {
     fn default() -> Self {
-        Self {
-            radius: SHAPE.radius + 2.,
-            strength: 2.5,
-        }
+        Size::default().separation()
     }
 }
 
-/// Shape of the collider and the placeholder mesh.
-pub const SHAPE: Circle = Circle::new(5.);
-
-pub const MASS: f32 = 1.;
-/// Reaches full speed in 0.1 s.
-pub const STRENGTH: f32 = 1000.;
-
 #[derive(Message)]
-pub struct SpawnEnemy;
+pub struct SpawnEnemy {
+    pub size: Size,
+}
 
 fn spawn_enemy_on_key(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut spawn_enemy: MessageWriter<SpawnEnemy>,
 ) {
-    if keyboard_input.just_pressed(KeyCode::KeyE) {
-        spawn_enemy.write(SpawnEnemy);
+    for (key, size) in [
+        (KeyCode::KeyE, Size::Small),
+        (KeyCode::KeyR, Size::Medium),
+        (KeyCode::KeyT, Size::Large),
+    ] {
+        if keyboard_input.just_pressed(key) {
+            spawn_enemy.write(SpawnEnemy { size });
+        }
     }
 }
 
 /// Physics components of an enemy. Enemies are dynamic bodies, so they collide with obstacles,
 /// the player and each other.
-pub fn physics() -> impl Bundle {
+pub fn physics(size: Size) -> impl Bundle {
     (
         RigidBody::Dynamic,
-        SHAPE.collider(),
+        size.shape().collider(),
         LockedAxes::ROTATION_LOCKED,
-        Mass(MASS),
+        Mass(size.mass()),
         NoAutoMass,
-        Strength(STRENGTH),
+        Strength(size.strength()),
     )
 }
 
@@ -67,12 +108,14 @@ fn spawn_enemy(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    for _ in spawn_enemy.read() {
+    for &SpawnEnemy { size } in spawn_enemy.read() {
         cmds.spawn((
             Enemy,
             Name::new("Enemy"),
-            physics(),
-            Mesh2d(meshes.add(SHAPE)),
+            size,
+            size.separation(),
+            physics(size),
+            Mesh2d(meshes.add(size.shape())),
             MeshMaterial2d(materials.add(Color::srgb(0.8, 0.2, 0.2))),
             // above the map layer at z = 0
             Transform::from_xyz(50., -50., 10.),
@@ -85,7 +128,7 @@ pub fn move_towards_player(
     flow_field: Res<FlowField>,
     spatial_query: SpatialQuery,
     others: Query<(&Transform, &Separation), With<Enemy>>,
-    mut enemies: Query<(Entity, &Transform, &Separation, &mut DesiredVelocity), With<Enemy>>,
+    mut enemies: Query<(Entity, &Transform, &Size, &Separation, &mut DesiredVelocity), With<Enemy>>,
 ) {
     const MOVE_SPEED: f32 = 100.;
 
@@ -94,12 +137,12 @@ pub fn move_towards_player(
         .map(|(_, separation)| separation.radius)
         .fold(0., f32::max);
 
-    for (entity, transform, separation, mut desired) in &mut enemies {
+    for (entity, transform, &size, separation, mut desired) in &mut enemies {
         let position = transform.translation.xy();
 
         // follow the flow field around obstacles, walk straight if the player can't be reached
         let direction = flow_field
-            .direction(position)
+            .direction(position, size)
             .unwrap_or_else(|| (player.translation.xy() - position).normalize_or_zero());
 
         // finds every enemy whose personal space could overlap with this one's

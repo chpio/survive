@@ -1,9 +1,13 @@
 use bevy::prelude::*;
-use survival::flowfield::Grid;
+use survival::{flowfield::Grid, objects::enemy::Size};
 
-/// Empty 160×160 grid with its bottom-left corner at the origin.
+/// Empty 160×160 grid for small enemies with its bottom-left corner at the origin.
 fn grid() -> Grid {
-    Grid::new(Vec2::ZERO, Vec2::splat(160.))
+    grid_for(Size::Small)
+}
+
+fn grid_for(size: Size) -> Grid {
+    Grid::new(Vec2::ZERO, Vec2::splat(160.), size.radius())
 }
 
 /// Wall at x = 76..84 over the whole height, except for a gap at `gap_min..gap_max`.
@@ -102,4 +106,23 @@ fn follows_target_when_it_moves() {
 
     let direction = grid.direction(Vec2::new(80., 80.)).unwrap();
     assert!(direction.dot(Vec2::NEG_X) > 0.99, "{direction}");
+}
+
+#[test]
+fn corridor_one_tile_wide_is_closed_for_large_enemies() {
+    let mut grid = grid_for(Size::Large);
+    wall_with_gap(&mut grid, 72., 88.);
+    grid.set_target(Vec2::new(150., 80.));
+
+    assert_eq!(grid.direction(Vec2::new(10., 80.)), None);
+}
+
+#[test]
+fn corridor_two_tiles_wide_is_open_for_large_enemies() {
+    let mut grid = grid_for(Size::Large);
+    wall_with_gap(&mut grid, 64., 96.);
+    grid.set_target(Vec2::new(150., 80.));
+
+    let direction = grid.direction(Vec2::new(10., 80.)).unwrap();
+    assert!(direction.x > 0.9, "{direction}");
 }
