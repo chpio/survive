@@ -3,6 +3,7 @@ use crate::{
     flowfield::FlowField,
     movement::{self, DesiredVelocity},
     objects::player,
+    perf,
 };
 use avian2d::prelude::*;
 use bevy::prelude::*;
@@ -269,9 +270,12 @@ impl bevy::app::Plugin for Plugin {
                 (
                     spawn_enemy_on_key,
                     spawn_enemy,
-                    move_towards_player,
-                    // after the heading is updated
-                    face_heading.after(move_towards_player),
+                    (
+                        move_towards_player,
+                        // after the heading is updated
+                        face_heading.after(move_towards_player),
+                    )
+                        .in_set(perf::Step::Enemies),
                 ),
             );
     }

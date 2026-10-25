@@ -12,7 +12,7 @@
 //! reachable then, the cells around the player that are only blocked by the clearance can be
 //! walked through as well, but never cells inside an obstacle.
 
-use crate::objects::player;
+use crate::{objects::player, perf};
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::*;
@@ -446,7 +446,11 @@ pub struct Plugin;
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         // in PreUpdate, so the field is up to date when enemies move in Update
-        app.init_resource::<FlowField>()
-            .add_systems(PreUpdate, (create_grids, update_flow_field).chain());
+        app.init_resource::<FlowField>().add_systems(
+            PreUpdate,
+            (create_grids, update_flow_field)
+                .chain()
+                .in_set(perf::Step::FlowField),
+        );
     }
 }

@@ -4,6 +4,7 @@
 //! walk straight at the player instead, which the arrows don't show.
 
 use super::{CELL_SIZE, FlowField};
+use crate::perf;
 use bevy::{
     asset::RenderAssetUsages,
     image::ToExtents,
@@ -114,6 +115,6 @@ impl bevy::app::Plugin for Plugin {
         // after the field is updated in PreUpdate
         app.init_resource::<FlowFieldDebug>()
             .add_systems(Startup, spawn_overlay)
-            .add_systems(Update, draw_overlay);
+            .add_systems(Update, draw_overlay.in_set(perf::Step::FlowFieldOverlay));
     }
 }

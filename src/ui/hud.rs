@@ -1,9 +1,12 @@
-use crate::combat::Health;
+use crate::{
+    combat::Health,
+    perf::{Averages, MAIN_THREAD, Node, RENDER_THREAD},
+};
 use dioxus::prelude::*;
-use std::sync::mpsc;
+use std::{sync::mpsc, time::Duration};
 
 /// Game state shown in the HUD, written by the game whenever it changes.
-#[derive(Clone, Copy, PartialEq, Default)]
+#[derive(Clone, PartialEq, Default)]
 pub struct State {
     /// `None` while there is no player
     pub player_health: Option<Health>,
@@ -12,6 +15,9 @@ pub struct State {
     pub flow_field_grid: Option<f32>,
     /// Whether the physics debug outlines of the colliders are drawn
     pub show_colliders: bool,
+    pub show_timings: bool,
+    /// Time per frame of the game's steps, `None` while hidden or not measured yet
+    pub timings: Option<Averages>,
 }
 
 /// Requests from the HUD to the game.
@@ -20,6 +26,7 @@ pub enum Action {
     /// Shows the next flow field grid, or hides the overlay after the last one
     CycleFlowField,
     ShowColliders(bool),
+    ShowTimings(bool),
 }
 
 const STYLE: &str = r#"
@@ -56,6 +63,24 @@ const STYLE: &str = r#"
     gap: 6px;
 }
 
+.timings {
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+}
+
+.timings .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.timings .children {
+    margin-left: 3px;
+    padding-left: 8px;
+    border-left: 1px solid #666;
+}
+
 /* Blitz paints checkboxes in the text color, which is white in the HUD */
 .hud input {
     color: #3a6ea5;
@@ -63,7 +88,7 @@ const STYLE: &str = r#"
 "#;
 
 pub fn app() -> Element {
-    let state = *use_context::<Signal<State>>().read();
+    let state = use_context::<Signal<State>>().read().clone();
     let actions = use_context::<mpsc::Sender<Action>>();
     // `Copy`, unlike the sender, so every event handler can use it
     let send = use_callback(move |action| {
@@ -93,6 +118,59 @@ pub fn app() -> Element {
                 }
                 "Kollider"
             }
+            label {
+                input {
+                    r#type: "checkbox",
+                    checked: state.show_timings,
+                    oninput: move |event| send(Action::ShowTimings(event.checked())),
+                }
+                "Performance"
+            }
+            if let Some(timings) = state.timings {
+                div { class: "timings",
+                    {row("Frame", timings.frame)}
+                    div { class: "children",
+                        for node in MAIN_THREAD {
+                            {node_rows(&timings, node)}
+                        }
+                        {row("Sonstiges", timings.rest())}
+                    }
+                    {row("Render-Thread (parallel)", RENDER_THREAD.iter().map(|&step| timings.step(step)).sum())}
+                    div { class: "children",
+                        for & step in RENDER_THREAD {
+                            {row(step.label(), timings.step(step))}
+                        }
+                    }
+                }
+            }
         }
     }
+}
+
+/// A step, or a group with its steps below it.
+fn node_rows(timings: &Averages, node: &Node) -> Element {
+    match node {
+        Node::Step(step) => row(step.label(), timings.step(*step)),
+        Node::Group(label, steps) => rsx! {
+            {row(label, timings.node(node))}
+            div { class: "children",
+                for & step in *steps {
+                    {row(step.label(), timings.step(step))}
+                }
+            }
+        },
+    }
+}
+
+fn row(label: &str, duration: Duration) -> Element {
+    rsx! {
+        div { class: "row", key: "{label}",
+            span { "{label}" }
+            span { {ms(duration)} }
+        }
+    }
+}
+
+fn ms(duration: Duration) -> String {
+    format!("{:.2} ms", duration.as_secs_f64() * 1000.)
 }

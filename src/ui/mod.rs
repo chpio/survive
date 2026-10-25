@@ -11,6 +11,7 @@ use crate::{
     combat::Health,
     flowfield::{FlowField, debug::FlowFieldDebug},
     objects::{enemy, player::Player},
+    perf,
 };
 use anyrender_vello::VelloScenePainter;
 use avian2d::prelude::PhysicsGizmos;
@@ -61,6 +62,7 @@ struct UiDocument {
     actions: mpsc::Receiver<hud::Action>,
     /// Whether the document has to be painted again, e.g. after input
     needs_paint: bool,
+    show_timings: bool,
     redraw_request: Arc<RedrawRequest>,
 }
 
@@ -110,6 +112,7 @@ fn setup(world: &mut World) {
         state,
         actions: action_rx,
         needs_paint: true,
+        show_timings: false,
         redraw_request,
     });
 
@@ -210,14 +213,16 @@ fn pointer_event(
 }
 
 fn sync_state(
-    ui: NonSend<UiDocument>,
+    mut ui: NonSendMut<UiDocument>,
     player: Query<&Health, With<Player>>,
     enemies: Query<(), With<enemy::Enemy>>,
     flow_field: Res<FlowField>,
     mut flow_field_debug: ResMut<FlowFieldDebug>,
     mut gizmos: ResMut<GizmoConfigStore>,
+    timings: Option<Res<perf::Timings>>,
     mut spawn_enemy: MessageWriter<enemy::SpawnEnemy>,
 ) {
+    let ui = &mut *ui;
     for action in ui.actions.try_iter() {
         match action {
             hud::Action::SpawnEnemy => {
@@ -228,6 +233,9 @@ fn sync_state(
             }
             hud::Action::ShowColliders(show) => {
                 gizmos.config_mut::<PhysicsGizmos>().0.enabled = show;
+            }
+            hud::Action::ShowTimings(show) => {
+                ui.show_timings = show;
             }
         }
     }
@@ -240,6 +248,11 @@ fn sync_state(
             .and_then(|i| flow_field.grids().get(i))
             .map(|grid| grid.clearance()),
         show_colliders: gizmos.config::<PhysicsGizmos>().0.enabled,
+        show_timings: ui.show_timings,
+        // only while shown, since they change twice a second and each change repaints the HUD
+        timings: timings
+            .filter(|_| ui.show_timings)
+            .and_then(|timings| timings.averages.clone()),
     };
     let mut state = ui.state;
     // only on changes, since setting the signal re-renders the HUD
@@ -365,10 +378,15 @@ impl bevy::app::Plugin for Plugin {
             .add_systems(Startup, setup)
             .add_systems(PreUpdate, forward_input)
             .add_systems(Update, sync_state)
-            .add_systems(PostUpdate, paint_ui);
+            .add_systems(PostUpdate, paint_ui.in_set(perf::Step::HudPaint));
 
         app.sub_app_mut(RenderApp)
             .add_systems(RenderStartup, init_vello_renderer)
-            .add_systems(Render, render_ui.in_set(RenderSystems::Prepare));
+            .add_systems(
+                Render,
+                render_ui
+                    .in_set(RenderSystems::Prepare)
+                    .in_set(perf::Step::HudRender),
+            );
     }
 }

@@ -4,4 +4,5 @@ pub mod combat;
 pub mod flowfield;
 pub mod movement;
 pub mod objects;
+pub mod perf;
 pub mod ui;

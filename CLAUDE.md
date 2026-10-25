@@ -32,6 +32,7 @@ Build notes:
 - Movement is force-based (`src/movement.rs`). Systems set a `DesiredVelocity` on Avian bodies (player and enemies: `RigidBody::Dynamic` with `Mass` and `Strength`) instead of changing `Transform` or `LinearVelocity` directly. In `FixedUpdate`, a spring towards an anchor moving at that velocity applies a force limited by `Strength`, so heavier and stronger bodies win when pushing each other. Bodies are built with `movement::body` and never rotate; an enemy's visible `enemy::Body` is a child that turns towards its `enemy::Heading` (the direction its navigation wants to walk, unaffected by knockback; `enemy::face_heading`, limited by `TURN_SPEED`), so other children like health bars stay upright. All enemies share one unit-circle mesh and their materials (`EnemyAssets`), scaled to their radius. The camera follows the player's `Transform` and keeps its own z.
 - Combat (`src/combat/`): units with `Health` and an `Attack` hit every opponent whose collider is within the attack's reach once per cooldown (the player all enemies around it, an enemy the player). A hit deals damage and knocks the target back with an impulse, so lighter units fly further. Dead enemies are despawned; when the player dies, all enemies are removed and the player is healed. `player::combat()` and `Enemy::combat` hold the values. `combat::health_bar` draws sprite bars above damaged units and is kept apart from the logic, since it needs rendering.
 - The HUD (`src/ui/`) is a Dioxus Native document (Blitz, painted with Vello) rendered into a fullscreen image. `sync_state` writes the game state into one `hud::State` signal and handles the `hud::Action`s the HUD sends back over a channel. The HUD is only painted and rendered again after input, a state change, a resize or a redraw request from Blitz; anything else that should change its look (e.g. animations) has to set `needs_paint`.
+- `src/perf.rs` measures the time per frame of the game's main steps. Each step is a `perf::Step` system set; marker systems before and after it record the wall time, and measured steps within one schedule run one after another so their times don't include each other. Put new costly systems into a step (or add one, and list it in `perf::MAIN_THREAD` or `RENDER_THREAD`) to see them in the HUD.
 
 ### Tiled map → ECS
 
@@ -49,5 +50,7 @@ Build notes:
 - F: toggle borderless fullscreen.
 
 The HUD button "Flowfield" cycles the flow field overlay through the grids (5, 8, 12, 16 px clearance) and off.
+
+The HUD checkbox "Performance" shows the time per frame of each `perf::Step` as a tree, averaged over half a second. "Sonstiges" is the rest of the frame: Bevy itself, preparing the rendering and waiting for the next frame.
 
 `PhysicsDebugPlugin` draws collider outlines. They start hidden; the HUD checkbox "Kollider" shows them.

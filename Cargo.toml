@@ -7,6 +7,8 @@ publish = false
 [lints.clippy]
 # Bevy system params (queries with filters) are complex types by nature
 type_complexity = "allow"
+# Bevy systems take everything they access as parameters
+too_many_arguments = "allow"
 
 [dependencies]
 anyrender_vello = "0.15"
