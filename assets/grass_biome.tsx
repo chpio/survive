@@ -84,9 +84,7 @@
  </tile>
  <tile id="71">
   <objectgroup draworder="index" id="2">
-   <object id="1" x="2.45455" y="3.45455">
-    <ellipse/>
-   </object>
+   <object id="1" x="0" y="0" width="11" height="16"/>
   </objectgroup>
  </tile>
  <tile id="72">
@@ -182,16 +180,12 @@
  </tile>
  <tile id="187">
   <objectgroup draworder="index" id="2">
-   <object id="1" x="17.8182" y="3.72727">
-    <ellipse/>
-   </object>
+   <object id="1" x="9" y="0" width="7" height="16"/>
   </objectgroup>
  </tile>
  <tile id="188">
   <objectgroup draworder="index" id="2">
-   <object id="1" x="2.45455" y="3.45455">
-    <ellipse/>
-   </object>
+   <object id="1" x="0" y="0" width="11" height="16"/>
   </objectgroup>
  </tile>
  <tile id="197" type="well">
