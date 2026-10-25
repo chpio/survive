@@ -5,6 +5,9 @@ use bevy::prelude::*;
 #[derive(Default, Clone, Component)]
 pub struct Enemy;
 
+/// Shape of the collider and the placeholder mesh.
+const SHAPE: Circle = Circle::new(5.);
+
 #[derive(Message)]
 pub struct SpawnEnemy;
 
@@ -17,16 +20,24 @@ fn spawn_enemy_on_key(
     }
 }
 
-fn spawn_enemy(mut spawn_enemy: MessageReader<SpawnEnemy>, mut cmds: Commands) {
+fn spawn_enemy(
+    mut spawn_enemy: MessageReader<SpawnEnemy>,
+    mut cmds: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
     for _ in spawn_enemy.read() {
         cmds.spawn((
             Enemy,
             Name::new("Enemy"),
             Sensor,
             RigidBody::Kinematic,
-            Collider::circle(5.),
+            SHAPE.collider(),
             LockedAxes::ROTATION_LOCKED,
-            Transform::from_xyz(50., -50., 0.),
+            Mesh2d(meshes.add(SHAPE)),
+            MeshMaterial2d(materials.add(Color::srgb(0.8, 0.2, 0.2))),
+            // above the map layer at z = 0
+            Transform::from_xyz(50., -50., 10.),
         ));
     }
 }

@@ -54,7 +54,12 @@ fn main() {
         .run();
 }
 
-fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn startup(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
     commands.spawn((
         Camera2d,
         Projection::Orthographic(OrthographicProjection {
@@ -69,10 +74,13 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((
         objects::player::Player,
         Name::new("Player"),
-        Collider::circle(5.),
+        objects::player::SHAPE.collider(),
         RigidBody::Dynamic,
         LockedAxes::ROTATION_LOCKED,
-        Transform::from_xyz(50., -50., 0.),
+        Mesh2d(meshes.add(objects::player::SHAPE)),
+        MeshMaterial2d(materials.add(Color::srgb(0.2, 0.4, 0.9))),
+        // above the map layer at z = 0
+        Transform::from_xyz(50., -50., 10.),
     ));
 
     commands

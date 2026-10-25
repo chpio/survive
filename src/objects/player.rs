@@ -4,6 +4,9 @@ use bevy::prelude::*;
 #[derive(Default, Clone, Component)]
 pub struct Player;
 
+/// Shape of the collider and the placeholder mesh.
+pub const SHAPE: Circle = Circle::new(5.);
+
 fn move_player(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut player_vel: Single<&mut LinearVelocity, With<Player>>,
