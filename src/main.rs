@@ -39,7 +39,11 @@ fn main() {
         )
         .insert_resource(Gravity::ZERO)
         .add_plugins(TiledPhysicsPlugin::<TiledPhysicsAvianBackend>::default())
-        .add_plugins(PhysicsPlugins::default().with_length_unit(100.0))
+        .add_plugins(PhysicsPlugins::default().with_length_unit(movement::LENGTH_UNIT))
+        .insert_resource(NarrowPhaseConfig {
+            contact_tolerance: movement::CONTACT_TOLERANCE,
+            ..default()
+        })
         .add_plugins(PhysicsDebugPlugin)
         // collider outlines start hidden, the HUD shows them
         .insert_gizmo_config(

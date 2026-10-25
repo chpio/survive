@@ -12,6 +12,15 @@ use crate::perf;
 use avian2d::prelude::*;
 use bevy::prelude::*;
 
+/// Length unit of the physics in px, a bit larger than the largest units. Avian scales its
+/// tolerances with it, and much smaller units soften the impacts between bodies.
+pub const LENGTH_UNIT: f32 = 32.;
+
+/// Distance at which Avian already treats shapes as touching, in [`LENGTH_UNIT`]s (0.16 px).
+/// Bodies sliding along an obstacle touch the corners where the edges between its triangles end
+/// within the default of 0.02, and are pushed away from them.
+pub const CONTACT_TOLERANCE: f32 = 0.005;
+
 /// Angular frequency of the spring towards the anchor, in rad/s. Higher values follow the anchor
 /// more tightly.
 const STIFFNESS: f32 = 45.;

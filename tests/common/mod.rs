@@ -21,11 +21,15 @@ pub fn app_with<M>(plugins: impl Plugins<M>) -> App {
     app.add_plugins((
         MinimalPlugins,
         TransformPlugin,
-        PhysicsPlugins::default().with_length_unit(100.),
+        PhysicsPlugins::default().with_length_unit(movement::LENGTH_UNIT),
         movement::Plugin,
         plugins,
     ))
     .insert_resource(Gravity::ZERO)
+    .insert_resource(NarrowPhaseConfig {
+        contact_tolerance: movement::CONTACT_TOLERANCE,
+        ..default()
+    })
     .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
         1. / 64.,
     )));
