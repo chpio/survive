@@ -2,15 +2,11 @@ mod common;
 
 use avian2d::prelude::*;
 use bevy::prelude::*;
+use common::SMALL;
 use survival::{
     flowfield::FlowField,
-    objects::{
-        enemy::{self, Enemy},
-        player,
-    },
+    objects::{enemy, player},
 };
-
-const SMALL: Enemy = Enemy { radius: 5. };
 
 #[test]
 fn enemy_does_not_walk_through_wall() {
@@ -98,14 +94,21 @@ fn facing_app(heading: Vec2) -> (App, Entity) {
     app.add_systems(Update, enemy::face_heading);
     let enemy = common::spawn(
         &mut app,
-        (SMALL, SMALL.physics(), enemy::Heading(heading)),
+        (
+            SMALL,
+            SMALL.physics(),
+            enemy::Heading(heading),
+            children![(enemy::Body, Transform::default())],
+        ),
         Vec2::ZERO,
     );
     (app, enemy)
 }
 
+/// Direction the enemy's body faces.
 fn facing(app: &App, enemy: Entity) -> Vec2 {
-    let transform = app.world().get::<Transform>(enemy).unwrap();
+    let body = app.world().get::<Children>(enemy).unwrap()[0];
+    let transform = app.world().get::<Transform>(body).unwrap();
     (transform.rotation * Vec3::X).xy()
 }
 
@@ -126,11 +129,11 @@ fn enemy_turns_at_limited_speed() {
 
     common::run(&mut app, 0.25);
 
-    // the transform shows the rotation a frame or two later, so allow for a few steps less
+    // the first update has no time delta, so it turns one step less
     let turned = facing(&app, enemy).to_angle().abs();
     let max = enemy::TURN_SPEED * 0.25;
     assert!(
-        turned <= max + 0.01 && turned > max * 0.75,
+        turned <= max + 0.01 && turned > max * 0.9,
         "turned {turned} rad"
     );
 }

@@ -7,7 +7,7 @@ use crate::{
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use std::{
-    f32::consts::{GOLDEN_RATIO, PI, TAU},
+    f32::consts::{GOLDEN_RATIO, TAU},
     time::Duration,
 };
 
@@ -89,10 +89,15 @@ impl Default for Separation {
     }
 }
 
-/// Direction an enemy wants to walk in, which it turns to face. Set by its navigation, so it
-/// doesn't change when the enemy is pushed or knocked back.
+/// Direction an enemy wants to walk in, which its [`Body`] turns to face. Set by its navigation,
+/// so it doesn't change when the enemy is pushed or knocked back.
 #[derive(Component, Default, PartialEq)]
 pub struct Heading(pub Vec2);
+
+/// Visible body of an enemy, a child that turns towards the [`Heading`]. The enemy itself never
+/// rotates, so other children like the health bar stay upright.
+#[derive(Component)]
+pub struct Body;
 
 #[derive(Message)]
 pub struct SpawnEnemy(pub Enemy);
@@ -125,15 +130,20 @@ fn spawn_enemy(
             enemy.separation(),
             enemy.physics(),
             enemy.combat(),
-            Mesh2d(meshes.add(enemy.shape())),
-            MeshMaterial2d(materials.add(Color::srgb(0.8, 0.2, 0.2))),
             // above the map layer at z = 0
             Transform::from_xyz(50., -50., 10.),
-            // dot at the front, showing where the enemy faces (+x when not rotated)
+            // shown through its children
+            Visibility::default(),
             children![(
-                Mesh2d(meshes.add(Circle::new(enemy.radius * 0.25))),
-                MeshMaterial2d(materials.add(Color::srgb(1., 0.9, 0.9))),
-                Transform::from_xyz(enemy.radius * 0.55, 0., 0.1),
+                Body,
+                Mesh2d(meshes.add(enemy.shape())),
+                MeshMaterial2d(materials.add(Color::srgb(0.8, 0.2, 0.2))),
+                // dot at the front, showing where the enemy faces (+x when not rotated)
+                children![(
+                    Mesh2d(meshes.add(Circle::new(enemy.radius * 0.25))),
+                    MeshMaterial2d(materials.add(Color::srgb(1., 0.9, 0.9))),
+                    Transform::from_xyz(enemy.radius * 0.55, 0., 0.1),
+                )],
             )],
         ));
     }
@@ -206,20 +216,23 @@ pub fn move_towards_player(
     }
 }
 
-/// Turns enemies towards their [`Heading`], at most at [`TURN_SPEED`]. Rotation is locked for the
-/// physics, so contacts don't spin enemies, and set here directly instead.
-pub fn face_heading(time: Res<Time>, mut enemies: Query<(&Heading, &mut Rotation), With<Enemy>>) {
+/// Turns the [`Body`] of enemies towards their [`Heading`], at most at [`TURN_SPEED`].
+pub fn face_heading(
+    time: Res<Time>,
+    headings: Query<&Heading, With<Enemy>>,
+    mut bodies: Query<(&ChildOf, &mut Transform), With<Body>>,
+) {
     let max_step = TURN_SPEED * time.delta_secs();
-    for (heading, mut rotation) in &mut enemies {
+    for (child_of, mut transform) in &mut bodies {
+        let Ok(heading) = headings.get(child_of.parent()) else {
+            continue;
+        };
         if heading.0 == Vec2::ZERO {
             continue;
         }
-        let current = rotation.as_radians();
-        // shortest way round, in -π..π
-        let difference = (heading.0.to_angle() - current + PI).rem_euclid(TAU) - PI;
-        if difference != 0. {
-            *rotation = Rotation::radians(current + difference.clamp(-max_step, max_step));
-        }
+        let target = Quat::from_rotation_z(heading.0.to_angle());
+        let rotation = transform.rotation.rotate_towards(target, max_step);
+        transform.set_if_neq(transform.with_rotation(rotation));
     }
 }
 
