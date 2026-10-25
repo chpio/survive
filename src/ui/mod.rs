@@ -6,6 +6,7 @@
 //! re-render, a resize or a redraw request from Blitz); otherwise the image keeps its content.
 
 mod hud;
+mod stylesheet;
 
 use crate::{
     combat::Health,
@@ -51,6 +52,7 @@ use std::{
     },
     time::Instant,
 };
+use stylesheet::{Stylesheet, StylesheetLoader};
 
 /// The Dioxus document and the channels between it and the game. Not `Send`, so it is stored as
 /// a non-send resource.
@@ -60,6 +62,9 @@ struct UiDocument {
     cursor: Vec2,
     buttons: MouseEventButtons,
     state: Signal<hud::State>,
+    /// Empty until the stylesheet is loaded
+    stylesheet: Signal<Stylesheet>,
+    stylesheet_handle: Handle<Stylesheet>,
     actions: mpsc::Receiver<hud::Action>,
     /// Whether the document has to be painted again, e.g. after input
     needs_paint: bool,
@@ -94,6 +99,8 @@ fn setup(world: &mut World) {
     let vdom = VirtualDom::new(hud::app).with_root_context(action_tx);
     let state = vdom.in_scope(ScopeId::ROOT, || Signal::new(hud::State::default()));
     vdom.provide_root_context(state);
+    let stylesheet = vdom.in_scope(ScopeId::ROOT, || Signal::new(Stylesheet::default()));
+    vdom.provide_root_context(stylesheet);
 
     let redraw_request = Arc::new(RedrawRequest::default());
     let mut doc = DioxusDocument::new(
@@ -111,6 +118,8 @@ fn setup(world: &mut World) {
         cursor: Vec2::ZERO,
         buttons: MouseEventButtons::None,
         state,
+        stylesheet,
+        stylesheet_handle: world.resource::<AssetServer>().load("ui/style.css"),
         actions: action_rx,
         needs_paint: true,
         show_timings: false,
@@ -270,6 +279,29 @@ fn sync_state(
     }
 }
 
+/// Hands the stylesheet to the HUD when it is loaded, and again after each change to the file.
+fn update_stylesheet(
+    mut ui: NonSendMut<UiDocument>,
+    mut events: MessageReader<AssetEvent<Stylesheet>>,
+    stylesheets: Res<Assets<Stylesheet>>,
+) {
+    let ui = &mut *ui;
+    let handle = &ui.stylesheet_handle;
+    if !events
+        .read()
+        .any(|event| event.is_loaded_with_dependencies(handle) || event.is_modified(handle))
+    {
+        return;
+    }
+    if let Some(new_stylesheet) = stylesheets.get(handle) {
+        let mut stylesheet = ui.stylesheet;
+        // re-renders the HUD, which hands the new styles to Blitz
+        ui.doc
+            .vdom
+            .in_scope(ScopeId::ROOT, || stylesheet.set(new_stylesheet.clone()));
+    }
+}
+
 fn paint_ui(
     mut ui: NonSendMut<UiDocument>,
     window: Single<&Window, With<PrimaryWindow>>,
@@ -397,9 +429,11 @@ pub struct Plugin;
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(ExtractResourcePlugin::<UiScene>::default())
+            .init_asset::<Stylesheet>()
+            .init_asset_loader::<StylesheetLoader>()
             .add_systems(Startup, setup)
             .add_systems(PreUpdate, forward_input)
-            .add_systems(Update, sync_state)
+            .add_systems(Update, (update_stylesheet, sync_state))
             .add_systems(PostUpdate, paint_ui);
 
         app.sub_app_mut(RenderApp)

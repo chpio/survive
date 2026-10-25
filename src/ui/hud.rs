@@ -1,3 +1,4 @@
+use super::stylesheet::Stylesheet;
 use crate::{
     combat::Health,
     perf::{Averages, MAIN_THREAD, Node, RENDER_THREAD},
@@ -34,15 +35,19 @@ pub enum Action {
     ChangeSettings(Settings),
 }
 
-const STYLE: &str = include_str!("style.css");
-
 pub fn app() -> Element {
     let state = use_context::<Signal<State>>().read().clone();
+    let stylesheet = use_context::<Signal<Stylesheet>>().read().0.clone();
     let actions = use_context::<mpsc::Sender<Action>>();
     // `Copy`, unlike the sender, so every event handler can use it
     let send = use_callback(move |action| {
         let _ = actions.send(action);
     });
+    // after the hooks, which have to run on every render. Without styles, the HUD would show up
+    // unstyled until the stylesheet is loaded.
+    if stylesheet.is_empty() {
+        return rsx! {};
+    }
     let health = match state.player_health {
         Some(health) => format!("{:.0} / {:.0}", health.current, health.max),
         None => "–".to_string(),
@@ -53,7 +58,7 @@ pub fn app() -> Element {
     };
 
     rsx! {
-        style { {STYLE} }
+        style { {stylesheet} }
         div { class: "hud",
             span { "Leben: {health}" }
             span { "Gegner: {state.enemy_count}" }
