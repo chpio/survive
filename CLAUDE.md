@@ -24,6 +24,8 @@ Build notes:
 - The `dynamic_linking` feature is always on, including in release builds.
 - Dev builds use `opt-level = 1` for the crate and `3` for dependencies.
 
+Open work is collected in `TODO.md`; remove entries once they are done.
+
 ## Architecture
 
 - `src/main.rs` builds the `App`: window/image settings, FPS overlay, Tiled + Avian plugins (with `Gravity::ZERO`, top-down; physics runs at Bevy's fixed 64 Hz and interpolates all bodies' `Transform`s in between, so code reading `Transform` sees positions up to one step behind the physics), and the game object plugins. `startup` spawns the camera, the player, and the `TiledMap`.
@@ -49,7 +51,7 @@ Build notes:
 - P: toggle the FPS overlay.
 - F: toggle borderless fullscreen.
 
-The HUD button "Flowfield" cycles the flow field overlay through the grids (5, 8, 12, 16 px clearance) and off.
+The HUD button "Gegner spawnen" spawns a small enemy, "Flowfield" cycles the flow field overlay through the grids (5, 8, 12, 16 px clearance) and off.
 
 The HUD checkbox "Performance" shows the time per frame of each `perf::Step` as a tree, averaged over half a second. "Warten (VSync/Render)" is the time between two frames, mostly waiting for the render thread, which waits for VSync; "Sonstiges" is the rest of the frame (Bevy itself, preparing the rendering).
 
