@@ -266,10 +266,19 @@ fn paint_ui(
     window: Single<&Window, With<PrimaryWindow>>,
     mut ui_scene: ResMut<UiScene>,
     mut images: ResMut<Assets<Image>>,
+    mut timings: Option<ResMut<perf::Timings>>,
 ) {
     let ui = &mut *ui;
+    let mut measure = |step, started: Instant| {
+        if let Some(timings) = &mut timings {
+            timings.add(step, started.elapsed());
+        }
+    };
+
     // true after a re-render, e.g. when `sync_state` changed the state
+    let started = Instant::now();
     ui.needs_paint |= ui.doc.poll(None);
+    measure(perf::Step::HudUpdate, started);
     ui.needs_paint |= ui.redraw_request.0.swap(false, Ordering::Relaxed);
 
     let (width, height) = (window.physical_width(), window.physical_height());
@@ -304,8 +313,11 @@ fn paint_ui(
     }
     ui.needs_paint = false;
 
+    let started = Instant::now();
     doc.resolve(ui.started.elapsed().as_secs_f64());
+    measure(perf::Step::HudLayout, started);
 
+    let started = Instant::now();
     ui_scene.scene.reset();
     paint_scene(
         &mut VelloScenePainter::new(&mut ui_scene.scene),
@@ -316,6 +328,7 @@ fn paint_ui(
         0,
         0,
     );
+    measure(perf::Step::HudScene, started);
 }
 
 fn init_vello_renderer(mut commands: Commands, device: Res<RenderDevice>) {
@@ -378,7 +391,7 @@ impl bevy::app::Plugin for Plugin {
             .add_systems(Startup, setup)
             .add_systems(PreUpdate, forward_input)
             .add_systems(Update, sync_state)
-            .add_systems(PostUpdate, paint_ui.in_set(perf::Step::HudPaint));
+            .add_systems(PostUpdate, paint_ui);
 
         app.sub_app_mut(RenderApp)
             .add_systems(RenderStartup, init_vello_renderer)

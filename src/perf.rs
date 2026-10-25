@@ -1,7 +1,7 @@
 //! Time the game's main steps take per frame, shown in the HUD.
 //!
-//! Each step is a [`Step`] system set. Marker systems before and after it measure the wall time
-//! in between. Measured steps in the same schedule run one after another, so their times don't
+//! Most steps are [`Step`] system sets. Marker systems before and after them measure the wall
+//! time in between. Steps within a single system are recorded by it with [`Timings::add`]. Measured steps in the same schedule run one after another, so their times don't
 //! include each other; other systems may still run in parallel. Steps in the fixed timestep run
 //! zero or more times per frame and are summed up. Rendering the HUD happens in
 //! the render world, which reports its time through a shared counter. The time between the end
@@ -35,7 +35,12 @@ pub enum Step {
     Movement,
     /// Avian's physics step, measured around its own sets
     Physics,
-    HudPaint,
+    /// Dioxus applying changes to the HUD, measured in its paint system
+    HudUpdate,
+    /// Blitz resolving styles and layout
+    HudLayout,
+    /// Blitz turning the HUD into a Vello scene, a list of drawing commands
+    HudScene,
     /// Between two frames on the main thread, mostly waiting for the render thread, which waits
     /// for VSync. Not a set, measured between [`FrameEnd`] and [`FrameStart`].
     Wait,
@@ -44,14 +49,16 @@ pub enum Step {
 }
 
 impl Step {
-    pub const ALL: [Step; 9] = [
+    pub const ALL: [Step; 11] = [
         Step::FlowField,
         Step::FlowFieldOverlay,
         Step::Enemies,
         Step::Combat,
         Step::Movement,
         Step::Physics,
-        Step::HudPaint,
+        Step::HudUpdate,
+        Step::HudLayout,
+        Step::HudScene,
         Step::Wait,
         Step::HudRender,
     ];
@@ -64,7 +71,9 @@ impl Step {
             Step::Combat => "Kampf",
             Step::Movement => "Bewegung",
             Step::Physics => "Physik",
-            Step::HudPaint => "HUD malen",
+            Step::HudUpdate => "Aktualisieren",
+            Step::HudLayout => "Layout",
+            Step::HudScene => "Szene",
             Step::Wait => "Warten (VSync/Render)",
             Step::HudRender => "HUD rendern",
         }
@@ -86,7 +95,7 @@ pub const MAIN_THREAD: &[Node] = &[
     ),
     Node::Group("Fester Takt", &[Step::Movement, Step::Physics]),
     Node::Step(Step::FlowFieldOverlay),
-    Node::Step(Step::HudPaint),
+    Node::Group("HUD", &[Step::HudUpdate, Step::HudLayout, Step::HudScene]),
     Node::Step(Step::Wait),
 ];
 
@@ -145,7 +154,7 @@ impl Timings {
         }
     }
 
-    fn add(&mut self, step: Step, duration: Duration) {
+    pub fn add(&mut self, step: Step, duration: Duration) {
         self.steps[step as usize] += duration;
     }
 }
@@ -239,7 +248,6 @@ impl bevy::app::Plugin for Plugin {
             &[Step::FlowFieldOverlay, Step::Enemies, Step::Combat],
         );
         measure(app, FixedUpdate, &[Step::Movement]);
-        measure(app, PostUpdate, &[Step::HudPaint]);
         // around Avian's own sets
         app.add_systems(
             FixedPostUpdate,
