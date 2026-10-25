@@ -15,7 +15,7 @@ cargo clippy       # lint
 cargo fmt          # format
 ```
 
-Tests live in `tests/` (never inline) and run with `cargo test`. Game code is in the `survival` lib crate (`src/lib.rs`) so tests can use it; `src/main.rs` only builds the `App`.
+Tests live in `tests/` (never inline) and run with `cargo test`. Game code is in the `survival` lib crate (`src/lib.rs`) so tests can use it; `src/main.rs` only builds the `App`. `tests/common` builds a headless physics app; `common::app_with` takes extra plugins, which can't be added once the app is finished.
 
 Build notes:
 - Bevy uses `default-features = false` with a hand-picked feature list in `Cargo.toml`. The commented-out lines mirror Bevy's default features. If a Bevy type or plugin is missing, the feature that provides it is probably commented out.
@@ -30,6 +30,7 @@ Build notes:
 - `src/objects/` holds one module per game object. Each module defines a marker `Component`, its systems, and a `pub struct Plugin` that registers them. New objects follow this pattern and get added to the plugin tuple in `main.rs`.
 - `src/flowfield/` keeps one grid per clearance in `flowfield::CLEARANCES` over the map (4 px cells); enemies of any radius (`Enemy::radius`) use the grid with the smallest clearance at least their radius. Cells closer than the clearance to a static, non-sensor collider are blocked, and a Dijkstra search from the player's cell gives each free cell its walking distance. Blocked cells within the clearance around the player that aren't inside a collider stay walkable, so the player is reachable while standing closer to an obstacle than the clearance. Enemies with a free line of sight walk straight at the player, the others follow the field via `FlowField::direction` and steer away from each other while their personal spaces (`enemy::Separation`, radius and strength per enemy) overlap. `flowfield/debug.rs` draws one grid as an overlay (blocked cells, distances, field directions); `FlowFieldDebug::cycle` switches between the grids.
 - Movement is force-based (`src/movement.rs`). Systems set a `DesiredVelocity` on Avian bodies (player and enemies: `RigidBody::Dynamic` with `Mass` and `Strength`) instead of changing `Transform` or `LinearVelocity` directly. In `FixedUpdate`, a spring towards an anchor moving at that velocity applies a force limited by `Strength`, so heavier and stronger bodies win when pushing each other. Rotation stays locked for the physics; enemies turn towards their `enemy::Heading` (the direction their navigation wants to walk, unaffected by knockback) by setting Avian's `Rotation` directly (`enemy::face_heading`, limited by `TURN_SPEED`). The camera follows the player's `Transform` and keeps its own z.
+- Combat (`src/combat/`): units with `Health` and an `Attack` hit every opponent whose collider is within the attack's reach once per cooldown (the player all enemies around it, an enemy the player). A hit deals damage and knocks the target back with an impulse, so lighter units fly further. Dead enemies are despawned; when the player dies, all enemies are removed and the player is healed. `player::combat()` and `Enemy::combat` hold the values. `combat::health_bar` draws bars above damaged units and is kept apart from the logic, since it needs meshes and materials.
 
 ### Tiled map → ECS
 

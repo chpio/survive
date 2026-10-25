@@ -1,11 +1,15 @@
 use crate::{
+    combat::{Attack, Health},
     flowfield::FlowField,
     movement::{DesiredVelocity, Strength},
     objects::player,
 };
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use std::f32::consts::{PI, TAU};
+use std::{
+    f32::consts::{PI, TAU},
+    time::Duration,
+};
 
 /// How fast enemies turn towards their [`Heading`], in rad/s.
 pub const TURN_SPEED: f32 = TAU;
@@ -56,6 +60,22 @@ impl Enemy {
             Mass(self.mass()),
             NoAutoMass,
             Strength(self.strength()),
+        )
+    }
+
+    /// Health and attack. Larger enemies last longer and push the player further (both grow with
+    /// the mass) and hit harder (with the radius, so a few large ones don't kill the player in
+    /// one hit). An enemy hits the player once a second while touching it.
+    pub fn combat(self) -> impl Bundle {
+        let mass = self.mass();
+        (
+            Health::new(20. * mass),
+            Attack::new(
+                self.radius,
+                self.radius + 2.,
+                100. * mass,
+                Duration::from_secs(1),
+            ),
         )
     }
 }
@@ -111,6 +131,7 @@ fn spawn_enemy(
             Name::new("Enemy"),
             enemy.separation(),
             enemy.physics(),
+            enemy.combat(),
             Mesh2d(meshes.add(enemy.shape())),
             MeshMaterial2d(materials.add(Color::srgb(0.8, 0.2, 0.2))),
             // above the map layer at z = 0

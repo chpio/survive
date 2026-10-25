@@ -1,9 +1,12 @@
+use crate::combat::Health;
 use dioxus::prelude::*;
 use std::sync::mpsc;
 
 /// Game state shown in the HUD, written by the game every frame.
 #[derive(Clone, Copy)]
 pub struct State {
+    /// `None` while there is no player
+    pub player_health: Signal<Option<Health>>,
     pub enemy_count: Signal<usize>,
     /// Clearance of the flow field grid shown in the debug overlay, `None` while it is hidden
     pub flow_field_grid: Signal<Option<f32>>,
@@ -70,9 +73,15 @@ pub fn app() -> Element {
         None => "aus".to_string(),
     };
 
+    let health = match *state.player_health.read() {
+        Some(health) => format!("{:.0} / {:.0}", health.current, health.max),
+        None => "–".to_string(),
+    };
+
     rsx! {
         style { {STYLE} }
         div { class: "hud",
+            span { "Leben: {health}" }
             span { "Gegner: {state.enemy_count}" }
             button {
                 onclick: move |_| {

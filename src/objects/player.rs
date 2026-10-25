@@ -1,6 +1,10 @@
-use crate::movement::{DesiredVelocity, Strength};
+use crate::{
+    combat::{Attack, Health},
+    movement::{DesiredVelocity, Strength},
+};
 use avian2d::prelude::*;
 use bevy::prelude::*;
+use std::time::Duration;
 
 #[derive(Default, Clone, Component)]
 pub struct Player;
@@ -21,6 +25,16 @@ pub fn physics() -> impl Bundle {
         Mass(MASS),
         NoAutoMass,
         Strength(STRENGTH),
+    )
+}
+
+pub const MAX_HEALTH: f32 = 100.;
+
+/// Health and attack of the player, which hits all enemies around it twice a second.
+pub fn combat() -> impl Bundle {
+    (
+        Health::new(MAX_HEALTH),
+        Attack::new(10., SHAPE.radius + 6., 300., Duration::from_millis(500)),
     )
 }
 

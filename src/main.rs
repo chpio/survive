@@ -6,7 +6,7 @@ use bevy::{
 };
 use bevy_ecs_tiled::prelude::*;
 use std::time::Duration;
-use survival::{flowfield, movement, objects, ui};
+use survival::{combat, flowfield, movement, objects, ui};
 
 fn main() {
     App::new()
@@ -58,6 +58,8 @@ fn main() {
             flowfield::Plugin,
             flowfield::debug::Plugin,
             movement::Plugin,
+            combat::Plugin,
+            combat::health_bar::Plugin,
         ))
         .add_plugins(ui::Plugin)
         .run();
@@ -84,6 +86,7 @@ fn startup(
         objects::player::Player,
         Name::new("Player"),
         objects::player::physics(),
+        objects::player::combat(),
         Mesh2d(meshes.add(objects::player::SHAPE)),
         MeshMaterial2d(materials.add(Color::srgb(0.2, 0.4, 0.9))),
         // above the map layer at z = 0

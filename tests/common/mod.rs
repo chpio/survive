@@ -2,19 +2,25 @@
 #![allow(dead_code)]
 
 use avian2d::prelude::*;
-use bevy::{prelude::*, time::TimeUpdateStrategy};
+use bevy::{app::Plugins, prelude::*, time::TimeUpdateStrategy};
 use std::time::Duration;
 use survival::movement;
 
 /// Headless app with top-down physics and force-based movement, advancing one fixed step of
 /// 1/64 s per update.
 pub fn app() -> App {
+    app_with(())
+}
+
+/// [`app`] with additional `plugins`, which can't be added after it is finished.
+pub fn app_with<M>(plugins: impl Plugins<M>) -> App {
     let mut app = App::new();
     app.add_plugins((
         MinimalPlugins,
         TransformPlugin,
         PhysicsPlugins::default().with_length_unit(100.),
         movement::Plugin,
+        plugins,
     ))
     .insert_resource(Gravity::ZERO)
     .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
