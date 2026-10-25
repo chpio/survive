@@ -117,11 +117,31 @@ fn spawn_enemy_on_key(
     }
 }
 
+/// Mesh and materials shared by all enemies, so they are drawn in batches. The mesh is a unit
+/// circle, scaled to each enemy's radius.
+#[derive(Resource)]
+struct EnemyAssets {
+    circle: Handle<Mesh>,
+    body: Handle<ColorMaterial>,
+    dot: Handle<ColorMaterial>,
+}
+
+impl FromWorld for EnemyAssets {
+    fn from_world(world: &mut World) -> Self {
+        let circle = world.resource_mut::<Assets<Mesh>>().add(Circle::new(1.));
+        let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
+        Self {
+            circle,
+            body: materials.add(Color::srgb(0.8, 0.2, 0.2)),
+            dot: materials.add(Color::srgb(1., 0.9, 0.9)),
+        }
+    }
+}
+
 fn spawn_enemy(
     mut spawn_enemy: MessageReader<SpawnEnemy>,
     mut cmds: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
+    assets: Res<EnemyAssets>,
 ) {
     for &SpawnEnemy(enemy) in spawn_enemy.read() {
         cmds.spawn((
@@ -136,13 +156,15 @@ fn spawn_enemy(
             Visibility::default(),
             children![(
                 Body,
-                Mesh2d(meshes.add(enemy.shape())),
-                MeshMaterial2d(materials.add(Color::srgb(0.8, 0.2, 0.2))),
-                // dot at the front, showing where the enemy faces (+x when not rotated)
+                Mesh2d(assets.circle.clone()),
+                MeshMaterial2d(assets.body.clone()),
+                Transform::from_scale(Vec3::new(enemy.radius, enemy.radius, 1.)),
+                // dot at the front, showing where the enemy faces (+x when not rotated), in
+                // units of the radius
                 children![(
-                    Mesh2d(meshes.add(Circle::new(enemy.radius * 0.25))),
-                    MeshMaterial2d(materials.add(Color::srgb(1., 0.9, 0.9))),
-                    Transform::from_xyz(enemy.radius * 0.55, 0., 0.1),
+                    Mesh2d(assets.circle.clone()),
+                    MeshMaterial2d(assets.dot.clone()),
+                    Transform::from_xyz(0.55, 0., 0.1).with_scale(Vec3::new(0.25, 0.25, 1.)),
                 )],
             )],
         ));
@@ -240,15 +262,17 @@ pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<SpawnEnemy>().add_systems(
-            Update,
-            (
-                spawn_enemy_on_key,
-                spawn_enemy,
-                move_towards_player,
-                // after the heading is updated
-                face_heading.after(move_towards_player),
-            ),
-        );
+        app.add_message::<SpawnEnemy>()
+            .init_resource::<EnemyAssets>()
+            .add_systems(
+                Update,
+                (
+                    spawn_enemy_on_key,
+                    spawn_enemy,
+                    move_towards_player,
+                    // after the heading is updated
+                    face_heading.after(move_towards_player),
+                ),
+            );
     }
 }
