@@ -4,6 +4,7 @@ mod combat;
 mod common;
 mod enemy;
 mod flowfield;
+mod items;
 mod movement;
 mod perf;
 mod settings;

@@ -67,8 +67,8 @@ Klasse macht das Blockieren zu einer bewussten Entscheidung. Elemente mit `point
 
 ## Nutzung in der Spielwelt
 
-- Objekte in der Welt (Items, Truhen) bekommen Observer für `Pointer<Click>` und
-  `Pointer<Over>`/`Pointer<Out>`. Über dem HUD lösen sie nicht aus.
+- Objekte in der Welt (Items, Truhen) bekommen Observer für `PointerClick` und
+  `PointerOver`/`PointerOut`. Über dem HUD lösen sie nicht aus.
 - Eingaben ohne Ziel-Entity, z. B. ein Angriff per Klick auf eine Position, lesen nicht
   `ButtonInput<MouseButton>` direkt. Sie prüfen vorher, ob `ui::Hud` in der `HoverMap` liegt.
   Dafür kommt eine Run-Condition `ui::pointer_over_hud` dazu, sobald es so eine Eingabe gibt.

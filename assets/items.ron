@@ -1,0 +1,7 @@
+// Item types by id: name, weight of one item in kg, whether they stack, sRGB color of the
+// placeholder sprite
+{
+    "apple": (name: "Apfel", weight: 0.2, stackable: true, color: (0.3, 0.8, 0.2)),
+    "healing_potion": (name: "Heiltrank", weight: 0.5, stackable: true, color: (0.8, 0.2, 0.2)),
+    "sword": (name: "Schwert", weight: 3.0, stackable: false, color: (0.7, 0.7, 0.8)),
+}

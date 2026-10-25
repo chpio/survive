@@ -4,6 +4,7 @@ use crate::{
     perf::{Averages, MAIN_THREAD, Node, RENDER_THREAD},
     settings::Settings,
 };
+use bevy::ecs::entity::Entity;
 use dioxus::prelude::*;
 use std::{sync::mpsc, time::Duration};
 
@@ -22,6 +23,18 @@ pub struct State {
     pub timings: Option<Averages>,
     pub menu_open: bool,
     pub settings: Settings,
+    /// The player's items, `None` while the inventory is closed
+    pub inventory: Option<Vec<InventoryRow>>,
+}
+
+/// An item or a stack in the inventory.
+#[derive(Clone, PartialEq)]
+pub struct InventoryRow {
+    pub item: Entity,
+    pub name: String,
+    pub count: u32,
+    /// Weight of all items in the row in kg
+    pub weight: f32,
 }
 
 /// Requests from the HUD to the game.
@@ -33,6 +46,12 @@ pub enum Action {
     ShowTimings(bool),
     /// Replaces the settings
     ChangeSettings(Settings),
+    ShowInventory(bool),
+    /// Puts down `count` of the item (the whole stack if it has fewer)
+    DropItem {
+        item: Entity,
+        count: u32,
+    },
 }
 
 pub fn app() -> Element {
@@ -98,8 +117,39 @@ pub fn app() -> Element {
                 }
             }
         }
+        if let Some(rows) = state.inventory {
+            {inventory(rows, send)}
+        }
         if state.menu_open {
             {menu(state.settings, send)}
+        }
+    }
+}
+
+fn inventory(rows: Vec<InventoryRow>, send: Callback<Action>) -> Element {
+    let weight: f32 = rows.iter().map(|row| row.weight).sum();
+
+    rsx! {
+        div { class: "inventory blocks-pointer",
+            div { class: "header",
+                span { class: "title", "Inventar" }
+                button { onclick: move |_| send(Action::ShowInventory(false)), "×" }
+            }
+            if rows.is_empty() {
+                span { class: "empty", "Leer" }
+            }
+            for row in rows {
+                div { class: "item", key: "{row.item}",
+                    span { class: "name", "{row.name}" }
+                    span { class: "count", "{row.count}×" }
+                    span { class: "weight", "{row.weight:.1} kg" }
+                    if row.count > 1 {
+                        button { onclick: move |_| send(Action::DropItem { item: row.item, count: 1 }), "1 ablegen" }
+                    }
+                    button { onclick: move |_| send(Action::DropItem { item: row.item, count: row.count }), "Ablegen" }
+                }
+            }
+            span { class: "total", "Gesamt: {weight:.1} kg" }
         }
     }
 }

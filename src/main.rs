@@ -5,7 +5,7 @@ use bevy::{
 };
 use bevy_ecs_tiled::prelude::*;
 use std::time::Duration;
-use survival::{combat, flowfield, movement, objects, perf, settings, ui};
+use survival::{combat, flowfield, items, movement, objects, perf, settings, ui};
 
 fn main() {
     App::new()
@@ -57,6 +57,11 @@ fn main() {
             movement::Plugin,
             combat::Plugin,
             combat::health_bar::Plugin,
+        ))
+        .add_plugins((
+            items::Plugin,
+            items::definitions::Plugin,
+            items::input::Plugin,
         ))
         .add_plugins((settings::Plugin, ui::Plugin, perf::Plugin))
         .run();

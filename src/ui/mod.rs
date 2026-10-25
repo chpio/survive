@@ -15,6 +15,7 @@ mod stylesheet;
 use crate::{
     combat::Health,
     flowfield::{FlowField, debug::FlowFieldDebug},
+    items::{DropItem, Inventory, Item, ItemDefinitions, Stack},
     objects::{enemy, player::Player},
     perf,
     settings::{Menu, Settings},
@@ -78,6 +79,7 @@ struct UiDocument {
     /// Whether the document has to be painted again, e.g. after input
     needs_paint: bool,
     show_timings: bool,
+    show_inventory: bool,
     redraw_request: Arc<RedrawRequest>,
 }
 
@@ -154,6 +156,7 @@ fn setup(world: &mut World) {
         actions: action_rx,
         needs_paint: true,
         show_timings: false,
+        show_inventory: false,
         redraw_request,
     });
 
@@ -290,7 +293,11 @@ fn pointer_event(
 
 fn sync_state(
     mut ui: NonSendMut<UiDocument>,
-    player: Query<&Health, With<Player>>,
+    player: Query<(&Health, Option<&Inventory>), With<Player>>,
+    items: Query<(&Item, Option<&Stack>)>,
+    definitions: Res<ItemDefinitions>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut drop_item: MessageWriter<DropItem>,
     enemies: Query<(), With<enemy::Enemy>>,
     flow_field: Res<FlowField>,
     mut flow_field_debug: ResMut<FlowFieldDebug>,
@@ -301,6 +308,9 @@ fn sync_state(
     menu: Res<State<Menu>>,
 ) {
     let ui = &mut *ui;
+    if keyboard_input.just_pressed(KeyCode::KeyI) {
+        ui.show_inventory = !ui.show_inventory;
+    }
     for action in ui.actions.try_iter() {
         match action {
             hud::Action::SpawnEnemy => {
@@ -319,11 +329,35 @@ fn sync_state(
                 // only on changes, since changing the settings saves them
                 settings.set_if_neq(new_settings);
             }
+            hud::Action::ShowInventory(show) => {
+                ui.show_inventory = show;
+            }
+            hud::Action::DropItem { item, count } => {
+                drop_item.write(DropItem { item, count });
+            }
         }
     }
 
+    let player = player.single().ok();
+    let inventory = player.filter(|_| ui.show_inventory).map(|(_, inventory)| {
+        let held = inventory.map(Inventory::items).unwrap_or_default();
+        held.iter()
+            .filter_map(|&item| Some((item, items.get(item).ok()?)))
+            .map(|(item, (Item(id), stack))| {
+                let definition = definitions.get(id);
+                let count = stack.map_or(1, |stack| stack.0);
+                hud::InventoryRow {
+                    item,
+                    name: definition.map_or_else(|| id.0.clone(), |d| d.name.clone()),
+                    count,
+                    weight: definition.map_or(0., |d| d.weight) * count as f32,
+                }
+            })
+            .collect()
+    });
+
     let new_state = hud::State {
-        player_health: player.single().ok().copied(),
+        player_health: player.map(|(health, _)| *health),
         enemy_count: enemies.iter().count(),
         flow_field_grid: flow_field_debug
             .grid
@@ -337,6 +371,7 @@ fn sync_state(
             .and_then(|timings| timings.averages.clone()),
         menu_open: *menu.get() == Menu::Open,
         settings: *settings,
+        inventory,
     };
     let mut state = ui.state;
     // only on changes, since setting the signal re-renders the HUD
