@@ -7,7 +7,27 @@ use avian2d::prelude::*;
 use bevy::prelude::*;
 
 #[derive(Default, Clone, Component)]
+#[require(Separation)]
 pub struct Enemy;
+
+/// Personal space of an enemy. Enemies steer away from each other while their personal spaces
+/// overlap, so a larger radius keeps all other enemies further away.
+#[derive(Component, Clone, Copy)]
+pub struct Separation {
+    /// Radius of the personal space around the enemy's center, in px
+    pub radius: f32,
+    /// How strongly the enemy steers away, relative to walking towards the player
+    pub strength: f32,
+}
+
+impl Default for Separation {
+    fn default() -> Self {
+        Self {
+            radius: SHAPE.radius + 2.,
+            strength: 2.5,
+        }
+    }
+}
 
 /// Shape of the collider and the placeholder mesh.
 pub const SHAPE: Circle = Circle::new(5.);
@@ -64,18 +84,17 @@ pub fn move_towards_player(
     player: Single<&Transform, With<player::Player>>,
     flow_field: Res<FlowField>,
     spatial_query: SpatialQuery,
-    positions: Query<&Transform, With<Enemy>>,
-    mut enemies: Query<(Entity, &Transform, &mut DesiredVelocity), With<Enemy>>,
+    others: Query<(&Transform, &Separation), With<Enemy>>,
+    mut enemies: Query<(Entity, &Transform, &Separation, &mut DesiredVelocity), With<Enemy>>,
 ) {
     const MOVE_SPEED: f32 = 100.;
-    /// Enemies closer than this push each other apart
-    const SEPARATION_DISTANCE: f32 = SHAPE.radius * 2. + 4.;
-    const SEPARATION_WEIGHT: f32 = 1.5;
 
-    // touches the collider of every enemy whose center is closer than `SEPARATION_DISTANCE`
-    let neighborhood = Collider::circle(SEPARATION_DISTANCE - SHAPE.radius);
+    let max_radius = others
+        .iter()
+        .map(|(_, separation)| separation.radius)
+        .fold(0., f32::max);
 
-    for (entity, transform, mut desired) in &mut enemies {
+    for (entity, transform, separation, mut desired) in &mut enemies {
         let position = transform.translation.xy();
 
         // follow the flow field around obstacles, walk straight if the player can't be reached
@@ -83,7 +102,9 @@ pub fn move_towards_player(
             .direction(position)
             .unwrap_or_else(|| (player.translation.xy() - position).normalize_or_zero());
 
-        let mut separation = Vec2::ZERO;
+        // finds every enemy whose personal space could overlap with this one's
+        let neighborhood = Collider::circle(separation.radius + max_radius);
+        let mut push = Vec2::ZERO;
         spatial_query.shape_intersections_callback(
             &neighborhood,
             position,
@@ -91,25 +112,26 @@ pub fn move_towards_player(
             &SpatialQueryFilter::default().with_excluded_entities([entity]),
             |other| {
                 // the query also finds the player and obstacles
-                let Ok(other_transform) = positions.get(other) else {
+                let Ok((other_transform, other_separation)) = others.get(other) else {
                     return true;
                 };
                 let offset = position - other_transform.translation.xy();
                 let distance = offset.length();
-                if distance < SEPARATION_DISTANCE {
+                let range = separation.radius + other_separation.radius;
+                if distance < range {
                     // enemies spawn on the same spot, so pick a direction per entity when they
                     // overlap
                     let away = offset.try_normalize().unwrap_or_else(|| {
                         Vec2::from_angle(entity.index_u32() as f32 * std::f32::consts::GOLDEN_RATIO)
                     });
-                    separation += away * (1. - distance / SEPARATION_DISTANCE);
+                    push += away * (1. - distance / range);
                 }
                 true
             },
         );
 
         let new_velocity =
-            (direction + separation * SEPARATION_WEIGHT).clamp_length_max(1.) * MOVE_SPEED;
+            (direction + push * separation.strength).clamp_length_max(1.) * MOVE_SPEED;
         if desired.0 != new_velocity {
             desired.0 = new_velocity;
         }

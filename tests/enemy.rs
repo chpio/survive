@@ -72,3 +72,27 @@ fn enemies_keep_distance_from_each_other() {
         "closest enemies {min_distance} apart"
     );
 }
+
+#[test]
+fn larger_separation_keeps_enemies_further_away() {
+    let mut app = common::app();
+    app.init_resource::<FlowField>()
+        .add_systems(Update, enemy::move_towards_player);
+    common::spawn(&mut app, player::Player, Vec2::new(500., 0.));
+    let small = common::spawn(&mut app, (enemy::Enemy, enemy::physics()), Vec2::ZERO);
+    let large = enemy::Separation {
+        radius: 20.,
+        ..default()
+    };
+    let large = common::spawn(
+        &mut app,
+        (enemy::Enemy, enemy::physics(), large),
+        Vec2::new(0., 1.),
+    );
+
+    common::run(&mut app, 1.);
+
+    // personal spaces of 7 and 20 px, normal enemies keep 14 px apart
+    let distance = common::position(&app, small).distance(common::position(&app, large));
+    assert!(distance > 22., "enemies {distance} apart");
+}
