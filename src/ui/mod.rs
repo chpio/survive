@@ -1,8 +1,9 @@
 //! Dioxus Native UI on top of the game.
 //!
 //! The Dioxus `VirtualDom` drives a Blitz document, which is laid out and painted into a Vello
-//! scene every frame. The render world renders that scene with Bevy's own wgpu device into an
-//! `Image`, which is shown as a fullscreen `ImageNode`.
+//! scene. The render world renders that scene with Bevy's own wgpu device into an `Image`, which
+//! is shown as a fullscreen `ImageNode`. Both only happen when the HUD changed (after input, a
+//! re-render, a resize or a redraw request from Blitz); otherwise the image keeps its content.
 
 mod hud;
 
@@ -21,7 +22,8 @@ use bevy::{
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_asset::RenderAssets,
         render_resource::{
-            Extent3d, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor,
+            Extent3d, TextureDimension, TextureFormat, TextureId, TextureUsages,
+            TextureViewDescriptor,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::GpuImage,
@@ -35,12 +37,16 @@ use blitz_traits::{
         BlitzPointerEvent, BlitzPointerId, MouseEventButton, MouseEventButtons, Point,
         PointerCoords, PointerDetails, UiEvent,
     },
-    shell::{ColorScheme, Viewport},
+    shell::{ColorScheme, ShellProvider, Viewport},
 };
 use dioxus::prelude::{Modifiers, ReadableExt, ScopeId, Signal, VirtualDom, WritableExt};
 use dioxus_native_dom::DioxusDocument;
 use std::{
-    sync::{Mutex, mpsc},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     time::Instant,
 };
 
@@ -53,9 +59,23 @@ struct UiDocument {
     buttons: MouseEventButtons,
     state: Signal<hud::State>,
     actions: mpsc::Receiver<hud::Action>,
+    /// Whether the document has to be painted again, e.g. after input
+    needs_paint: bool,
+    redraw_request: Arc<RedrawRequest>,
 }
 
-/// The painted UI and the image it is rendered into, extracted to the render world every frame.
+/// Set by Blitz when the document has to be painted again for reasons of its own.
+#[derive(Default)]
+struct RedrawRequest(AtomicBool);
+
+impl ShellProvider for RedrawRequest {
+    fn request_redraw(&self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+}
+
+/// The painted UI and the image it is rendered into, extracted to the render world whenever it is
+/// painted.
 #[derive(Resource, ExtractResource, Clone)]
 #[extract_app(RenderApp)]
 struct UiScene {
@@ -72,7 +92,14 @@ fn setup(world: &mut World) {
     let state = vdom.in_scope(ScopeId::ROOT, || Signal::new(hud::State::default()));
     vdom.provide_root_context(state);
 
-    let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
+    let redraw_request = Arc::new(RedrawRequest::default());
+    let mut doc = DioxusDocument::new(
+        vdom,
+        DocumentConfig {
+            shell_provider: Some(redraw_request.clone()),
+            ..default()
+        },
+    );
     doc.initial_build();
 
     world.insert_non_send(UiDocument {
@@ -82,6 +109,8 @@ fn setup(world: &mut World) {
         buttons: MouseEventButtons::None,
         state,
         actions: action_rx,
+        needs_paint: true,
+        redraw_request,
     });
 
     let mut image = Image::new_uninit(
@@ -126,6 +155,7 @@ fn forward_input(
     let ui = &mut *ui;
 
     for event in cursor_moved.read() {
+        ui.needs_paint = true;
         ui.cursor = event.position;
         let event = pointer_event(ui.cursor, MouseEventButton::Main, ui.buttons);
         ui.doc.handle_ui_event(UiEvent::PointerMove(event));
@@ -138,6 +168,7 @@ fn forward_input(
             MouseButton::Middle => (MouseEventButton::Auxiliary, MouseEventButtons::Auxiliary),
             _ => continue,
         };
+        ui.needs_paint = true;
         let event = match event.state {
             ButtonState::Pressed => {
                 ui.buttons |= flag;
@@ -224,7 +255,9 @@ fn paint_ui(
     mut images: ResMut<Assets<Image>>,
 ) {
     let ui = &mut *ui;
-    ui.doc.poll(None);
+    // true after a re-render, e.g. when `sync_state` changed the state
+    ui.needs_paint |= ui.doc.poll(None);
+    ui.needs_paint |= ui.redraw_request.0.swap(false, Ordering::Relaxed);
 
     let (width, height) = (window.physical_width(), window.physical_height());
     let scale = window.scale_factor();
@@ -232,6 +265,7 @@ fn paint_ui(
 
     let viewport = doc.viewport();
     if viewport.window_size != (width, height) || viewport.hidpi_scale != scale {
+        ui.needs_paint = true;
         doc.set_viewport(Viewport::new(width, height, scale, ColorScheme::Dark));
         // Blitz aligns a node's inline layout in every measure pass. After a resize, taffy serves
         // the final layout of unchanged nodes from its cache, so centered text (e.g. in buttons)
@@ -251,6 +285,11 @@ fn paint_ui(
             });
         }
     }
+
+    if !ui.needs_paint {
+        return;
+    }
+    ui.needs_paint = false;
 
     doc.resolve(ui.started.elapsed().as_secs_f64());
 
@@ -272,12 +311,15 @@ fn init_vello_renderer(mut commands: Commands, device: Res<RenderDevice>) {
     commands.insert_resource(VelloRenderer(Mutex::new(renderer)));
 }
 
+/// Renders the scene when it was painted again, or when the texture was recreated (after a
+/// resize, possibly a frame after the scene for the new size).
 fn render_ui(
     ui_scene: Res<UiScene>,
     gpu_images: Res<RenderAssets<GpuImage>>,
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
     renderer: Res<VelloRenderer>,
+    mut rendered_texture: Local<Option<TextureId>>,
 ) {
     let Some(gpu_image) = gpu_images.get(&ui_scene.image) else {
         return;
@@ -286,6 +328,11 @@ fn render_ui(
     if size.width == 0 || size.height == 0 {
         return;
     }
+    let texture = Some(gpu_image.texture.id());
+    if !ui_scene.is_changed() && *rendered_texture == texture {
+        return;
+    }
+    *rendered_texture = texture;
 
     let view = gpu_image.texture.create_view(&TextureViewDescriptor {
         format: Some(TextureFormat::Rgba8Unorm),
