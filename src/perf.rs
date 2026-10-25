@@ -4,11 +4,13 @@
 //! in between. Measured steps in the same schedule run one after another, so their times don't
 //! include each other; other systems may still run in parallel. Steps in the fixed timestep run
 //! zero or more times per frame and are summed up. Rendering the HUD happens in
-//! the render world, which reports its time through a shared counter. [`Timings::averages`] holds
-//! the averages per frame over the last [`PERIOD`].
+//! the render world, which reports its time through a shared counter. The time between the end
+//! of one frame's schedules and the start of the next one's is [`Step::Wait`].
+//! [`Timings::averages`] holds the averages per frame over the last [`PERIOD`].
 
 use avian2d::prelude::PhysicsSystems;
 use bevy::{
+    app::MainScheduleOrder,
     ecs::schedule::ScheduleLabel,
     prelude::*,
     render::{Render, RenderApp, RenderSystems},
@@ -34,12 +36,15 @@ pub enum Step {
     /// Avian's physics step, measured around its own sets
     Physics,
     HudPaint,
+    /// Between two frames on the main thread, mostly waiting for the render thread, which waits
+    /// for VSync. Not a set, measured between [`FrameEnd`] and [`FrameStart`].
+    Wait,
     /// In the render world
     HudRender,
 }
 
 impl Step {
-    pub const ALL: [Step; 8] = [
+    pub const ALL: [Step; 9] = [
         Step::FlowField,
         Step::FlowFieldOverlay,
         Step::Enemies,
@@ -47,6 +52,7 @@ impl Step {
         Step::Movement,
         Step::Physics,
         Step::HudPaint,
+        Step::Wait,
         Step::HudRender,
     ];
 
@@ -59,6 +65,7 @@ impl Step {
             Step::Movement => "Bewegung",
             Step::Physics => "Physik",
             Step::HudPaint => "HUD malen",
+            Step::Wait => "Warten (VSync/Render)",
             Step::HudRender => "HUD rendern",
         }
     }
@@ -80,6 +87,7 @@ pub const MAIN_THREAD: &[Node] = &[
     Node::Group("Fester Takt", &[Step::Movement, Step::Physics]),
     Node::Step(Step::FlowFieldOverlay),
     Node::Step(Step::HudPaint),
+    Node::Step(Step::Wait),
 ];
 
 /// Steps in the render world, which runs in parallel to the main thread.
@@ -105,8 +113,8 @@ impl Averages {
         }
     }
 
-    /// Frame time outside the measured steps on the main thread: Bevy itself, preparing the
-    /// rendering and waiting for the next frame.
+    /// Frame time outside the measured steps on the main thread: Bevy itself and preparing the
+    /// rendering.
     pub fn rest(&self) -> Duration {
         let measured: Duration = MAIN_THREAD.iter().map(|node| self.node(node)).sum();
         self.frame.saturating_sub(measured)
@@ -122,6 +130,8 @@ pub struct Timings {
     steps: [Duration; Step::ALL.len()],
     frame: Duration,
     frames: u32,
+    /// When the last frame's schedules were done
+    frame_end: Option<Instant>,
 }
 
 impl Timings {
@@ -139,6 +149,14 @@ impl Timings {
         self.steps[step as usize] += duration;
     }
 }
+
+/// Runs before all other schedules of a frame.
+#[derive(ScheduleLabel, Clone, PartialEq, Eq, Hash, Debug)]
+struct FrameStart;
+
+/// Runs after all other schedules of a frame.
+#[derive(ScheduleLabel, Clone, PartialEq, Eq, Hash, Debug)]
+struct FrameEnd;
 
 /// Nanoseconds the render world spent on [`Step::HudRender`] since the main world last read it.
 #[derive(Resource, Clone, Default)]
@@ -199,7 +217,21 @@ impl bevy::app::Plugin for Plugin {
         let render_time = RenderTime::default();
         app.init_resource::<Timings>()
             .insert_resource(render_time.clone())
-            .add_systems(Last, finish_frame);
+            .add_systems(Last, finish_frame)
+            .add_schedule(Schedule::new(FrameStart))
+            .add_schedule(Schedule::new(FrameEnd))
+            .add_systems(FrameStart, |mut timings: ResMut<Timings>| {
+                if let Some(frame_end) = timings.frame_end.take() {
+                    timings.add(Step::Wait, frame_end.elapsed());
+                }
+            })
+            .add_systems(FrameEnd, |mut timings: ResMut<Timings>| {
+                timings.frame_end = Some(Instant::now());
+            });
+        let mut order = app.world_mut().resource_mut::<MainScheduleOrder>();
+        order.insert_before(First, FrameStart);
+        order.insert_after(Last, FrameEnd);
+
         measure(app, PreUpdate, &[Step::FlowField]);
         measure(
             app,

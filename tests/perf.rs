@@ -66,6 +66,23 @@ fn groups_sum_up_their_steps_and_the_rest_fills_the_frame() {
     let logic = &perf::MAIN_THREAD[0];
     assert!(matches!(logic, Node::Group(_, steps) if steps.len() == 3));
     assert_eq!(averages.node(logic), ms(3));
-    // all steps but the one in the render thread
-    assert_eq!(averages.rest(), ms(20 - 7));
+    // minus all steps on the main thread
+    let main_thread = (Step::ALL.len() - perf::RENDER_THREAD.len()) as u64;
+    assert_eq!(averages.rest(), ms(20 - main_thread));
+}
+
+#[test]
+fn measures_the_time_between_frames_as_waiting() {
+    let mut app = common::app_with(perf::Plugin);
+    while app.world().resource::<Timings>().averages.is_none() {
+        app.update();
+        std::thread::sleep(Duration::from_millis(2));
+    }
+
+    let averages = app.world().resource::<Timings>().averages.clone().unwrap();
+    let wait = averages.step(Step::Wait);
+    assert!(
+        wait >= Duration::from_millis(2) && wait < Duration::from_millis(10),
+        "wait {wait:?}"
+    );
 }

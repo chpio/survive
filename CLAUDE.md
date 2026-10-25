@@ -51,6 +51,6 @@ Build notes:
 
 The HUD button "Flowfield" cycles the flow field overlay through the grids (5, 8, 12, 16 px clearance) and off.
 
-The HUD checkbox "Performance" shows the time per frame of each `perf::Step` as a tree, averaged over half a second. "Sonstiges" is the rest of the frame: Bevy itself, preparing the rendering and waiting for the next frame.
+The HUD checkbox "Performance" shows the time per frame of each `perf::Step` as a tree, averaged over half a second. "Warten (VSync/Render)" is the time between two frames, mostly waiting for the render thread, which waits for VSync; "Sonstiges" is the rest of the frame (Bevy itself, preparing the rendering).
 
 `PhysicsDebugPlugin` draws collider outlines. They start hidden; the HUD checkbox "Kollider" shows them.
