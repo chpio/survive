@@ -1,7 +1,5 @@
-mod common;
-
+use crate::common::{self, LARGE, SMALL, health};
 use bevy::prelude::*;
-use common::{LARGE, SMALL, health};
 use std::time::Duration;
 use survival::{
     combat::{self, Attack, Health},

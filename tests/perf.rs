@@ -1,5 +1,4 @@
-mod common;
-
+use crate::common;
 use bevy::prelude::*;
 use std::time::Duration;
 use survival::perf::{self, Averages, Node, Step, Timings};

@@ -1,6 +1,3 @@
-// each test binary uses only some of these helpers
-#![allow(dead_code)]
-
 use avian2d::prelude::*;
 use bevy::{app::Plugins, prelude::*, time::TimeUpdateStrategy};
 use std::time::Duration;

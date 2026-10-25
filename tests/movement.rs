@@ -1,8 +1,6 @@
-mod common;
-
+use crate::common::{self, LARGE, SMALL};
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use common::{LARGE, SMALL};
 use survival::objects::{enemy::Enemy, player};
 
 #[test]

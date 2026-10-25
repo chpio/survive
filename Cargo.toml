@@ -3,6 +3,22 @@ name = "survival"
 version = "0.0.0"
 edition = "2024"
 publish = false
+# the files in tests/ are modules of the single test binary below, not test binaries of their own
+autotests = false
+
+# all tests live in tests/, in one binary, so the game and its dependencies are linked only once
+[[test]]
+name = "it"
+path = "tests/main.rs"
+
+# without tests of their own, they would only link empty test binaries
+[lib]
+test = false
+doctest = false
+
+[[bin]]
+name = "survival"
+test = false
 
 [lints.clippy]
 # Bevy system params (queries with filters) are complex types by nature

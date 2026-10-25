@@ -1,8 +1,6 @@
-mod common;
-
+use crate::common::{self, SMALL};
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use common::SMALL;
 use survival::{
     flowfield::{CLEARANCES, FlowField},
     objects::{
