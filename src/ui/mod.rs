@@ -140,6 +140,8 @@ fn setup(world: &mut World) {
         vdom,
         DocumentConfig {
             shell_provider: Some(redraw_request.clone()),
+            // no browser defaults: `assets/ui/style.css` sets everything the HUD needs explicitly
+            ua_stylesheets: Vec::new(),
             ..default()
         },
     );

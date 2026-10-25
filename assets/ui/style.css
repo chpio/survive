@@ -1,3 +1,39 @@
+/* Base styles. The HUD has no user-agent stylesheet (see `ui::setup`), so every element starts
+   with CSS's initial values (e.g. `display: inline`), and what a browser would provide is set
+   here, only for the elements the HUD uses. */
+
+head,
+style {
+    display: none;
+}
+
+html,
+body,
+main,
+div {
+    display: block;
+}
+
+/* The HUD's texts can't be selected. On every element, since Blitz only checks the element a
+   drag starts on and its parent, not all ancestors. */
+* {
+    user-select: none;
+}
+
+button,
+input {
+    display: inline-block;
+}
+
+button {
+    text-align: center;
+}
+
+input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+}
+
 .hud {
     position: absolute;
     top: 8px;
