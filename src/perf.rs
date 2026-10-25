@@ -42,7 +42,8 @@ pub enum Step {
     /// Blitz turning the HUD into a Vello scene, a list of drawing commands
     HudScene,
     /// Between two frames on the main thread, mostly waiting for the render thread, which waits
-    /// for VSync. Not a set, measured between [`FrameEnd`] and [`FrameStart`].
+    /// for VSync. Not a set, measured from the end of one frame's schedules to the start of the
+    /// next one's.
     Wait,
     /// In the render world
     HudRender,
