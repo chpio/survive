@@ -2,6 +2,7 @@
 name = "survival"
 version = "0.0.0"
 edition = "2024"
+publish = false
 
 [lints.clippy]
 # Bevy system params (queries with filters) are complex types by nature

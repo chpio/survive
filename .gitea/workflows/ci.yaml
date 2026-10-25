@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # the fast checks that don't compile, in parallel to the test job. Each runs even if one before
+  # failed, so a run reports all of them.
+  check:
+    runs-on: ubuntu-latest
+    # built in the git/images repo, meant to float like in the test job. The plain ci-rust image
+    # is enough here, nothing is compiled.
+    container: ${{ vars.DOCKER_REGISTRY }}/git/ci-rust:latest # zizmor: ignore[unpinned-images]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: cargo fmt --check
+      - if: ${{ !cancelled() }}
+        run: cargo deny --locked check
+      - if: ${{ !cancelled() }}
+        run: cargo machete
+      - if: ${{ !cancelled() }}
+        run: typos
+      # both only look into .github/workflows on their own
+      - if: ${{ !cancelled() }}
+        run: actionlint .gitea/workflows/*.yaml
+      - if: ${{ !cancelled() }}
+        run: zizmor --offline .gitea/workflows/*.yaml
+
+  test:
+    runs-on: ubuntu-latest
+    # built in the git/images repo, with the alsa and fontconfig dev libs the sys crates link
+    # against.
+    # The image runs rustc through sccache. Its storage (SCCACHE_REDIS_ENDPOINT and
+    # SCCACHE_REDIS_PASSWORD) comes from the runner for every job; don't set it here, an empty
+    # value would override it. The image is meant to float: it's rebuilt with the current toolchain
+    # and tools every week.
+    container: ${{ vars.DOCKER_REGISTRY }}/git/ci-rust-bevy:latest # zizmor: ignore[unpinned-images]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo doc --no-deps --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - run: cargo test --locked
+      - run: sccache --show-stats
+        if: always()

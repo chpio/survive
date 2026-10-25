@@ -1,0 +1,23 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "extends": [
+        "local>git/renovate",
+        "local>git/renovate:automerge",
+        "local>git/renovate:group-non-major"
+    ],
+    "lockFileMaintenance": {
+        "enabled": true
+    },
+    "packageRules": [
+        {
+            "description": "Bevy, Avian and bevy_ecs_tiled only work on mutually compatible versions, so they're updated in one PR.",
+            "matchPackageNames": ["bevy", "avian2d", "bevy_ecs_tiled"],
+            "groupName": "bevy"
+        },
+        {
+            "description": "dioxus-native-dom pins the blitz crates to exact versions, and vello has to be on the wgpu of Bevy, so they're updated in one PR.",
+            "matchPackageNames": ["dioxus", "dioxus-native-dom", "blitz-*", "anyrender_vello", "vello"],
+            "groupName": "dioxus native"
+        }
+    ]
+}
