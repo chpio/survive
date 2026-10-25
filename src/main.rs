@@ -86,6 +86,11 @@ fn startup(
                 y_sort: true,
             },
             TilemapAnchor::Center,
+            // filled colliders as in Tiled, the default polyline backend only keeps the outlines
+            TiledPhysicsSettings::<TiledPhysicsAvianBackend> {
+                backend: TiledPhysicsAvianBackend::Triangulation,
+                ..default()
+            },
         ))
         .observe(
             |collider_created: On<TiledEvent<ColliderCreated>>,

@@ -34,7 +34,7 @@ Build notes:
 
 - `assets/map.tmx` (16×16 tiles, tileset `assets/grass_biome.tsx`) is loaded in `startup`.
 - Colliders defined in the tileset or map are created by `TiledPhysicsPlugin`. An observer on `TiledEvent<ColliderCreated>` makes each one `RigidBody::Static`, then reads the object's Tiled `type` (or the tile's type as a fallback) to attach game components. For example, `type="well"` (tile 197 in the tileset) becomes `Well + Sensor + CollisionEventsEnabled`.
-- The tile colliders of a layer are merged into one hollow polyline collider whose AABB spans the whole map, so code dealing with obstacles must use the collider's shape, not its `ColliderAabb` (see `Grid::block_collider`).
+- The tile colliders of a layer are merged into one collider whose AABB spans the whole map, so code dealing with obstacles must use the collider's shape, not its `ColliderAabb` (see `Grid::block_collider`). The map uses the `Triangulation` backend, so the collider is filled as in Tiled; the default `Polyline` backend would only keep the outlines.
 - To add a new map-driven object: give the tile or object a type in Tiled, then add a match arm in that observer.
 - Collision handling reads Avian's `CollisionStart` messages (via `MessageReader`; Bevy's buffered events are called messages). Only colliders with `CollisionEventsEnabled` emit them.
 
