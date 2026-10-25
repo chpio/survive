@@ -42,6 +42,11 @@ jobs:
     # value would override it. The image is meant to float: it's rebuilt with the current toolchain
     # and tools every week.
     container: ${{ vars.DOCKER_REGISTRY }}/git/ci-rust-bevy:latest # zizmor: ignore[unpinned-images]
+    env:
+      # target/ lives in the runner's RAM and counts against the job's memory limit. With the
+      # full debug info of bevy and the other dependencies it ran the job out of memory; line
+      # numbers in backtraces are enough here. The test profile inherits it from dev.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
