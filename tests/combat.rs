@@ -1,14 +1,12 @@
 mod common;
 
 use bevy::prelude::*;
+use common::{LARGE, SMALL, health};
 use std::time::Duration;
 use survival::{
     combat::{self, Attack, Health},
     objects::{enemy::Enemy, player},
 };
-
-const SMALL: Enemy = Enemy { radius: 5. };
-const LARGE: Enemy = Enemy { radius: 12. };
 
 fn app() -> App {
     common::app_with(combat::Plugin)
@@ -24,10 +22,6 @@ fn spawn_player(app: &mut App, position: Vec2) -> Entity {
 
 fn spawn_enemy(app: &mut App, enemy: Enemy, position: Vec2) -> Entity {
     common::spawn(app, (enemy, enemy.physics(), enemy.combat()), position)
-}
-
-fn health(app: &App, entity: Entity) -> Health {
-    *app.world().get::<Health>(entity).unwrap()
 }
 
 #[test]

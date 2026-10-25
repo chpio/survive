@@ -4,7 +4,10 @@
 use avian2d::prelude::*;
 use bevy::{app::Plugins, prelude::*, time::TimeUpdateStrategy};
 use std::time::Duration;
-use survival::movement;
+use survival::{combat::Health, movement, objects::enemy::Enemy};
+
+pub const SMALL: Enemy = Enemy { radius: 5. };
+pub const LARGE: Enemy = Enemy { radius: 12. };
 
 /// Headless app with top-down physics and force-based movement, advancing one fixed step of
 /// 1/64 s per update.
@@ -62,4 +65,8 @@ pub fn position(app: &App, entity: Entity) -> Vec2 {
 
 pub fn velocity(app: &App, entity: Entity) -> Vec2 {
     app.world().get::<LinearVelocity>(entity).unwrap().0
+}
+
+pub fn health(app: &App, entity: Entity) -> Health {
+    *app.world().get::<Health>(entity).unwrap()
 }

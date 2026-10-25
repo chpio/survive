@@ -1,10 +1,8 @@
 mod common;
 
 use bevy::prelude::*;
+use common::{LARGE, SMALL};
 use survival::objects::{enemy::Enemy, player};
-
-const SMALL: Enemy = Enemy { radius: 5. };
-const LARGE: Enemy = Enemy { radius: 12. };
 
 #[test]
 fn reaches_desired_velocity() {
