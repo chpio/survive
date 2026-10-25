@@ -5,9 +5,13 @@ use crate::{
 };
 use avian2d::prelude::*;
 use bevy::prelude::*;
+use std::f32::consts::{PI, TAU};
+
+/// How fast enemies turn towards their [`Heading`], in rad/s.
+pub const TURN_SPEED: f32 = TAU;
 
 #[derive(Clone, Copy, Component, PartialEq, Debug)]
-#[require(Separation)]
+#[require(Separation, Heading)]
 pub struct Enemy {
     /// Radius in px, which sets the enemy's shape, mass, strength and personal space
     pub radius: f32,
@@ -72,6 +76,11 @@ impl Default for Separation {
     }
 }
 
+/// Direction an enemy wants to walk in, which it turns to face. Set by its navigation, so it
+/// doesn't change when the enemy is pushed or knocked back.
+#[derive(Component, Default)]
+pub struct Heading(pub Vec2);
+
 #[derive(Message)]
 pub struct SpawnEnemy(pub Enemy);
 
@@ -106,6 +115,12 @@ fn spawn_enemy(
             MeshMaterial2d(materials.add(Color::srgb(0.8, 0.2, 0.2))),
             // above the map layer at z = 0
             Transform::from_xyz(50., -50., 10.),
+            // dot at the front, showing where the enemy faces (+x when not rotated)
+            children![(
+                Mesh2d(meshes.add(Circle::new(enemy.radius * 0.25))),
+                MeshMaterial2d(materials.add(Color::srgb(1., 0.9, 0.9))),
+                Transform::from_xyz(enemy.radius * 0.55, 0., 0.1),
+            )],
         ));
     }
 }
@@ -120,6 +135,7 @@ pub fn move_towards_player(
         &Enemy,
         &Transform,
         &Separation,
+        &mut Heading,
         &mut DesiredVelocity,
     )>,
 ) {
@@ -130,13 +146,17 @@ pub fn move_towards_player(
         .map(|(_, separation)| separation.radius)
         .fold(0., f32::max);
 
-    for (entity, enemy, transform, separation, mut desired) in &mut enemies {
+    for (entity, enemy, transform, separation, mut heading, mut desired) in &mut enemies {
         let position = transform.translation.xy();
 
         // follow the flow field around obstacles, walk straight if the player can't be reached
         let direction = flow_field
             .direction(position, enemy.radius)
             .unwrap_or_else(|| (player.translation.xy() - position).normalize_or_zero());
+        // keep the last heading when standing on the player
+        if direction != Vec2::ZERO && heading.0 != direction {
+            heading.0 = direction;
+        }
 
         // finds every enemy whose personal space could overlap with this one's
         let neighborhood = Collider::circle(separation.radius + max_radius);
@@ -174,13 +194,36 @@ pub fn move_towards_player(
     }
 }
 
+/// Turns enemies towards their [`Heading`], at most at [`TURN_SPEED`]. Rotation is locked for the
+/// physics, so contacts don't spin enemies, and set here directly instead.
+pub fn face_heading(time: Res<Time>, mut enemies: Query<(&Heading, &mut Rotation), With<Enemy>>) {
+    let max_step = TURN_SPEED * time.delta_secs();
+    for (heading, mut rotation) in &mut enemies {
+        if heading.0 == Vec2::ZERO {
+            continue;
+        }
+        let current = rotation.as_radians();
+        // shortest way round, in -π..π
+        let difference = (heading.0.to_angle() - current + PI).rem_euclid(TAU) - PI;
+        if difference != 0. {
+            *rotation = Rotation::radians(current + difference.clamp(-max_step, max_step));
+        }
+    }
+}
+
 pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_message::<SpawnEnemy>().add_systems(
             Update,
-            (spawn_enemy_on_key, spawn_enemy, move_towards_player),
+            (
+                spawn_enemy_on_key,
+                spawn_enemy,
+                move_towards_player,
+                // after the heading is updated
+                face_heading.after(move_towards_player),
+            ),
         );
     }
 }

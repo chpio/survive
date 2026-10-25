@@ -91,3 +91,60 @@ fn larger_separation_keeps_enemies_further_away() {
     let distance = common::position(&app, small).distance(common::position(&app, large));
     assert!(distance > 22., "enemies {distance} apart");
 }
+
+/// Enemy at the origin facing +x, heading towards `heading`.
+fn facing_app(heading: Vec2) -> (App, Entity) {
+    let mut app = common::app();
+    app.add_systems(Update, enemy::face_heading);
+    let enemy = common::spawn(
+        &mut app,
+        (SMALL, SMALL.physics(), enemy::Heading(heading)),
+        Vec2::ZERO,
+    );
+    (app, enemy)
+}
+
+fn facing(app: &App, enemy: Entity) -> Vec2 {
+    let transform = app.world().get::<Transform>(enemy).unwrap();
+    (transform.rotation * Vec3::X).xy()
+}
+
+#[test]
+fn enemy_turns_towards_heading() {
+    let (mut app, enemy) = facing_app(Vec2::Y);
+
+    common::run(&mut app, 1.);
+
+    let facing = facing(&app, enemy);
+    assert!(facing.dot(Vec2::Y) > 0.999, "facing {facing}");
+}
+
+#[test]
+fn enemy_turns_at_limited_speed() {
+    // half a turn away
+    let (mut app, enemy) = facing_app(Vec2::NEG_X);
+
+    common::run(&mut app, 0.25);
+
+    // the transform shows the rotation a frame or two later, so allow for a few steps less
+    let turned = facing(&app, enemy).to_angle().abs();
+    let max = enemy::TURN_SPEED * 0.25;
+    assert!(
+        turned <= max + 0.01 && turned > max * 0.75,
+        "turned {turned} rad"
+    );
+}
+
+#[test]
+fn knockback_does_not_turn_enemy() {
+    let (mut app, enemy) = facing_app(Vec2::X);
+    common::run(&mut app, 0.25);
+
+    // knocked back against its heading
+    app.world_mut().get_mut::<LinearVelocity>(enemy).unwrap().0 = Vec2::new(-300., 50.);
+    common::run(&mut app, 0.5);
+
+    assert!(common::position(&app, enemy).x < -10.);
+    let facing = facing(&app, enemy);
+    assert!(facing.dot(Vec2::X) > 0.999, "facing {facing}");
+}
