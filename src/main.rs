@@ -5,7 +5,7 @@ use bevy::{
 };
 use bevy_ecs_tiled::prelude::*;
 use std::time::Duration;
-use survival::{combat, flowfield, items, movement, objects, perf, settings, ui};
+use survival::{combat, flowfield, items, movement, objects, perf, settings, sight, ui};
 
 fn main() {
     App::new()
@@ -63,6 +63,7 @@ fn main() {
             items::definitions::Plugin,
             items::input::Plugin,
         ))
+        .add_plugins((sight::Plugin, sight::render::Plugin))
         .add_plugins((settings::Plugin, ui::Plugin, perf::Plugin))
         .run();
 }
@@ -103,6 +104,9 @@ fn startup(
                 y_sort: true,
             },
             TilemapAnchor::Center,
+            // layers 2 apart: y-sorting moves the chunks by up to 1.5, and the upper layers stay
+            // below the items (z = 5) and the units (z = 10)
+            TiledMapLayerZOffset(2.),
             // filled colliders as in Tiled, the default polyline backend only keeps the outlines
             TiledPhysicsSettings::<TiledPhysicsAvianBackend> {
                 backend: TiledPhysicsAvianBackend::Triangulation,
@@ -118,7 +122,25 @@ fn startup(
                 // Automatically insert a `RigidBody::Static` component on all the colliders entities from the map
                 collider.insert(RigidBody::Static);
 
-                if let Some(obj) = collider_created.event().get_object(&assets) {
+                // a tile layer's colliders are merged into one, so the property applies to the
+                // whole layer. Objects can have it themselves or on their tile.
+                let object = collider_created.event().get_object(&assets);
+                let blocks_sight = collider_created
+                    .event()
+                    .get_layer(&assets)
+                    .is_some_and(|layer| blocks_sight(&layer.properties))
+                    || object.as_ref().is_some_and(|obj| {
+                        blocks_sight(&obj.properties)
+                            || obj
+                                .get_tile()
+                                .and_then(|obj_tile| obj_tile.get_tile())
+                                .is_some_and(|tile| blocks_sight(&tile.properties))
+                    });
+                if blocks_sight {
+                    collider.insert(sight::BlocksSight);
+                }
+
+                if let Some(obj) = object {
                     let user_type = Some(obj.user_type.clone())
                         .filter(|t| !t.is_empty())
                         .or_else(|| {
@@ -141,6 +163,14 @@ fn startup(
                 };
             },
         );
+}
+
+/// Whether the Tiled `properties` mark something as blocking the sight.
+fn blocks_sight(properties: &tiled::Properties) -> bool {
+    matches!(
+        properties.get("blocks_sight"),
+        Some(tiled::PropertyValue::BoolValue(true))
+    )
 }
 
 fn update_camera_position(

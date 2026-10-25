@@ -8,4 +8,5 @@ mod items;
 mod movement;
 mod perf;
 mod settings;
+mod sight;
 mod ui;

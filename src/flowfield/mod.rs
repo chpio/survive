@@ -441,6 +441,19 @@ fn block(grids: &mut [Grid], collider: &Collider, position: Vec2, rotation: Rota
     }
 }
 
+/// World position of the bottom-left corner and size of the map that `event` reports as created.
+pub(crate) fn map_area(
+    event: &TiledEvent<MapCreated>,
+    maps: &Query<(&Transform, &TilemapAnchor)>,
+    assets: &Res<Assets<TiledMapAsset>>,
+) -> Option<(Vec2, Vec2)> {
+    let asset = event.get_map_asset(assets)?;
+    let (transform, anchor) = maps.get(event.origin).ok()?;
+    let bottom_left =
+        asset.world_space_from_tiled_position(anchor, Vec2::new(0., asset.rect.height()));
+    Some((transform.translation.xy() + bottom_left, asset.rect.size()))
+}
+
 /// Creates the grids when a map is (re)loaded, covering the whole map.
 fn create_grids(
     mut map_created: MessageReader<TiledEvent<MapCreated>>,
@@ -449,18 +462,9 @@ fn create_grids(
     mut flow_field: ResMut<FlowField>,
 ) {
     for event in map_created.read() {
-        let (Some(asset), Ok((transform, anchor))) =
-            (event.get_map_asset(&assets), maps.get(event.origin))
-        else {
-            continue;
-        };
-        let bottom_left =
-            asset.world_space_from_tiled_position(anchor, Vec2::new(0., asset.rect.height()));
-        *flow_field = FlowField::new(
-            transform.translation.xy() + bottom_left,
-            asset.rect.size(),
-            CLEARANCES.iter().copied(),
-        );
+        if let Some((origin, size)) = map_area(event, &maps, &assets) {
+            *flow_field = FlowField::new(origin, size, CLEARANCES.iter().copied());
+        }
     }
 }
 

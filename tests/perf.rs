@@ -63,8 +63,8 @@ fn groups_sum_up_their_steps_and_the_rest_fills_the_frame() {
     }
 
     let logic = &perf::MAIN_THREAD[0];
-    assert!(matches!(logic, Node::Group(_, steps) if steps.len() == 3));
-    assert_eq!(averages.node(logic), ms(3));
+    assert!(matches!(logic, Node::Group(_, steps) if steps.len() == 4));
+    assert_eq!(averages.node(logic), ms(4));
     // minus all steps on the main thread
     let main_thread = (Step::ALL.len() - perf::RENDER_THREAD.len()) as u64;
     assert_eq!(averages.rest(), ms(20 - main_thread));

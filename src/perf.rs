@@ -29,6 +29,7 @@ pub const PERIOD: Duration = Duration::from_millis(500);
 #[derive(SystemSet, Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Step {
     FlowField,
+    Sight,
     FlowFieldOverlay,
     Enemies,
     Combat,
@@ -50,8 +51,9 @@ pub enum Step {
 }
 
 impl Step {
-    pub const ALL: [Step; 11] = [
+    pub const ALL: [Step; 12] = [
         Step::FlowField,
+        Step::Sight,
         Step::FlowFieldOverlay,
         Step::Enemies,
         Step::Combat,
@@ -67,6 +69,7 @@ impl Step {
     pub fn label(self) -> &'static str {
         match self {
             Step::FlowField => "Flowfield",
+            Step::Sight => "Sicht",
             Step::FlowFieldOverlay => "Flowfield-Overlay",
             Step::Enemies => "Gegner",
             Step::Combat => "Kampf",
@@ -92,7 +95,7 @@ pub enum Node {
 pub const MAIN_THREAD: &[Node] = &[
     Node::Group(
         "Spiellogik",
-        &[Step::FlowField, Step::Enemies, Step::Combat],
+        &[Step::FlowField, Step::Sight, Step::Enemies, Step::Combat],
     ),
     Node::Group("Fester Takt", &[Step::Movement, Step::Physics]),
     Node::Step(Step::FlowFieldOverlay),
@@ -242,7 +245,7 @@ impl bevy::app::Plugin for Plugin {
         order.insert_before(First, FrameStart);
         order.insert_after(Last, FrameEnd);
 
-        measure(app, PreUpdate, &[Step::FlowField]);
+        measure(app, PreUpdate, &[Step::FlowField, Step::Sight]);
         measure(
             app,
             Update,

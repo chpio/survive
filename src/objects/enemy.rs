@@ -4,6 +4,7 @@ use crate::{
     movement::{self, DesiredVelocity},
     objects::player,
     perf,
+    sight::render::{SightMask, SightMaterial},
 };
 use avian2d::prelude::*;
 use bevy::prelude::*;
@@ -119,24 +120,25 @@ fn spawn_enemy_on_key(
 }
 
 /// Mesh and materials shared by all enemies, so they are drawn in batches. The mesh is a unit
-/// circle, scaled to each enemy's radius.
+/// circle, scaled to each enemy's radius. The materials only show the parts in the player's sight.
 #[derive(Resource)]
 struct EnemyAssets {
     circle: Handle<Mesh>,
-    body: Handle<ColorMaterial>,
-    dot: Handle<ColorMaterial>,
+    body: Handle<SightMaterial>,
+    dot: Handle<SightMaterial>,
 }
 
-impl FromWorld for EnemyAssets {
-    fn from_world(world: &mut World) -> Self {
-        let circle = world.resource_mut::<Assets<Mesh>>().add(Circle::new(1.));
-        let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
-        Self {
-            circle,
-            body: materials.add(Color::srgb(0.8, 0.2, 0.2)),
-            dot: materials.add(Color::srgb(1., 0.9, 0.9)),
-        }
-    }
+fn create_assets(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<SightMaterial>>,
+    mask: Res<SightMask>,
+) {
+    commands.insert_resource(EnemyAssets {
+        circle: meshes.add(Circle::new(1.)),
+        body: materials.add(SightMaterial::new(Color::srgb(0.8, 0.2, 0.2), &mask)),
+        dot: materials.add(SightMaterial::new(Color::srgb(1., 0.9, 0.9), &mask)),
+    });
 }
 
 fn spawn_enemy(
@@ -264,7 +266,7 @@ pub struct Plugin;
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_message::<SpawnEnemy>()
-            .init_resource::<EnemyAssets>()
+            .add_systems(Startup, create_assets)
             .add_systems(
                 Update,
                 (

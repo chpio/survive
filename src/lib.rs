@@ -7,4 +7,5 @@ pub mod movement;
 pub mod objects;
 pub mod perf;
 pub mod settings;
+pub mod sight;
 pub mod ui;
