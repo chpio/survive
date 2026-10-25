@@ -48,4 +48,4 @@ Build notes:
 
 The HUD button "Flowfield" cycles the flow field overlay through the grids (5, 8, 12, 16 px clearance) and off.
 
-`PhysicsDebugPlugin` is always on and draws collider outlines.
+`PhysicsDebugPlugin` draws collider outlines. They start hidden; the HUD checkbox "Kollider" shows them.

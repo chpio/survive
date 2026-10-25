@@ -11,6 +11,7 @@ use crate::{
     objects::enemy,
 };
 use anyrender_vello::VelloScenePainter;
+use avian2d::prelude::PhysicsGizmos;
 use bevy::{
     input::{ButtonState, mouse::MouseButtonInput},
     prelude::*,
@@ -51,6 +52,7 @@ struct UiDocument {
     buttons: MouseEventButtons,
     enemy_count: Signal<usize>,
     flow_field_grid: Signal<Option<f32>>,
+    show_colliders: Signal<bool>,
     actions: mpsc::Receiver<hud::Action>,
 }
 
@@ -68,11 +70,13 @@ struct VelloRenderer(Mutex<vello::Renderer>);
 fn setup(world: &mut World) {
     let (action_tx, action_rx) = mpsc::channel();
     let vdom = VirtualDom::new(hud::app).with_root_context(action_tx);
-    let (enemy_count, flow_field_grid) =
-        vdom.in_scope(ScopeId::ROOT, || (Signal::new(0), Signal::new(None)));
+    let (enemy_count, flow_field_grid, show_colliders) = vdom.in_scope(ScopeId::ROOT, || {
+        (Signal::new(0), Signal::new(None), Signal::new(false))
+    });
     vdom.provide_root_context(hud::State {
         enemy_count,
         flow_field_grid,
+        show_colliders,
     });
 
     let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
@@ -85,6 +89,7 @@ fn setup(world: &mut World) {
         buttons: MouseEventButtons::None,
         enemy_count,
         flow_field_grid,
+        show_colliders,
         actions: action_rx,
     });
 
@@ -187,6 +192,7 @@ fn sync_state(
     enemies: Query<(), With<enemy::Enemy>>,
     flow_field: Res<FlowField>,
     mut flow_field_debug: ResMut<FlowFieldDebug>,
+    mut gizmos: ResMut<GizmoConfigStore>,
     mut spawn_enemy: MessageWriter<enemy::SpawnEnemy>,
 ) {
     for action in ui.actions.try_iter() {
@@ -197,6 +203,9 @@ fn sync_state(
             hud::Action::CycleFlowField => {
                 flow_field_debug.cycle(flow_field.grids().len());
             }
+            hud::Action::ShowColliders(show) => {
+                gizmos.config_mut::<PhysicsGizmos>().0.enabled = show;
+            }
         }
     }
 
@@ -205,13 +214,18 @@ fn sync_state(
         .grid
         .and_then(|i| flow_field.grids().get(i))
         .map(|grid| grid.clearance());
-    let (mut enemy_count, mut flow_field_grid) = (ui.enemy_count, ui.flow_field_grid);
+    let colliders_shown = gizmos.config::<PhysicsGizmos>().0.enabled;
+    let (mut enemy_count, mut flow_field_grid, mut show_colliders) =
+        (ui.enemy_count, ui.flow_field_grid, ui.show_colliders);
     ui.doc.vdom.in_scope(ScopeId::ROOT, || {
         if *enemy_count.peek() != count {
             enemy_count.set(count);
         }
         if *flow_field_grid.peek() != grid {
             flow_field_grid.set(grid);
+        }
+        if *show_colliders.peek() != colliders_shown {
+            show_colliders.set(colliders_shown);
         }
     });
 }

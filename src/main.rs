@@ -41,6 +41,14 @@ fn main() {
         .add_plugins(TiledPhysicsPlugin::<TiledPhysicsAvianBackend>::default())
         .add_plugins(PhysicsPlugins::default().with_length_unit(100.0))
         .add_plugins(PhysicsDebugPlugin)
+        // collider outlines start hidden, the HUD shows them
+        .insert_gizmo_config(
+            PhysicsGizmos::default(),
+            GizmoConfig {
+                enabled: false,
+                ..default()
+            },
+        )
         .add_plugins((
             objects::enemy::Plugin,
             objects::player::Plugin,
