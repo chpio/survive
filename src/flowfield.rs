@@ -94,17 +94,36 @@ impl Grid {
 
     /// Blocks all cells whose center is closer than the clearance to `obstacle`.
     pub fn block(&mut self, obstacle: Rect) {
-        let obstacle = obstacle.inflate(self.clearance);
-        // cells whose center lies in the inflated rect
-        let min = ((obstacle.min - self.origin) / CELL_SIZE - 0.5)
+        let size = obstacle.size();
+        self.block_collider(
+            &Collider::rectangle(size.x, size.y),
+            obstacle.center(),
+            Rotation::IDENTITY,
+        );
+    }
+
+    /// Blocks all cells whose center is closer than the clearance to the shape of `collider` at
+    /// `position` and `rotation`. Only the shape counts, not its bounding box, since the map's
+    /// tiles are merged into one collider per layer that spans the whole map.
+    pub fn block_collider(&mut self, collider: &Collider, position: Vec2, rotation: Rotation) {
+        let area = collider.aabb(position, rotation, self.clearance);
+        // cells whose center lies in the area, limited to the grid
+        let min = ((area.min - self.origin) / CELL_SIZE - 0.5)
             .ceil()
-            .as_ivec2();
-        let max = ((obstacle.max - self.origin) / CELL_SIZE - 0.5)
+            .as_ivec2()
+            .max(IVec2::ZERO);
+        let max = ((area.max - self.origin) / CELL_SIZE - 0.5)
             .floor()
-            .as_ivec2();
+            .as_ivec2()
+            .min(self.size - 1);
         for y in min.y..=max.y {
             for x in min.x..=max.x {
-                if let Some(i) = self.index(IVec2::new(x, y)) {
+                let cell = IVec2::new(x, y);
+                let i = self.index(cell).unwrap();
+                let center = self.origin + (cell.as_vec2() + 0.5) * CELL_SIZE;
+                if !self.blocked[i]
+                    && collider.distance_to_point(position, rotation, center, true) < self.clearance
+                {
                     self.blocked[i] = true;
                 }
             }
@@ -241,6 +260,13 @@ impl FlowField {
         }
     }
 
+    /// See [`Grid::block_collider`].
+    pub fn block_collider(&mut self, collider: &Collider, position: Vec2, rotation: Rotation) {
+        for grid in &mut self.grids {
+            grid.block_collider(collider, position, rotation);
+        }
+    }
+
     /// See [`Grid::clear`].
     pub fn clear(&mut self) {
         for grid in &mut self.grids {
@@ -291,26 +317,39 @@ fn create_grids(
     }
 }
 
-/// Marks cells covered by static, solid colliders as blocked and updates the distances whenever
-/// the obstacles or the player's cell change.
+/// Marks cells near static, solid colliders as blocked and updates the distances whenever the
+/// obstacles or the player's cell change.
 fn update_flow_field(
     mut flow_field: ResMut<FlowField>,
-    obstacles: Query<(Ref<ColliderAabb>, &RigidBody), Without<Sensor>>,
+    colliders: Query<
+        (
+            &Collider,
+            &Position,
+            &Rotation,
+            Ref<ColliderAabb>,
+            &ColliderOf,
+        ),
+        Without<Sensor>,
+    >,
+    bodies: Query<&RigidBody>,
     player: Single<&Transform, With<player::Player>>,
 ) {
     let grids_created = flow_field.is_changed();
     let flow_field = flow_field.bypass_change_detection();
 
+    let obstacles = colliders.iter().filter(|(.., collider_of)| {
+        bodies
+            .get(collider_of.body)
+            .is_ok_and(|body| body.is_static())
+    });
     let obstacles_changed = grids_created
         || obstacles
-            .iter()
-            .any(|(aabb, body)| body.is_static() && aabb.is_changed());
+            .clone()
+            .any(|(_, _, _, aabb, _)| aabb.is_changed());
     if obstacles_changed {
         flow_field.clear();
-        for (aabb, body) in &obstacles {
-            if body.is_static() {
-                flow_field.block(Rect::from_corners(aabb.min, aabb.max));
-            }
+        for (collider, position, rotation, ..) in obstacles {
+            flow_field.block_collider(collider, position.0, *rotation);
         }
     }
 

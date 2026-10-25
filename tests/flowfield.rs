@@ -1,3 +1,4 @@
+use avian2d::prelude::*;
 use bevy::prelude::*;
 use survival::flowfield::{FlowField, Grid};
 
@@ -57,6 +58,29 @@ fn corridor_one_tile_wide_is_open() {
 
     let direction = grid.direction(Vec2::new(10., 80.)).unwrap();
     assert!(direction.x > 0.9, "{direction}");
+}
+
+#[test]
+fn only_the_shape_of_an_obstacle_blocks() {
+    // one outline for the border and a wall with a gap at the top, like the merged colliders of
+    // a map layer, whose bounding box covers the whole grid
+    let border_and_wall = Collider::polyline(
+        vec![
+            Vec2::new(2., 2.),
+            Vec2::new(158., 2.),
+            Vec2::new(158., 158.),
+            Vec2::new(2., 158.),
+            Vec2::new(80., 2.),
+            Vec2::new(80., 120.),
+        ],
+        Some(vec![[0, 1], [1, 2], [2, 3], [3, 0], [4, 5]]),
+    );
+    let mut grid = grid();
+    grid.block_collider(&border_and_wall, Vec2::ZERO, Rotation::IDENTITY);
+    grid.set_target(Vec2::new(150., 20.));
+
+    let direction = grid.direction(Vec2::new(10., 20.)).unwrap();
+    assert!(direction.y > 0.5, "{direction}");
 }
 
 #[test]
