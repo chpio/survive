@@ -1,6 +1,7 @@
 use crate::{
     combat::Health,
     perf::{Averages, MAIN_THREAD, Node, RENDER_THREAD},
+    settings::Settings,
 };
 use dioxus::prelude::*;
 use std::{sync::mpsc, time::Duration};
@@ -18,6 +19,8 @@ pub struct State {
     pub show_timings: bool,
     /// Time per frame of the game's steps, `None` while hidden or not measured yet
     pub timings: Option<Averages>,
+    pub menu_open: bool,
+    pub settings: Settings,
 }
 
 /// Requests from the HUD to the game.
@@ -27,6 +30,8 @@ pub enum Action {
     CycleFlowField,
     ShowColliders(bool),
     ShowTimings(bool),
+    /// Replaces the settings
+    ChangeSettings(Settings),
 }
 
 const STYLE: &str = r#"
@@ -82,8 +87,66 @@ const STYLE: &str = r#"
 }
 
 /* Blitz paints checkboxes in the text color, which is white in the HUD */
-.hud input {
+.hud input, .menu input {
     color: #3a6ea5;
+}
+
+.menu {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+.menu .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 260px;
+    padding: 16px 20px;
+    border-radius: 8px;
+    background: rgba(20, 20, 20, 0.9);
+}
+
+.menu .title {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.menu label, .menu .setting {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.menu .setting {
+    justify-content: space-between;
+}
+
+.menu .stepper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.menu button {
+    padding: 4px 10px;
+    border: none;
+    border-radius: 4px;
+    background: #3a6ea5;
+    color: white;
+}
+
+.menu button:hover {
+    background: #4a84c4;
 }
 "#;
 
@@ -140,6 +203,46 @@ pub fn app() -> Element {
                         for & step in RENDER_THREAD {
                             {row(step.label(), timings.step(step))}
                         }
+                    }
+                }
+            }
+        }
+        if state.menu_open {
+            {menu(state.settings, send)}
+        }
+    }
+}
+
+fn menu(settings: Settings, send: Callback<Action>) -> Element {
+    let zoom = format!("{:.0} %", settings.zoom * 100.);
+    let change = move |settings| send(Action::ChangeSettings(settings));
+
+    rsx! {
+        div { class: "menu",
+            div { class: "panel",
+                span { class: "title", "Einstellungen" }
+                label {
+                    input {
+                        r#type: "checkbox",
+                        checked: settings.vsync,
+                        oninput: move |event| change(Settings { vsync: event.checked(), ..settings }),
+                    }
+                    "VSync"
+                }
+                label {
+                    input {
+                        r#type: "checkbox",
+                        checked: settings.fullscreen,
+                        oninput: move |event| change(Settings { fullscreen: event.checked(), ..settings }),
+                    }
+                    "Vollbild"
+                }
+                div { class: "setting",
+                    span { "Zoom" }
+                    div { class: "stepper",
+                        button { onclick: move |_| change(Settings { zoom: settings.next_zoom(false), ..settings }), "−" }
+                        span { "{zoom}" }
+                        button { onclick: move |_| change(Settings { zoom: settings.next_zoom(true), ..settings }), "+" }
                     }
                 }
             }

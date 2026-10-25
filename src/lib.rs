@@ -5,4 +5,5 @@ pub mod flowfield;
 pub mod movement;
 pub mod objects;
 pub mod perf;
+pub mod settings;
 pub mod ui;

@@ -12,6 +12,7 @@ use crate::{
     flowfield::{FlowField, debug::FlowFieldDebug},
     objects::{enemy, player::Player},
     perf,
+    settings::{Menu, Settings},
 };
 use anyrender_vello::VelloScenePainter;
 use avian2d::prelude::PhysicsGizmos;
@@ -221,6 +222,8 @@ fn sync_state(
     mut gizmos: ResMut<GizmoConfigStore>,
     timings: Option<Res<perf::Timings>>,
     mut spawn_enemy: MessageWriter<enemy::SpawnEnemy>,
+    mut settings: ResMut<Settings>,
+    menu: Res<State<Menu>>,
 ) {
     let ui = &mut *ui;
     for action in ui.actions.try_iter() {
@@ -236,6 +239,10 @@ fn sync_state(
             }
             hud::Action::ShowTimings(show) => {
                 ui.show_timings = show;
+            }
+            hud::Action::ChangeSettings(new_settings) => {
+                // only on changes, since changing the settings saves them
+                settings.set_if_neq(new_settings);
             }
         }
     }
@@ -253,6 +260,8 @@ fn sync_state(
         timings: timings
             .filter(|_| ui.show_timings)
             .and_then(|timings| timings.averages.clone()),
+        menu_open: *menu.get() == Menu::Open,
+        settings: *settings,
     };
     let mut state = ui.state;
     // only on changes, since setting the signal re-renders the HUD

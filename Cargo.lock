@@ -6902,6 +6902,8 @@ dependencies = [
  "blitz-traits",
  "dioxus",
  "dioxus-native-dom",
+ "ron",
+ "serde",
  "vello",
 ]
 

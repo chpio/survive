@@ -2,25 +2,16 @@ use avian2d::prelude::*;
 use bevy::{
     dev_tools::{fps_overlay, render_debug},
     prelude::*,
-    window,
 };
 use bevy_ecs_tiled::prelude::*;
 use std::time::Duration;
-use survival::{combat, flowfield, movement, objects, perf, ui};
+use survival::{combat, flowfield, movement, objects, perf, settings, ui};
 
 fn main() {
     App::new()
         .add_plugins(
             DefaultPlugins
                 .build()
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        mode: window::WindowMode::Windowed,
-                        present_mode: window::PresentMode::Fifo,
-                        ..default()
-                    }),
-                    ..default()
-                })
                 .set(ImagePlugin::default_nearest())
                 // enabled by the `render_dev_tools` feature (needed for the fps overlay), but requires bevy_pbr
                 .disable::<render_debug::RenderDebugOverlayPlugin>(),
@@ -33,10 +24,7 @@ fn main() {
         })
         .add_plugins(TiledPlugin::default())
         .add_systems(Startup, startup)
-        .add_systems(
-            Update,
-            (update_camera_position, toggle_fps, toggle_fullscreen),
-        )
+        .add_systems(Update, (update_camera_position, toggle_fps))
         .insert_resource(Gravity::ZERO)
         .add_plugins(TiledPhysicsPlugin::<TiledPhysicsAvianBackend>::default())
         .add_plugins(
@@ -70,7 +58,7 @@ fn main() {
             combat::Plugin,
             combat::health_bar::Plugin,
         ))
-        .add_plugins((ui::Plugin, perf::Plugin))
+        .add_plugins((settings::Plugin, ui::Plugin, perf::Plugin))
         .run();
 }
 
@@ -173,20 +161,5 @@ fn toggle_fps(
         let enabled = !fps_overlay.enabled;
         fps_overlay.enabled = enabled;
         fps_overlay.frame_time_graph_config.enabled = enabled;
-    }
-}
-
-fn toggle_fullscreen(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut window: Single<&mut Window, With<window::PrimaryWindow>>,
-) {
-    if keyboard_input.just_pressed(KeyCode::KeyF) {
-        let new_mode = match window.mode {
-            window::WindowMode::Windowed => {
-                window::WindowMode::BorderlessFullscreen(MonitorSelection::Current)
-            }
-            _ => window::WindowMode::Windowed,
-        };
-        window.mode = new_mode;
     }
 }

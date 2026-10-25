@@ -7,7 +7,14 @@
   a few cells. Measure first with the HUD's "Performance" tree.
 - Repaint the HUD only when the hover state changes, not on every mouse move over the game.
 
+- Optional FPS limit in the settings, e.g. as a power saving mode. `bevy_framepace` isn't available
+  for Bevy 0.20, so build it like it does: sleep at the end of the render world's frame until the
+  next frame is due.
+
 ## Gameplay
+
+- Ignore game input (spawn keys E / R / T, the HUD's spawn button) while the settings menu pauses
+  the game; enemies spawned then only appear frozen until it is closed.
 
 - Balance the combat values in `player::combat()` and `Enemy::combat`: five enemies touching the
   player kill it within a few seconds.

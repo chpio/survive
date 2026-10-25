@@ -18,6 +18,8 @@ blitz-paint = "=0.3.0-beta.4"
 blitz-traits = "=0.3.0-beta.4"
 dioxus = { version = "=0.8.0-alpha.3", default-features = false, features = ["macro", "html", "signals", "hooks"] }
 dioxus-native-dom = "=0.8.0-alpha.3"
+ron = "0.12"
+serde = { version = "1", features = ["derive"] }
 vello = { version = "0.11", default-features = false, features = ["wgpu"] }
 
 [dependencies.bevy]
