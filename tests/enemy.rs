@@ -212,3 +212,24 @@ fn enemies_walk_around_pond_corners() {
     }
     assert!(stuck.is_empty(), "{stuck:#?}");
 }
+
+#[test]
+fn enemy_slides_along_obstacle_instead_of_sticking() {
+    let mut app = common::app();
+    // bottom-right corner at (48, -24)
+    common::spawn(
+        &mut app,
+        (RigidBody::Static, Collider::rectangle(96., 48.)),
+        Vec2::ZERO,
+    );
+    // touching the bottom edge left of the corner
+    let enemy = common::spawn(&mut app, SMALL.physics(), Vec2::new(46., -29.5));
+    // mostly into the edge, a little along it, like an enemy walking straight at a player above
+    // to the right
+    common::set_desired_velocity(&mut app, enemy, Vec2::new(0.34, 0.94).normalize() * 100.);
+
+    common::run(&mut app, 1.);
+
+    let position = common::position(&app, enemy);
+    assert!(position.x > 48. && position.y > -24., "enemy at {position}");
+}

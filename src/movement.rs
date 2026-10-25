@@ -29,7 +29,9 @@ pub struct Strength(pub f32);
 #[derive(Component, Default)]
 struct Anchor(Option<Vec2>);
 
-/// Dynamic body moved by this module. Its rotation is locked, so contacts don't spin it.
+/// Dynamic body moved by this module. Its rotation is locked, so contacts don't spin it. It has no
+/// friction, so it slides along obstacles and other bodies when pushing against them at an angle,
+/// instead of sticking to them.
 pub fn body(collider: Collider, mass: f32, strength: f32) -> impl Bundle {
     (
         RigidBody::Dynamic,
@@ -38,6 +40,8 @@ pub fn body(collider: Collider, mass: f32, strength: f32) -> impl Bundle {
         Mass(mass),
         NoAutoMass,
         Strength(strength),
+        // `Min`, so the friction of what it touches doesn't count either
+        Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
     )
 }
 
