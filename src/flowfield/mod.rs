@@ -8,9 +8,12 @@
 //! the player walk straight towards them instead, since the eight directions between cells would
 //! otherwise bend their path.
 //!
-//! Only the grids used by enemies (or shown by the debug overlay) are computed, and only within
-//! [`FLOW_FIELD_RADIUS`] around the player, so the cost doesn't grow with the size of the map or
-//! the number of grids. Enemies outside the radius have no field and walk straight at the player.
+//! The obstacles of a grid cover the whole map and are only computed when it changes. The walking
+//! distances only cover a square window of a fixed size around the player's cell (see
+//! [`FLOW_FIELD_RADIUS`]), which moves along whenever they are computed again. So their memory and
+//! cost don't grow with the size of the map. Only the grids used by enemies (or shown by the debug
+//! overlay) are computed at all. Enemies outside the window have no field and walk straight at the
+//! player.
 //!
 //! The player can stand closer to an obstacle than a grid's clearance. So that the player stays
 //! reachable then, the cells around the player that are only blocked by the clearance can be
@@ -38,10 +41,14 @@ pub const CELL_SIZE: f32 = 4.;
 /// clearances use the largest one and may get stuck in narrow gaps.
 pub const CLEARANCES: &[f32] = &[5., 8., 12., 16.];
 
-/// Distance in px from the player up to which the walking distances are computed. A bit more than
-/// half the diagonal of the view at the default zoom (500 × 281 px at 16:9), so enemies just
-/// outside the view still find their way.
+/// Half the edge length in px of the square window around the player in which the walking
+/// distances are computed. A bit more than half the diagonal of the view at the default zoom
+/// (500 × 281 px at 16:9), so enemies just outside the view still find their way.
 pub const FLOW_FIELD_RADIUS: f32 = 320.;
+
+/// Cells from the player's cell to the edge of the window, and the window's edge length in cells.
+const WINDOW_RADIUS: i32 = (FLOW_FIELD_RADIUS / CELL_SIZE) as i32;
+const WINDOW_SIZE: i32 = 2 * WINDOW_RADIUS + 1;
 
 /// Cost of a straight and a diagonal step between cells (roughly 1 : √2).
 const STRAIGHT_COST: u32 = 10;
@@ -73,11 +80,11 @@ pub struct Grid {
     blocked: Vec<bool>,
     /// Cells whose center lies inside an obstacle, which are blocked as well
     solid: Vec<bool>,
-    /// Walking distance to the target per cell, `u32::MAX` if unreachable
+    /// Walking distance to the target per cell of the window, `u32::MAX` if unreachable
     distance: Vec<u32>,
-    /// Indices of the cells with a distance, so only these are reset for the next target
-    reached: Vec<usize>,
-    /// Target cell the distances were computed for
+    /// Cell of the grid at the bottom-left corner of the window, centered on the target cell
+    window_origin: IVec2,
+    /// Target cell the distances were computed for, `None` while they are outdated
     target: Option<IVec2>,
     target_position: Vec2,
 }
@@ -108,8 +115,8 @@ impl Grid {
             size,
             blocked: vec![false; len],
             solid: vec![false; len],
-            distance: vec![u32::MAX; len],
-            reached: Vec::new(),
+            distance: vec![u32::MAX; (WINDOW_SIZE * WINDOW_SIZE) as usize],
+            window_origin: IVec2::ZERO,
             target: None,
             target_position: Vec2::ZERO,
         }
@@ -144,6 +151,7 @@ impl Grid {
 
     /// Highest walking distance of a reachable cell, `None` if no cell is reachable.
     pub fn max_distance(&self) -> Option<u32> {
+        self.target?;
         self.distance
             .iter()
             .copied()
@@ -164,9 +172,16 @@ impl Grid {
             .then(|| (cell.y * self.size.x + cell.x) as usize)
     }
 
-    /// Inverse of [`Self::index`].
-    fn cell_of(&self, index: usize) -> IVec2 {
-        IVec2::new(index as i32 % self.size.x, index as i32 / self.size.x)
+    /// Index of `cell` in the window of distances, `None` outside the window.
+    fn window_index(&self, cell: IVec2) -> Option<usize> {
+        let local = cell - self.window_origin;
+        (local.cmpge(IVec2::ZERO).all() && local.cmplt(IVec2::splat(WINDOW_SIZE)).all())
+            .then(|| (local.y * WINDOW_SIZE + local.x) as usize)
+    }
+
+    /// Inverse of [`Self::window_index`].
+    fn window_cell(&self, index: usize) -> IVec2 {
+        self.window_origin + IVec2::new(index as i32 % WINDOW_SIZE, index as i32 / WINDOW_SIZE)
     }
 
     fn is_free(&self, cell: IVec2) -> bool {
@@ -190,7 +205,11 @@ impl Grid {
     }
 
     fn distance(&self, cell: IVec2) -> u32 {
-        self.index(cell).map_or(u32::MAX, |i| self.distance[i])
+        if self.target.is_none() {
+            return u32::MAX;
+        }
+        self.window_index(cell)
+            .map_or(u32::MAX, |i| self.distance[i])
     }
 
     /// Blocks all cells whose center is closer than the clearance to the shape of `collider` at
@@ -249,25 +268,22 @@ impl Grid {
         }
     }
 
-    /// Forgets the target and the distances towards it, until the next [`Self::set_target`].
+    /// Forgets the target, so the distances count as outdated until the next
+    /// [`Self::set_target`].
     fn forget_target(&mut self) {
-        for &i in &self.reached {
-            self.distance[i] = u32::MAX;
-        }
-        self.reached.clear();
         self.target = None;
     }
 
-    /// Dijkstra search from `target`, limited to the cells within [`FLOW_FIELD_RADIUS`] of it.
+    /// Dijkstra search from `target` within the window, which is moved to be centered on it.
     fn compute_distances(&mut self, target: IVec2) {
-        self.forget_target();
         self.target = Some(target);
-        let Some(start) = self.index(target) else {
+        self.window_origin = target - IVec2::splat(WINDOW_RADIUS);
+        self.distance.fill(u32::MAX);
+        if self.index(target).is_none() {
             return;
-        };
+        }
+        let start = self.window_index(target).unwrap();
         self.distance[start] = 0;
-        self.reached.push(start);
-        let max_cells = FLOW_FIELD_RADIUS / CELL_SIZE;
 
         let mut queue = BinaryHeap::from([Reverse((0, start))]);
         while let Some(Reverse((distance, index))) = queue.pop() {
@@ -277,24 +293,18 @@ impl Grid {
             // copied out, since the steps borrow the grid
             let mut steps = [(0, 0); NEIGHBORS.len()];
             let mut count = 0;
-            for (next, cost) in self.steps(self.cell_of(index)) {
-                steps[count] = (self.index(next).unwrap(), cost);
-                count += 1;
+            for (next, cost) in self.steps(self.window_cell(index)) {
+                if let Some(next_index) = self.window_index(next) {
+                    steps[count] = (next_index, cost);
+                    count += 1;
+                }
             }
             for &(next_index, cost) in &steps[..count] {
                 let next_distance = distance + cost;
-                if next_distance >= self.distance[next_index] {
-                    continue;
+                if next_distance < self.distance[next_index] {
+                    self.distance[next_index] = next_distance;
+                    queue.push(Reverse((next_distance, next_index)));
                 }
-                if self.distance[next_index] == u32::MAX {
-                    let offset = (self.cell_of(next_index) - target).as_vec2();
-                    if offset.length_squared() > max_cells.powi(2) {
-                        continue;
-                    }
-                    self.reached.push(next_index);
-                }
-                self.distance[next_index] = next_distance;
-                queue.push(Reverse((next_distance, next_index)));
             }
         }
     }
