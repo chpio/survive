@@ -103,7 +103,11 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
                                 .filter(|t| !t.is_empty())
                         });
 
-                    match user_type.as_ref().map(String::as_str) {
+                    #[expect(
+                        clippy::single_match,
+                        reason = "new map-driven objects get an arm here"
+                    )]
+                    match user_type.as_deref() {
                         Some("well") => {
                             collider.insert((objects::well::Well, Sensor, CollisionEventsEnabled));
                         }

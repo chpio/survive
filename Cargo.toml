@@ -3,6 +3,10 @@ name = "survival"
 version = "0.0.0"
 edition = "2024"
 
+[lints.clippy]
+# Bevy system params (queries with filters) are complex types by nature
+type_complexity = "allow"
+
 [dependencies]
 anyrender_vello = "0.15"
 avian2d = "0.8"
