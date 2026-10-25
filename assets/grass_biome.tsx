@@ -32,6 +32,21 @@
    <object id="1" x="0" y="12" width="10" height="4"/>
   </objectgroup>
  </tile>
+ <tile id="57">
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="6" y="6" width="10" height="10"/>
+  </objectgroup>
+ </tile>
+ <tile id="58">
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="0" y="4" width="16" height="12"/>
+  </objectgroup>
+ </tile>
+ <tile id="59">
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="0" y="6" width="10" height="10"/>
+  </objectgroup>
+ </tile>
  <tile id="60">
   <objectgroup draworder="index" id="2">
    <object id="2" x="4" y="0" width="12" height="16"/>
@@ -55,6 +70,23 @@
  <tile id="68">
   <objectgroup draworder="index" id="2">
    <object id="1" x="0" y="0" width="10" height="16"/>
+  </objectgroup>
+ </tile>
+ <tile id="69">
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="6" y="0" width="10" height="16"/>
+  </objectgroup>
+ </tile>
+ <tile id="70">
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="0" y="0" width="16" height="16"/>
+  </objectgroup>
+ </tile>
+ <tile id="71">
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="2.45455" y="3.45455">
+    <ellipse/>
+   </object>
   </objectgroup>
  </tile>
  <tile id="72">
@@ -87,6 +119,21 @@
    <object id="1" x="0" y="0" width="10" height="12"/>
   </objectgroup>
  </tile>
+ <tile id="81">
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="10" y="0" width="6" height="10"/>
+  </objectgroup>
+ </tile>
+ <tile id="82">
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="0" y="0" width="16" height="12"/>
+  </objectgroup>
+ </tile>
+ <tile id="83">
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="0" y="0" width="6" height="10"/>
+  </objectgroup>
+ </tile>
  <tile id="84">
   <objectgroup draworder="index" id="2">
    <object id="2" x="0" y="0" width="12" height="16"/>
@@ -97,6 +144,13 @@
   <objectgroup draworder="index" id="2">
    <object id="2" x="4" y="0" width="12" height="16"/>
    <object id="3" x="0" y="0" width="4" height="12"/>
+  </objectgroup>
+ </tile>
+ <tile id="95">
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="4" y="3" width="9" height="11">
+    <ellipse/>
+   </object>
   </objectgroup>
  </tile>
  <tile id="96">
