@@ -174,6 +174,30 @@ fn spawn_enemy(
     }
 }
 
+/// Debug switch: frozen enemies neither walk, turn nor attack. They are still bodies, so they can
+/// be hit and pushed, and hold their ground with their strength.
+#[derive(Resource, Default, Clone, Copy, PartialEq, Debug)]
+pub struct Frozen(pub bool);
+
+/// Run condition for what enemies do on their own: false while they are [`Frozen`].
+pub fn active(frozen: Option<Res<Frozen>>) -> bool {
+    !frozen.is_some_and(|frozen| frozen.0)
+}
+
+/// G freezes all enemies or lets them go again.
+fn toggle_frozen_on_key(keyboard_input: Res<ButtonInput<KeyCode>>, mut frozen: ResMut<Frozen>) {
+    if keyboard_input.just_pressed(KeyCode::KeyG) {
+        frozen.0 = !frozen.0;
+    }
+}
+
+/// Makes frozen enemies stand still instead of keeping the velocity they had.
+fn stop(mut enemies: Query<&mut DesiredVelocity, With<Enemy>>) {
+    for mut desired in &mut enemies {
+        desired.set_if_neq(DesiredVelocity(Vec2::ZERO));
+    }
+}
+
 pub fn move_towards_player(
     player: Single<&Transform, With<player::Player>>,
     flow_field: Res<FlowField>,
@@ -266,16 +290,22 @@ pub struct Plugin;
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_message::<SpawnEnemy>()
+            .init_resource::<Frozen>()
             .add_systems(Startup, create_assets)
             .add_systems(
                 Update,
                 (
                     spawn_enemy_on_key,
+                    toggle_frozen_on_key,
                     spawn_enemy,
                     (
-                        move_towards_player,
-                        // after the heading is updated
-                        face_heading.after(move_towards_player),
+                        (
+                            move_towards_player,
+                            // after the heading is updated
+                            face_heading.after(move_towards_player),
+                        )
+                            .run_if(active),
+                        stop.run_if(not(active)),
                     )
                         .in_set(perf::Step::Enemies),
                 ),

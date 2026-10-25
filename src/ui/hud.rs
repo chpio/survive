@@ -18,6 +18,7 @@ pub struct State {
     pub flow_field_grid: Option<f32>,
     /// Whether the physics debug outlines of the colliders are drawn
     pub show_colliders: bool,
+    pub enemies_frozen: bool,
     pub show_timings: bool,
     /// Time per frame of the game's steps, `None` while hidden or not measured yet
     pub timings: Option<Averages>,
@@ -43,6 +44,7 @@ pub enum Action {
     /// Shows the next flow field grid, or hides the overlay after the last one
     CycleFlowField,
     ShowColliders(bool),
+    FreezeEnemies(bool),
     ShowTimings(bool),
     /// Replaces the settings
     ChangeSettings(Settings),
@@ -90,6 +92,14 @@ pub fn app() -> Element {
                     oninput: move |event| send(Action::ShowColliders(event.checked())),
                 }
                 "Kollider"
+            }
+            label {
+                input {
+                    r#type: "checkbox",
+                    checked: state.enemies_frozen,
+                    oninput: move |event| send(Action::FreezeEnemies(event.checked())),
+                }
+                "Gegner einfrieren (G)"
             }
             label {
                 input {

@@ -51,6 +51,7 @@ Open work is collected in `TODO.md`; remove entries once they are done.
 
 - WASD: move the player.
 - E / R / T: spawn a small / medium / large enemy.
+- G: freeze all enemies or let them go again (also a HUD checkbox).
 - F: spawn an item at the mouse cursor, cycling through the item types.
 - Left click on an item within reach: pick it up.
 - I: open/close the inventory, where items can be dropped again.
@@ -62,3 +63,5 @@ The HUD button "Gegner spawnen" spawns a small enemy, "Flowfield" cycles the flo
 The HUD checkbox "Performance" shows the frames per second and the time per frame of each `perf::Step` as a tree, averaged over half a second. "Warten (VSync/Render)" is the time between two frames, mostly waiting for the render thread, which waits for VSync; "Sonstiges" is the rest of the frame (Bevy itself, preparing the rendering).
 
 `PhysicsDebugPlugin` draws collider outlines. They start hidden; the HUD checkbox "Kollider" shows them.
+
+The HUD checkbox "Gegner einfrieren (G)" freezes all enemies (`enemy::Frozen`, run condition `enemy::active`): they neither walk, turn nor attack, but can still be hit and pushed.

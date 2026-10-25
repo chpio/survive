@@ -3,7 +3,10 @@ use bevy::prelude::*;
 use std::time::Duration;
 use survival::{
     combat::{self, Attack, Health},
-    objects::{enemy::Enemy, player},
+    objects::{
+        enemy::{self, Enemy},
+        player,
+    },
 };
 
 fn app() -> App {
@@ -35,6 +38,21 @@ fn player_and_enemy_in_reach_hurt_each_other() {
     let enemy_health = health(&app, enemy);
     assert!(player_health.current < player_health.max);
     assert!(enemy_health.current < enemy_health.max);
+}
+
+#[test]
+fn frozen_enemies_do_not_attack() {
+    let mut app = app();
+    app.insert_resource(enemy::Frozen(true));
+    let player = spawn_player(&mut app, Vec2::ZERO);
+    let enemy = spawn_enemy(&mut app, SMALL, Vec2::new(11., 0.));
+
+    common::run(&mut app, 1.);
+
+    let player_health = health(&app, player);
+    assert_eq!(player_health.current, player_health.max);
+    // the player still attacks them
+    assert!(health(&app, enemy).current < health(&app, enemy).max);
 }
 
 #[test]

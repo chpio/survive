@@ -304,6 +304,7 @@ fn sync_state(
     flow_field: Res<FlowField>,
     mut flow_field_debug: ResMut<FlowFieldDebug>,
     mut gizmos: ResMut<GizmoConfigStore>,
+    mut frozen: ResMut<enemy::Frozen>,
     timings: Option<Res<perf::Timings>>,
     mut spawn_enemy: MessageWriter<enemy::SpawnEnemy>,
     mut settings: ResMut<Settings>,
@@ -323,6 +324,9 @@ fn sync_state(
             }
             hud::Action::ShowColliders(show) => {
                 gizmos.config_mut::<PhysicsGizmos>().0.enabled = show;
+            }
+            hud::Action::FreezeEnemies(freeze) => {
+                frozen.set_if_neq(enemy::Frozen(freeze));
             }
             hud::Action::ShowTimings(show) => {
                 ui.show_timings = show;
@@ -366,6 +370,7 @@ fn sync_state(
             .and_then(|i| flow_field.grids().get(i))
             .map(|grid| grid.clearance()),
         show_colliders: gizmos.config::<PhysicsGizmos>().0.enabled,
+        enemies_frozen: frozen.0,
         show_timings: ui.show_timings,
         // only while shown, since they change twice a second and each change repaints the HUD
         timings: timings

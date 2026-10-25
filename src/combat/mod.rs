@@ -7,7 +7,10 @@
 //! all enemies are removed and the player is healed.
 
 use crate::{
-    objects::{enemy::Enemy, player::Player},
+    objects::{
+        enemy::{self, Enemy},
+        player::Player,
+    },
     perf,
 };
 use avian2d::prelude::*;
@@ -132,7 +135,7 @@ impl bevy::app::Plugin for Plugin {
             Update,
             (
                 attack::<Player, Enemy>,
-                attack::<Enemy, Player>,
+                attack::<Enemy, Player>.run_if(enemy::active),
                 despawn_dead_enemies,
                 restart_on_player_death,
             )
