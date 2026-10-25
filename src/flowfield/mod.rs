@@ -7,6 +7,10 @@
 //! [`CLEARANCES`]. Units with a free line of sight to
 //! the player walk straight towards them instead, since the eight directions between cells would
 //! otherwise bend their path.
+//!
+//! The player can stand closer to an obstacle than a grid's clearance. So that the player stays
+//! reachable then, the cells around the player that are only blocked by the clearance can be
+//! walked through as well, but never cells inside an obstacle.
 
 use crate::objects::player;
 use avian2d::prelude::*;
@@ -53,6 +57,8 @@ pub struct Grid {
     origin: Vec2,
     size: IVec2,
     blocked: Vec<bool>,
+    /// Cells whose center lies inside an obstacle, which are blocked as well
+    solid: Vec<bool>,
     /// Walking distance to the target per cell, `u32::MAX` if unreachable
     distance: Vec<u32>,
     /// Target cell the distances were computed for
@@ -85,6 +91,7 @@ impl Grid {
             origin,
             size,
             blocked: vec![false; len],
+            solid: vec![false; len],
             distance: vec![u32::MAX; len],
             target: None,
             target_position: Vec2::ZERO,
@@ -131,6 +138,19 @@ impl Grid {
         self.index(cell).is_some_and(|i| !self.blocked[i])
     }
 
+    /// Whether paths towards the target may lead through `cell`: free cells, and cells within the
+    /// clearance around the target cell that are only blocked by the clearance, so the target
+    /// stays reachable when it is closer to an obstacle than the clearance.
+    fn is_walkable(&self, cell: IVec2) -> bool {
+        let Some(i) = self.index(cell) else {
+            return false;
+        };
+        let near_target = self
+            .target
+            .is_some_and(|target| (cell - target).as_vec2().length() * CELL_SIZE < self.clearance);
+        !self.blocked[i] || (near_target && !self.solid[i])
+    }
+
     fn distance(&self, cell: IVec2) -> u32 {
         self.index(cell).map_or(u32::MAX, |i| self.distance[i])
     }
@@ -163,12 +183,13 @@ impl Grid {
             for x in min.x..=max.x {
                 let cell = IVec2::new(x, y);
                 let i = self.index(cell).unwrap();
-                let center = self.origin + (cell.as_vec2() + 0.5) * CELL_SIZE;
-                if !self.blocked[i]
-                    && collider.distance_to_point(position, rotation, center, true) < self.clearance
-                {
-                    self.blocked[i] = true;
+                if self.solid[i] {
+                    continue;
                 }
+                let center = self.origin + (cell.as_vec2() + 0.5) * CELL_SIZE;
+                let distance = collider.distance_to_point(position, rotation, center, true);
+                self.blocked[i] |= distance < self.clearance;
+                self.solid[i] |= distance <= 0.;
             }
         }
     }
@@ -176,21 +197,22 @@ impl Grid {
     /// Removes all obstacles. The distances are computed again on the next [`Self::set_target`].
     pub fn clear(&mut self) {
         self.blocked.fill(false);
+        self.solid.fill(false);
         self.target = None;
     }
 
     /// Neighbors of `cell` that can be walked to, with the cost of the step. Diagonal steps are
-    /// only allowed if both adjacent straight neighbors are free, so paths don't cut corners.
+    /// only allowed if both adjacent straight neighbors are walkable, so paths don't cut corners.
     fn steps(&self, cell: IVec2) -> impl Iterator<Item = (IVec2, u32)> + '_ {
         NEIGHBORS.into_iter().filter_map(move |offset| {
             let next = cell + offset;
-            if !self.is_free(next) {
+            if !self.is_walkable(next) {
                 return None;
             }
             if offset.x != 0 && offset.y != 0 {
-                let corners_free = self.is_free(cell + IVec2::new(offset.x, 0))
-                    && self.is_free(cell + IVec2::new(0, offset.y));
-                corners_free.then_some((next, DIAGONAL_COST))
+                let corners_walkable = self.is_walkable(cell + IVec2::new(offset.x, 0))
+                    && self.is_walkable(cell + IVec2::new(0, offset.y));
+                corners_walkable.then_some((next, DIAGONAL_COST))
             } else {
                 Some((next, STRAIGHT_COST))
             }
@@ -232,12 +254,12 @@ impl Grid {
         }
     }
 
-    /// Whether all cells on the line from `from` to `to` are free.
+    /// Whether all cells on the line from `from` to `to` are walkable.
     fn line_of_sight(&self, from: Vec2, to: Vec2) -> bool {
         // samples half a cell apart can only skip a cell at its corner, which is still within
         // the clearance around an obstacle
         let steps = (from.distance(to) / (CELL_SIZE / 2.)).ceil().max(1.);
-        (0..=steps as u32).all(|i| self.is_free(self.cell(from.lerp(to, i as f32 / steps))))
+        (0..=steps as u32).all(|i| self.is_walkable(self.cell(from.lerp(to, i as f32 / steps))))
     }
 
     /// Unit vector from `cell` towards its neighbor closest to the target, if there is one.

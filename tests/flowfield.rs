@@ -221,3 +221,30 @@ fn debug_overlay_cycles_through_grids_and_hides() {
     debug.cycle(0);
     assert_eq!(debug.grid, None);
 }
+
+#[test]
+fn target_closer_to_obstacle_than_clearance_is_reachable() {
+    let mut grid = grid_for(LARGE);
+    grid.block(Rect::new(60., 60., 100., 100.));
+    // 4 px right of the obstacle, inside its clearance
+    grid.set_target(Vec2::new(104., 80.));
+
+    // behind the obstacle, the way leads around it
+    let direction = grid.direction(Vec2::new(10., 80.)).unwrap();
+    assert!(direction.y.abs() > 0.5, "{direction}");
+    // in front of it, straight at the target
+    let direction = grid.direction(Vec2::new(150., 80.)).unwrap();
+    assert!(direction.dot(Vec2::NEG_X) > 0.99, "{direction}");
+}
+
+#[test]
+fn target_next_to_obstacle_is_not_reached_through_it() {
+    let mut grid = grid_for(LARGE);
+    // thin wall over the whole height
+    grid.block(Rect::new(77., 0., 79., 160.));
+    // 3 px right of the wall, so the cells right behind it are within the clearance of the target
+    grid.set_target(Vec2::new(82., 80.));
+
+    assert_eq!(grid.direction(Vec2::new(74., 80.)), None);
+    assert_eq!(grid.direction(Vec2::new(10., 80.)), None);
+}
