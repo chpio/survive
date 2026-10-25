@@ -19,7 +19,6 @@ Tests live in `tests/` (never inline) and run with `cargo test`; filter with `ca
 
 Build notes:
 - Bevy uses `default-features = false` with a hand-picked feature list in `Cargo.toml`. The commented-out lines mirror Bevy's default features. If a Bevy type or plugin is missing, the feature that provides it is probably commented out.
-- The fps overlay needs the `render_dev_tools` feature, which also adds `RenderDebugOverlayPlugin` to `DefaultPlugins`. That plugin requires `bevy_pbr`, so `main.rs` disables it.
 - Gizmos (physics debug outlines, flow field arrows) need both `bevy_gizmos` and `bevy_gizmos_render`; without the latter they are recorded but never drawn.
 - The `dynamic_linking` feature is always on, including in release builds.
 - Dev builds use `opt-level = 1` for the crate and `3` for dependencies.
@@ -55,12 +54,11 @@ Open work is collected in `TODO.md`; remove entries once they are done.
 - F: spawn an item at the mouse cursor, cycling through the item types.
 - Left click on an item within reach: pick it up.
 - I: open/close the inventory, where items can be dropped again.
-- P: toggle the FPS overlay.
 - Alt+Enter: toggle borderless fullscreen (a setting, so it is saved).
 - Escape: open/close the settings menu, which pauses the game.
 
 The HUD button "Gegner spawnen" spawns a small enemy, "Flowfield" cycles the flow field overlay through the grids (5, 8, 12, 16 px clearance) and off.
 
-The HUD checkbox "Performance" shows the time per frame of each `perf::Step` as a tree, averaged over half a second. "Warten (VSync/Render)" is the time between two frames, mostly waiting for the render thread, which waits for VSync; "Sonstiges" is the rest of the frame (Bevy itself, preparing the rendering).
+The HUD checkbox "Performance" shows the frames per second and the time per frame of each `perf::Step` as a tree, averaged over half a second. "Warten (VSync/Render)" is the time between two frames, mostly waiting for the render thread, which waits for VSync; "Sonstiges" is the rest of the frame (Bevy itself, preparing the rendering).
 
 `PhysicsDebugPlugin` draws collider outlines. They start hidden; the HUD checkbox "Kollider" shows them.

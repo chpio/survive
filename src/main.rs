@@ -1,30 +1,14 @@
 use avian2d::prelude::*;
-use bevy::{
-    dev_tools::{fps_overlay, render_debug},
-    prelude::*,
-};
+use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::*;
-use std::time::Duration;
 use survival::{combat, flowfield, items, movement, objects, perf, settings, sight, ui};
 
 fn main() {
     App::new()
-        .add_plugins(
-            DefaultPlugins
-                .build()
-                .set(ImagePlugin::default_nearest())
-                // enabled by the `render_dev_tools` feature (needed for the fps overlay), but requires bevy_pbr
-                .disable::<render_debug::RenderDebugOverlayPlugin>(),
-        )
-        .add_plugins(fps_overlay::FpsOverlayPlugin {
-            config: fps_overlay::FpsOverlayConfig {
-                refresh_interval: Duration::from_millis(500),
-                ..default()
-            },
-        })
+        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_plugins(TiledPlugin::default())
         .add_systems(Startup, startup)
-        .add_systems(Update, (update_camera_position, toggle_fps))
+        .add_systems(Update, update_camera_position)
         .insert_resource(Gravity::ZERO)
         .add_plugins(TiledPhysicsPlugin::<TiledPhysicsAvianBackend>::default())
         .add_plugins(
@@ -186,15 +170,4 @@ fn update_camera_position(
 ) {
     // keep camera z-coordinate unchanged
     camera.translation = player.translation.with_z(camera.translation.z);
-}
-
-fn toggle_fps(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut fps_overlay: ResMut<fps_overlay::FpsOverlayConfig>,
-) {
-    if keyboard_input.just_pressed(KeyCode::KeyP) {
-        let enabled = !fps_overlay.enabled;
-        fps_overlay.enabled = enabled;
-        fps_overlay.frame_time_graph_config.enabled = enabled;
-    }
 }

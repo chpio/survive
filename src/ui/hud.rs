@@ -101,7 +101,10 @@ pub fn app() -> Element {
             }
             if let Some(timings) = state.timings {
                 div { class: "timings",
-                    {row("Frame", timings.frame)}
+                    div { class: "row",
+                        span { "Frame" }
+                        span { {format!("{:.0} FPS / {}", 1. / timings.frame.as_secs_f64(), ms(timings.frame))} }
+                    }
                     div { class: "children",
                         for node in MAIN_THREAD {
                             {node_rows(&timings, node)}

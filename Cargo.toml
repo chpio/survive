@@ -44,8 +44,6 @@ default-features = false
 features = [
     "dynamic_linking",
     "file_watcher",
-    "bevy_dev_tools",
-    "render_dev_tools",
 
     # default features https://docs.rs/bevy/0.20.0/bevy/index.html#default-features
     "std",
