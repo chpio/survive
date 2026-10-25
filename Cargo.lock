@@ -1836,7 +1836,6 @@ dependencies = [
  "bevy_input_focus",
  "bevy_log",
  "bevy_math",
- "bevy_picking",
  "bevy_platform",
  "bevy_reflect",
  "bevy_sprite",
@@ -1852,7 +1851,6 @@ dependencies = [
  "taffy 0.14.0",
  "thiserror 2.0.21",
  "tracing",
- "uuid",
 ]
 
 [[package]]

@@ -4,6 +4,10 @@
 //! scene. The render world renders that scene with Bevy's own wgpu device into an `Image`, which
 //! is shown as a fullscreen `ImageNode`. Both only happen when the HUD changed (after input, a
 //! re-render, a resize or a redraw request from Blitz); otherwise the image keeps its content.
+//!
+//! Blitz gets all mouse input. Where the HUD [blocks the pointer](blocks_pointer), it reports a
+//! picking hit on its image above the sprites, so the game world only gets the pointer elsewhere
+//! (see `docs/ui-events.md`).
 
 mod hud;
 mod stylesheet;
@@ -19,6 +23,11 @@ use anyrender_vello::VelloScenePainter;
 use avian2d::prelude::PhysicsGizmos;
 use bevy::{
     input::{ButtonState, mouse::MouseButtonInput},
+    picking::{
+        PickingSystems,
+        backend::{HitData, PointerHits},
+        pointer::{PointerId, PointerLocation},
+    },
     prelude::*,
     render::{
         Render, RenderApp, RenderStartup, RenderSystems,
@@ -33,7 +42,7 @@ use bevy::{
     },
     window::PrimaryWindow,
 };
-use blitz_dom::{Document as _, DocumentConfig};
+use blitz_dom::{BaseDocument, Document as _, DocumentConfig, local_name};
 use blitz_paint::paint_scene;
 use blitz_traits::{
     events::{
@@ -94,6 +103,28 @@ struct UiScene {
 #[derive(Resource)]
 struct VelloRenderer(Mutex<vello::Renderer>);
 
+/// The fullscreen image showing the HUD. Picking hits it wherever the HUD blocks the pointer, so
+/// it is in the `HoverMap` then.
+#[derive(Component)]
+pub struct Hud;
+
+/// Class of the HUD elements that take the pointer from the game world, along with their children.
+pub const BLOCKS_POINTER: &str = "blocks-pointer";
+
+/// Whether the HUD takes the pointer at `position` (in logical pixels, like Bevy's pointer
+/// positions): whether the topmost element there or one of its ancestors has the class
+/// [`BLOCKS_POINTER`]. Uses the last layout, so the document has to be resolved before.
+pub fn blocks_pointer(doc: &BaseDocument, position: Vec2) -> bool {
+    doc.elements_from_point(position.x, position.y)
+        .into_iter()
+        .filter_map(|id| doc.get_node(id)?.element_data()?.attr(local_name!("class")))
+        .any(|class| {
+            class
+                .split_ascii_whitespace()
+                .any(|name| name == BLOCKS_POINTER)
+        })
+}
+
 fn setup(world: &mut World) {
     let (action_tx, action_rx) = mpsc::channel();
     let vdom = VirtualDom::new(hud::app).with_root_context(action_tx);
@@ -145,6 +176,7 @@ fn setup(world: &mut World) {
 
     world.spawn((
         Name::new("UI"),
+        Hud,
         ImageNode::new(image.clone()),
         Node {
             position_type: PositionType::Absolute,
@@ -193,6 +225,30 @@ fn forward_input(
             }
         };
         ui.doc.handle_ui_event(event);
+    }
+}
+
+/// Picking backend for the HUD: reports a hit on the [`Hud`] image for each pointer the HUD blocks.
+/// Without `Pickable`, the image blocks all hits below it.
+fn pick_hud(
+    ui: NonSend<UiDocument>,
+    hud: Single<Entity, With<Hud>>,
+    camera: Single<(Entity, &Camera), With<Camera2d>>,
+    pointers: Query<(&PointerId, &PointerLocation)>,
+    mut hits: MessageWriter<PointerHits>,
+) {
+    let (camera_entity, camera) = *camera;
+    let doc = ui.doc.inner();
+    for (pointer, location) in &pointers {
+        let Some(location) = &location.location else {
+            continue;
+        };
+        if blocks_pointer(&doc, location.position) {
+            let hit = HitData::new(camera_entity, 0., Some(location.position.extend(0.)), None);
+            // above the sprites, which use the camera's order, since the HUD is drawn above them
+            let order = camera.order as f32 + 1.;
+            hits.write(PointerHits::new(*pointer, vec![(*hud, hit)], order));
+        }
     }
 }
 
@@ -432,7 +488,10 @@ impl bevy::app::Plugin for Plugin {
             .init_asset::<Stylesheet>()
             .init_asset_loader::<StylesheetLoader>()
             .add_systems(Startup, setup)
-            .add_systems(PreUpdate, forward_input)
+            .add_systems(
+                PreUpdate,
+                (forward_input, pick_hud.in_set(PickingSystems::Backend)),
+            )
             .add_systems(Update, (update_stylesheet, sync_state))
             .add_systems(PostUpdate, paint_ui);
 

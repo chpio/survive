@@ -59,7 +59,7 @@ pub fn app() -> Element {
 
     rsx! {
         style { {stylesheet} }
-        div { class: "hud",
+        div { class: "hud blocks-pointer",
             span { "Leben: {health}" }
             span { "Gegner: {state.enemy_count}" }
             button { onclick: move |_| send(Action::SpawnEnemy), "Gegner spawnen" }
@@ -109,7 +109,7 @@ fn menu(settings: Settings, send: Callback<Action>) -> Element {
     let change = move |settings| send(Action::ChangeSettings(settings));
 
     rsx! {
-        div { class: "menu",
+        div { class: "menu blocks-pointer",
             div { class: "panel",
                 span { class: "title", "Einstellungen" }
                 label {

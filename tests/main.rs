@@ -7,3 +7,4 @@ mod flowfield;
 mod movement;
 mod perf;
 mod settings;
+mod ui;

@@ -81,7 +81,8 @@ features = [
     "bevy_state",
     # "bevy_text",
     "bevy_ui",
-    "ui_picking",
+    # the HUD picks itself (ui::pick_hud), Bevy's UI picking would hit its fullscreen image everywhere
+    # "ui_picking",
     "bevy_ui_render",
     "bevy_window",
     "bevy_winit",
