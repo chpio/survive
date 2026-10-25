@@ -50,7 +50,8 @@
 }
 
 /* Blitz paints checkboxes in the text color, which is white in the HUD */
-.hud input, .menu input {
+.hud input,
+.menu input {
     color: #3a6ea5;
 }
 
@@ -84,7 +85,8 @@
     font-weight: bold;
 }
 
-.menu label, .menu .setting {
+.menu label,
+.menu .setting {
     display: flex;
     align-items: center;
     gap: 8px;
