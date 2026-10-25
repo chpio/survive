@@ -1,4 +1,7 @@
+#![recursion_limit = "256"]
+
 mod objects;
+mod ui;
 
 use avian2d::prelude::*;
 use bevy::{
@@ -47,6 +50,7 @@ fn main() {
             objects::player::Plugin,
             objects::well::Plugin,
         ))
+        .add_plugins(ui::Plugin)
         .run();
 }
 

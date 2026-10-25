@@ -4,7 +4,14 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
+anyrender_vello = "0.15"
 avian2d = "0.8"
+blitz-dom = "=0.3.0-beta.4"
+blitz-paint = "=0.3.0-beta.4"
+blitz-traits = "=0.3.0-beta.4"
+dioxus = { version = "=0.8.0-alpha.3", default-features = false, features = ["macro", "html", "signals", "hooks"] }
+dioxus-native-dom = "=0.8.0-alpha.3"
+vello = { version = "0.11", default-features = false, features = ["wgpu"] }
 
 [dependencies.bevy]
 version = "0.20"

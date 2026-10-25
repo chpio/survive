@@ -5,8 +5,20 @@ use bevy::prelude::*;
 #[derive(Default, Clone, Component)]
 pub struct Enemy;
 
-fn spawn_enemy(keyboard_input: Res<ButtonInput<KeyCode>>, mut cmds: Commands) {
+#[derive(Message)]
+pub struct SpawnEnemy;
+
+fn spawn_enemy_on_key(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut spawn_enemy: MessageWriter<SpawnEnemy>,
+) {
     if keyboard_input.just_pressed(KeyCode::KeyE) {
+        spawn_enemy.write(SpawnEnemy);
+    }
+}
+
+fn spawn_enemy(mut spawn_enemy: MessageReader<SpawnEnemy>, mut cmds: Commands) {
+    for _ in spawn_enemy.read() {
         cmds.spawn((
             Enemy,
             Name::new("Enemy"),
@@ -35,6 +47,9 @@ pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (spawn_enemy, move_towards_player));
+        app.add_message::<SpawnEnemy>().add_systems(
+            Update,
+            (spawn_enemy_on_key, spawn_enemy, move_towards_player),
+        );
     }
 }
