@@ -15,10 +15,27 @@ fn grid_for(radius: f32) -> Grid {
     Grid::new(Vec2::ZERO, Vec2::splat(160.), radius)
 }
 
+/// Blocks the cells near the rectangle `obstacle`.
+fn block(grid: &mut Grid, obstacle: Rect) {
+    let (collider, position) = rectangle(obstacle);
+    grid.block_collider(&collider, position, Rotation::IDENTITY);
+}
+
+/// Blocks the cells near the rectangle `obstacle` in all grids.
+fn block_all(flow_field: &mut FlowField, obstacle: Rect) {
+    let (collider, position) = rectangle(obstacle);
+    flow_field.block_collider(&collider, position, Rotation::IDENTITY);
+}
+
+fn rectangle(rect: Rect) -> (Collider, Vec2) {
+    let size = rect.size();
+    (Collider::rectangle(size.x, size.y), rect.center())
+}
+
 /// Wall at x = 76..84 over the whole height, except for a gap at `gap_min..gap_max`.
 fn wall_with_gap(grid: &mut Grid, gap_min: f32, gap_max: f32) {
-    grid.block(Rect::new(76., 0., 84., gap_min));
-    grid.block(Rect::new(76., gap_max, 84., 160.));
+    block(grid, Rect::new(76., 0., 84., gap_min));
+    block(grid, Rect::new(76., gap_max, 84., 160.));
 }
 
 #[test]
@@ -86,10 +103,10 @@ fn only_the_shape_of_an_obstacle_blocks() {
 #[test]
 fn enclosed_target_is_unreachable() {
     let mut grid = grid();
-    grid.block(Rect::new(100., 60., 140., 64.));
-    grid.block(Rect::new(100., 96., 140., 100.));
-    grid.block(Rect::new(100., 60., 104., 100.));
-    grid.block(Rect::new(136., 60., 140., 100.));
+    block(&mut grid, Rect::new(100., 60., 140., 64.));
+    block(&mut grid, Rect::new(100., 96., 140., 100.));
+    block(&mut grid, Rect::new(100., 60., 104., 100.));
+    block(&mut grid, Rect::new(136., 60., 140., 100.));
     grid.set_target(Vec2::new(120., 80.));
 
     assert_eq!(grid.direction(Vec2::new(10., 80.)), None);
@@ -98,7 +115,7 @@ fn enclosed_target_is_unreachable() {
 #[test]
 fn leads_out_of_clearance_around_obstacle() {
     let mut grid = grid();
-    grid.block(Rect::new(60., 60., 100., 100.));
+    block(&mut grid, Rect::new(60., 60., 100., 100.));
     grid.set_target(Vec2::new(150., 80.));
 
     // touching the obstacle, closer than the clearance
@@ -171,14 +188,14 @@ fn unlisted_radius_uses_next_larger_grid() {
 }
 
 fn wall_with_gap_in(flow_field: &mut FlowField, gap_min: f32, gap_max: f32) {
-    flow_field.block(Rect::new(76., 0., 84., gap_min));
-    flow_field.block(Rect::new(76., gap_max, 84., 160.));
+    block_all(flow_field, Rect::new(76., 0., 84., gap_min));
+    block_all(flow_field, Rect::new(76., gap_max, 84., 160.));
 }
 
 #[test]
 fn cells_report_obstacles_distances_and_directions() {
     let mut grid = grid();
-    grid.block(Rect::new(60., 60., 100., 100.));
+    block(&mut grid, Rect::new(60., 60., 100., 100.));
     grid.set_target(Vec2::new(150., 80.));
     let cell_at = |position: Vec2| {
         let cell = (position / CELL_SIZE).floor().as_ivec2();
@@ -225,7 +242,7 @@ fn debug_overlay_cycles_through_grids_and_hides() {
 #[test]
 fn target_closer_to_obstacle_than_clearance_is_reachable() {
     let mut grid = grid_for(LARGE);
-    grid.block(Rect::new(60., 60., 100., 100.));
+    block(&mut grid, Rect::new(60., 60., 100., 100.));
     // 4 px right of the obstacle, inside its clearance
     grid.set_target(Vec2::new(104., 80.));
 
@@ -241,7 +258,7 @@ fn target_closer_to_obstacle_than_clearance_is_reachable() {
 fn target_next_to_obstacle_is_not_reached_through_it() {
     let mut grid = grid_for(LARGE);
     // thin wall over the whole height
-    grid.block(Rect::new(77., 0., 79., 160.));
+    block(&mut grid, Rect::new(77., 0., 79., 160.));
     // 3 px right of the wall, so the cells right behind it are within the clearance of the target
     grid.set_target(Vec2::new(82., 80.));
 

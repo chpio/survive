@@ -6,8 +6,9 @@
 use super::{CELL_SIZE, FlowField};
 use bevy::{
     asset::RenderAssetUsages,
+    image::ToExtents,
     prelude::*,
-    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+    render::render_resource::{TextureDimension, TextureFormat},
     sprite::Anchor,
 };
 
@@ -47,11 +48,7 @@ fn spawn_overlay(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
 
 fn cell_image(size: UVec2) -> Image {
     Image::new_fill(
-        Extent3d {
-            width: size.x,
-            height: size.y,
-            depth_or_array_layers: 1,
-        },
+        size.to_extents(),
         TextureDimension::D2,
         &[0; 4],
         TextureFormat::Rgba8UnormSrgb,
@@ -80,10 +77,10 @@ fn draw_overlay(
         return;
     };
     if image.size() != size {
-        *image = cell_image(size);
+        image.resize(size.to_extents());
     }
 
-    let max_distance = grid.cells().filter_map(|cell| cell.distance).max();
+    let max_distance = grid.max_distance();
     for cell in grid.cells() {
         let color = match (cell.blocked, cell.distance, max_distance) {
             (true, ..) => Color::srgba(0.9, 0.1, 0.1, 0.5),

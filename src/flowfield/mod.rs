@@ -118,20 +118,38 @@ impl Grid {
             .flat_map(move |y| (0..self.size.x).map(move |x| IVec2::new(x, y)))
             .map(|position| Cell {
                 position,
-                center: self.origin + (position.as_vec2() + 0.5) * CELL_SIZE,
+                center: self.cell_center(position),
                 blocked: !self.is_free(position),
                 distance: Some(self.distance(position)).filter(|&d| d != u32::MAX),
                 direction: self.cell_direction(position),
             })
     }
 
+    /// Highest walking distance of a reachable cell, `None` if no cell is reachable.
+    pub fn max_distance(&self) -> Option<u32> {
+        self.distance
+            .iter()
+            .copied()
+            .filter(|&d| d != u32::MAX)
+            .max()
+    }
+
     fn cell(&self, position: Vec2) -> IVec2 {
         ((position - self.origin) / CELL_SIZE).floor().as_ivec2()
+    }
+
+    fn cell_center(&self, cell: IVec2) -> Vec2 {
+        self.origin + (cell.as_vec2() + 0.5) * CELL_SIZE
     }
 
     fn index(&self, cell: IVec2) -> Option<usize> {
         (cell.cmpge(IVec2::ZERO).all() && cell.cmplt(self.size).all())
             .then(|| (cell.y * self.size.x + cell.x) as usize)
+    }
+
+    /// Inverse of [`Self::index`].
+    fn cell_of(&self, index: usize) -> IVec2 {
+        IVec2::new(index as i32 % self.size.x, index as i32 / self.size.x)
     }
 
     fn is_free(&self, cell: IVec2) -> bool {
@@ -145,32 +163,28 @@ impl Grid {
         let Some(i) = self.index(cell) else {
             return false;
         };
-        let near_target = self
-            .target
-            .is_some_and(|target| (cell - target).as_vec2().length() * CELL_SIZE < self.clearance);
-        !self.blocked[i] || (near_target && !self.solid[i])
+        if !self.blocked[i] {
+            return true;
+        }
+        !self.solid[i]
+            && self.target.is_some_and(|target| {
+                (cell - target).length_squared() as f32 * CELL_SIZE.powi(2) < self.clearance.powi(2)
+            })
     }
 
     fn distance(&self, cell: IVec2) -> u32 {
         self.index(cell).map_or(u32::MAX, |i| self.distance[i])
     }
 
-    /// Blocks all cells whose center is closer than the clearance to `obstacle`.
-    pub fn block(&mut self, obstacle: Rect) {
-        let size = obstacle.size();
-        self.block_collider(
-            &Collider::rectangle(size.x, size.y),
-            obstacle.center(),
-            Rotation::IDENTITY,
-        );
-    }
-
     /// Blocks all cells whose center is closer than the clearance to the shape of `collider` at
     /// `position` and `rotation`. Only the shape counts, not its bounding box, since the map's
     /// tiles are merged into one collider per layer that spans the whole map.
     pub fn block_collider(&mut self, collider: &Collider, position: Vec2, rotation: Rotation) {
-        let area = collider.aabb(position, rotation, self.clearance);
-        // cells whose center lies in the area, limited to the grid
+        block(std::slice::from_mut(self), collider, position, rotation);
+    }
+
+    /// Indices and centers of the cells whose center lies in `area`.
+    fn cells_in(&self, area: ColliderAabb) -> impl Iterator<Item = (usize, Vec2)> + '_ {
         let min = ((area.min - self.origin) / CELL_SIZE - 0.5)
             .ceil()
             .as_ivec2()
@@ -179,19 +193,9 @@ impl Grid {
             .floor()
             .as_ivec2()
             .min(self.size - 1);
-        for y in min.y..=max.y {
-            for x in min.x..=max.x {
-                let cell = IVec2::new(x, y);
-                let i = self.index(cell).unwrap();
-                if self.solid[i] {
-                    continue;
-                }
-                let center = self.origin + (cell.as_vec2() + 0.5) * CELL_SIZE;
-                let distance = collider.distance_to_point(position, rotation, center, true);
-                self.blocked[i] |= distance < self.clearance;
-                self.solid[i] |= distance <= 0.;
-            }
-        }
+        (min.y..=max.y)
+            .flat_map(move |y| (min.x..=max.x).map(move |x| IVec2::new(x, y)))
+            .map(|cell| (self.index(cell).unwrap(), self.cell_center(cell)))
     }
 
     /// Removes all obstacles. The distances are computed again on the next [`Self::set_target`].
@@ -241,10 +245,14 @@ impl Grid {
             if distance > self.distance[index] {
                 continue;
             }
-            let cell = IVec2::new(index as i32 % self.size.x, index as i32 / self.size.x);
-            let steps: Vec<_> = self.steps(cell).collect();
-            for (next, cost) in steps {
-                let next_index = self.index(next).unwrap();
+            // copied out, since the steps borrow the grid
+            let mut steps = [(0, 0); NEIGHBORS.len()];
+            let mut count = 0;
+            for (next, cost) in self.steps(self.cell_of(index)) {
+                steps[count] = (self.index(next).unwrap(), cost);
+                count += 1;
+            }
+            for &(next_index, cost) in &steps[..count] {
                 let next_distance = distance + cost;
                 if next_distance < self.distance[next_index] {
                     self.distance[next_index] = next_distance;
@@ -323,18 +331,9 @@ impl FlowField {
         &self.grids
     }
 
-    /// See [`Grid::block`].
-    pub fn block(&mut self, obstacle: Rect) {
-        for grid in &mut self.grids {
-            grid.block(obstacle);
-        }
-    }
-
     /// See [`Grid::block_collider`].
     pub fn block_collider(&mut self, collider: &Collider, position: Vec2, rotation: Rotation) {
-        for grid in &mut self.grids {
-            grid.block_collider(collider, position, rotation);
-        }
+        block(&mut self.grids, collider, position, rotation);
     }
 
     /// See [`Grid::clear`].
@@ -361,6 +360,22 @@ impl FlowField {
             .find(|grid| grid.clearance >= radius)
             .or(self.grids.last())?
             .direction(position)
+    }
+}
+
+/// Blocks the cells near `collider` in `grids`, which cover the same cells and are sorted by
+/// clearance. The distance of each cell to the collider is computed once for all of them.
+fn block(grids: &mut [Grid], collider: &Collider, position: Vec2, rotation: Rotation) {
+    let Some(widest) = grids.last() else {
+        return;
+    };
+    let area = collider.aabb(position, rotation, widest.clearance);
+    for (i, center) in widest.cells_in(area).collect::<Vec<_>>() {
+        let distance = collider.distance_to_point(position, rotation, center, true);
+        for grid in &mut *grids {
+            grid.blocked[i] |= distance < grid.clearance;
+            grid.solid[i] |= distance <= 0.;
+        }
     }
 }
 
