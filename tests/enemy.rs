@@ -2,7 +2,10 @@ mod common;
 
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use survival::objects::enemy;
+use survival::{
+    flowfield::FlowField,
+    objects::{enemy, player},
+};
 
 #[test]
 fn enemy_does_not_walk_through_wall() {
@@ -35,5 +38,37 @@ fn overlapping_enemies_are_pushed_apart() {
     assert!(
         distance >= enemy::SHAPE.radius * 2. - 0.5,
         "enemies {distance} apart"
+    );
+}
+
+#[test]
+fn enemies_keep_distance_from_each_other() {
+    let mut app = common::app();
+    app.init_resource::<FlowField>()
+        .add_systems(Update, enemy::move_towards_player);
+    // far enough away that the enemies don't reach the player
+    common::spawn(&mut app, player::Player, Vec2::new(500., 0.));
+    let enemies: Vec<_> = (0..6)
+        .map(|i| {
+            common::spawn(
+                &mut app,
+                (enemy::Enemy, enemy::physics()),
+                Vec2::new(0., i as f32),
+            )
+        })
+        .collect();
+
+    common::run(&mut app, 1.);
+
+    let positions: Vec<_> = enemies.iter().map(|&e| common::position(&app, e)).collect();
+    let min_distance = positions
+        .iter()
+        .enumerate()
+        .flat_map(|(i, a)| positions[i + 1..].iter().map(move |b| a.distance(*b)))
+        .fold(f32::INFINITY, f32::min);
+    // colliders alone only keep them `2 * radius` apart
+    assert!(
+        min_distance > enemy::SHAPE.radius * 2. + 2.,
+        "closest enemies {min_distance} apart"
     );
 }

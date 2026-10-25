@@ -60,9 +60,11 @@ fn spawn_enemy(
     }
 }
 
-fn move_towards_player(
+pub fn move_towards_player(
     player: Single<&Transform, With<player::Player>>,
     flow_field: Res<FlowField>,
+    spatial_query: SpatialQuery,
+    positions: Query<&Transform, With<Enemy>>,
     mut enemies: Query<(Entity, &Transform, &mut DesiredVelocity), With<Enemy>>,
 ) {
     const MOVE_SPEED: f32 = 100.;
@@ -70,10 +72,8 @@ fn move_towards_player(
     const SEPARATION_DISTANCE: f32 = SHAPE.radius * 2. + 4.;
     const SEPARATION_WEIGHT: f32 = 1.5;
 
-    let positions: Vec<_> = enemies
-        .iter()
-        .map(|(entity, transform, _)| (entity, transform.translation.xy()))
-        .collect();
+    // touches the collider of every enemy whose center is closer than `SEPARATION_DISTANCE`
+    let neighborhood = Collider::circle(SEPARATION_DISTANCE - SHAPE.radius);
 
     for (entity, transform, mut desired) in &mut enemies {
         let position = transform.translation.xy();
@@ -84,18 +84,29 @@ fn move_towards_player(
             .unwrap_or_else(|| (player.translation.xy() - position).normalize_or_zero());
 
         let mut separation = Vec2::ZERO;
-        for &(other, other_position) in &positions {
-            let offset = position - other_position;
-            let distance = offset.length();
-            if other == entity || distance >= SEPARATION_DISTANCE {
-                continue;
-            }
-            // enemies spawn on the same spot, so pick a direction per entity when they overlap
-            let away = offset.try_normalize().unwrap_or_else(|| {
-                Vec2::from_angle(entity.index_u32() as f32 * std::f32::consts::GOLDEN_RATIO)
-            });
-            separation += away * (1. - distance / SEPARATION_DISTANCE);
-        }
+        spatial_query.shape_intersections_callback(
+            &neighborhood,
+            position,
+            0.,
+            &SpatialQueryFilter::default().with_excluded_entities([entity]),
+            |other| {
+                // the query also finds the player and obstacles
+                let Ok(other_transform) = positions.get(other) else {
+                    return true;
+                };
+                let offset = position - other_transform.translation.xy();
+                let distance = offset.length();
+                if distance < SEPARATION_DISTANCE {
+                    // enemies spawn on the same spot, so pick a direction per entity when they
+                    // overlap
+                    let away = offset.try_normalize().unwrap_or_else(|| {
+                        Vec2::from_angle(entity.index_u32() as f32 * std::f32::consts::GOLDEN_RATIO)
+                    });
+                    separation += away * (1. - distance / SEPARATION_DISTANCE);
+                }
+                true
+            },
+        );
 
         let new_velocity =
             (direction + separation * SEPARATION_WEIGHT).clamp_length_max(1.) * MOVE_SPEED;
