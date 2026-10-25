@@ -20,6 +20,7 @@ Tests live in `tests/` (never inline) and run with `cargo test`. Game code is in
 Build notes:
 - Bevy uses `default-features = false` with a hand-picked feature list in `Cargo.toml`. The commented-out lines mirror Bevy's default features. If a Bevy type or plugin is missing, the feature that provides it is probably commented out.
 - The fps overlay needs the `render_dev_tools` feature, which also adds `RenderDebugOverlayPlugin` to `DefaultPlugins`. That plugin requires `bevy_pbr`, so `main.rs` disables it.
+- Gizmos (physics debug outlines, flow field arrows) need both `bevy_gizmos` and `bevy_gizmos_render`; without the latter they are recorded but never drawn.
 - The `dynamic_linking` feature is always on, including in release builds.
 - Dev builds use `opt-level = 1` for the crate and `3` for dependencies.
 
