@@ -14,6 +14,8 @@ use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::*;
 use std::{cmp::Reverse, collections::BinaryHeap};
 
+pub mod debug;
+
 /// Edge length of a cell in pixels (a quarter tile). Small enough that a corridor one tile wide
 /// still has free cells for small enemies after the obstacles around it are inflated.
 pub const CELL_SIZE: f32 = 4.;
@@ -58,6 +60,20 @@ pub struct Grid {
     target_position: Vec2,
 }
 
+/// State of one cell of a [`Grid`], see [`Grid::cells`].
+pub struct Cell {
+    /// Column and row, counted from the bottom-left corner of the grid
+    pub position: IVec2,
+    /// World position of the center
+    pub center: Vec2,
+    pub blocked: bool,
+    /// Walking distance to the target, `None` if unreachable
+    pub distance: Option<u32>,
+    /// Direction towards the neighbor closest to the target, `None` at the target or if it can't
+    /// be reached
+    pub direction: Option<Vec2>,
+}
+
 impl Grid {
     /// Grid covering the area from `origin` (bottom-left corner) to `origin + world_size`, with
     /// no obstacles and no target, for units keeping `clearance` from obstacles.
@@ -73,6 +89,33 @@ impl Grid {
             target: None,
             target_position: Vec2::ZERO,
         }
+    }
+
+    pub fn clearance(&self) -> f32 {
+        self.clearance
+    }
+
+    /// World position of the bottom-left corner.
+    pub fn origin(&self) -> Vec2 {
+        self.origin
+    }
+
+    /// Number of columns and rows.
+    pub fn size(&self) -> IVec2 {
+        self.size
+    }
+
+    /// All cells row by row, starting at the bottom-left corner.
+    pub fn cells(&self) -> impl Iterator<Item = Cell> + '_ {
+        (0..self.size.y)
+            .flat_map(move |y| (0..self.size.x).map(move |x| IVec2::new(x, y)))
+            .map(|position| Cell {
+                position,
+                center: self.origin + (position.as_vec2() + 0.5) * CELL_SIZE,
+                blocked: !self.is_free(position),
+                distance: Some(self.distance(position)).filter(|&d| d != u32::MAX),
+                direction: self.cell_direction(position),
+            })
     }
 
     fn cell(&self, position: Vec2) -> IVec2 {
@@ -251,6 +294,11 @@ impl FlowField {
             .collect();
         grids.sort_by(|a, b| a.clearance.total_cmp(&b.clearance));
         Self { grids }
+    }
+
+    /// Grids sorted by clearance.
+    pub fn grids(&self) -> &[Grid] {
+        &self.grids
     }
 
     /// See [`Grid::block`].

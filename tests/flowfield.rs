@@ -1,6 +1,6 @@
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use survival::flowfield::{FlowField, Grid};
+use survival::flowfield::{CELL_SIZE, FlowField, Grid, debug::FlowFieldDebug};
 
 /// Radii of a small and a large enemy
 const SMALL: f32 = 5.;
@@ -173,4 +173,51 @@ fn unlisted_radius_uses_next_larger_grid() {
 fn wall_with_gap_in(flow_field: &mut FlowField, gap_min: f32, gap_max: f32) {
     flow_field.block(Rect::new(76., 0., 84., gap_min));
     flow_field.block(Rect::new(76., gap_max, 84., 160.));
+}
+
+#[test]
+fn cells_report_obstacles_distances_and_directions() {
+    let mut grid = grid();
+    grid.block(Rect::new(60., 60., 100., 100.));
+    grid.set_target(Vec2::new(150., 80.));
+    let cell_at = |position: Vec2| {
+        let cell = (position / CELL_SIZE).floor().as_ivec2();
+        grid.cells().find(|c| c.position == cell).unwrap()
+    };
+
+    let target = cell_at(Vec2::new(150., 80.));
+    assert_eq!(
+        (target.blocked, target.distance, target.direction),
+        (false, Some(0), None)
+    );
+
+    let obstacle = cell_at(Vec2::new(80., 80.));
+    assert!(obstacle.blocked);
+    assert_eq!(obstacle.distance, None);
+
+    let left = cell_at(Vec2::new(10., 140.));
+    assert!(!left.blocked);
+    assert!(left.distance.unwrap() > 0);
+    assert!(left.direction.unwrap().x > 0.);
+
+    assert_eq!(
+        grid.cells().count(),
+        (grid.size().x * grid.size().y) as usize
+    );
+}
+
+#[test]
+fn debug_overlay_cycles_through_grids_and_hides() {
+    let mut debug = FlowFieldDebug::default();
+    let shown: Vec<_> = (0..4)
+        .map(|_| {
+            debug.cycle(3);
+            debug.grid
+        })
+        .collect();
+    assert_eq!(shown, [Some(0), Some(1), Some(2), None]);
+
+    // no grids before a map is loaded
+    debug.cycle(0);
+    assert_eq!(debug.grid, None);
 }

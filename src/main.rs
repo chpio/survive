@@ -46,7 +46,11 @@ fn main() {
             objects::player::Plugin,
             objects::well::Plugin,
         ))
-        .add_plugins((flowfield::Plugin, movement::Plugin))
+        .add_plugins((
+            flowfield::Plugin,
+            flowfield::debug::Plugin,
+            movement::Plugin,
+        ))
         .add_plugins(ui::Plugin)
         .run();
 }
