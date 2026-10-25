@@ -27,6 +27,7 @@ Build notes:
 
 - `src/main.rs` builds the `App`: window/image settings, FPS overlay, Tiled + Avian plugins (with `Gravity::ZERO`, top-down), and the game object plugins. `startup` spawns the camera, the player, and the `TiledMap`.
 - `src/objects/` holds one module per game object. Each module defines a marker `Component`, its systems, and a `pub struct Plugin` that registers them. New objects follow this pattern and get added to the plugin tuple in `main.rs`.
+- `src/flowfield.rs` keeps a grid over the map (8 px cells). Cells covered by static, non-sensor colliders are blocked, and a Dijkstra search from the player's cell gives each free cell its walking distance. Enemies follow it via `FlowField::direction` and add a separation force so they don't stack.
 - Movement is velocity-based. Systems set `LinearVelocity` on Avian bodies (player: `RigidBody::Dynamic`, enemies: `RigidBody::Kinematic` + `Sensor`) instead of changing `Transform` directly. The camera follows the player's `Transform` and keeps its own z.
 
 ### Tiled map → ECS

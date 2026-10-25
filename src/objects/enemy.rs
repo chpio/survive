@@ -1,4 +1,4 @@
-use crate::objects::player;
+use crate::{flowfield::FlowField, objects::player};
 use avian2d::prelude::*;
 use bevy::prelude::*;
 
@@ -44,13 +44,47 @@ fn spawn_enemy(
 
 fn move_towards_player(
     player: Single<&Transform, With<player::Player>>,
-    enemies: Query<(&Transform, &mut LinearVelocity), With<Enemy>>,
+    flow_field: Res<FlowField>,
+    mut enemies: Query<(Entity, &Transform, &mut LinearVelocity), With<Enemy>>,
 ) {
     const MOVE_SPEED: f32 = 100.;
+    /// Enemies closer than this push each other apart
+    const SEPARATION_DISTANCE: f32 = SHAPE.radius * 2. + 4.;
+    const SEPARATION_WEIGHT: f32 = 1.5;
 
-    for (enemy_pos, mut enemy_vel) in enemies {
-        let direction = (player.translation.xy() - enemy_pos.translation.xy()).normalize_or_zero();
-        enemy_vel.0 = direction * MOVE_SPEED;
+    let positions: Vec<_> = enemies
+        .iter()
+        .map(|(entity, transform, _)| (entity, transform.translation.xy()))
+        .collect();
+
+    for (entity, transform, mut velocity) in &mut enemies {
+        let position = transform.translation.xy();
+
+        // follow the flow field around obstacles, walk straight once in the player's cell or
+        // if the player can't be reached
+        let direction = flow_field
+            .direction(position)
+            .unwrap_or_else(|| (player.translation.xy() - position).normalize_or_zero());
+
+        let mut separation = Vec2::ZERO;
+        for &(other, other_position) in &positions {
+            let offset = position - other_position;
+            let distance = offset.length();
+            if other == entity || distance >= SEPARATION_DISTANCE {
+                continue;
+            }
+            // enemies spawn on the same spot, so pick a direction per entity when they overlap
+            let away = offset.try_normalize().unwrap_or_else(|| {
+                Vec2::from_angle(entity.index_u32() as f32 * std::f32::consts::GOLDEN_RATIO)
+            });
+            separation += away * (1. - distance / SEPARATION_DISTANCE);
+        }
+
+        let new_vel =
+            (direction + separation * SEPARATION_WEIGHT).clamp_length_max(1.) * MOVE_SPEED;
+        if velocity.0 != new_vel {
+            velocity.0 = new_vel;
+        }
     }
 }
 

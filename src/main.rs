@@ -1,5 +1,6 @@
 #![recursion_limit = "256"]
 
+mod flowfield;
 mod objects;
 mod ui;
 
@@ -50,6 +51,7 @@ fn main() {
             objects::player::Plugin,
             objects::well::Plugin,
         ))
+        .add_plugins(flowfield::Plugin)
         .add_plugins(ui::Plugin)
         .run();
 }
