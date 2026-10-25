@@ -169,7 +169,7 @@ fn gap_after_walking_around_pond(enemy: Enemy, start: Vec2, player_at: Vec2) -> 
             PreUpdate,
             |mut flow_field: ResMut<FlowField>,
              player: Single<&Transform, With<player::Player>>| {
-                flow_field.set_target(player.translation.xy());
+                flow_field.set_target(player.translation.xy(), CLEARANCES.iter().copied());
             },
         )
         .add_systems(Update, enemy::move_towards_player);

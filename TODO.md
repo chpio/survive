@@ -3,8 +3,8 @@
 ## Performance
 
 - Compute the flow field less often or with less work: larger cells (8 instead of 4 px would close
-  corridors one tile wide), only the grids used by the enemies alive, or only after the player moved
-  a few cells. Measure first with the HUD's "Performance" tree.
+  corridors one tile wide), or only after the player moved a few cells. Measure first with the HUD's
+  "Performance" tree.
 
 - Optional FPS limit in the settings, e.g. as a power saving mode. `bevy_framepace` isn't available
   for Bevy 0.20, so build it like it does: sleep at the end of the render world's frame until the

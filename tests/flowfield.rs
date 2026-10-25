@@ -1,6 +1,6 @@
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use survival::flowfield::{CELL_SIZE, FlowField, Grid, debug::FlowFieldDebug};
+use survival::flowfield::{CELL_SIZE, FLOW_FIELD_RADIUS, FlowField, Grid, debug::FlowFieldDebug};
 
 /// Radii of a small and a large enemy
 const SMALL: f32 = 5.;
@@ -177,7 +177,7 @@ fn unlisted_radius_uses_next_larger_grid() {
     let mut flow_field = FlowField::new(Vec2::ZERO, Vec2::splat(160.), [12., 5., 8.]);
     // corridor 16 px wide: open for a clearance of 5, closed for 8 and 12
     wall_with_gap_in(&mut flow_field, 72., 88.);
-    flow_field.set_target(Vec2::new(150., 80.));
+    flow_field.set_target(Vec2::new(150., 80.), [5., 8., 12.]);
 
     let start = Vec2::new(10., 80.);
     assert!(flow_field.direction(start, 5.).is_some());
@@ -292,7 +292,7 @@ fn following_the_field_around_a_pond_reaches_the_target() {
         let mut flow_field = FlowField::new(Vec2::ZERO, Vec2::splat(200.), [5., 8., 12., 16.]);
         // pond from 52..148 × 76..124
         block_all(&mut flow_field, Rect::new(52., 76., 148., 124.));
-        flow_field.set_target(target);
+        flow_field.set_target(target, [5., 8., 12., 16.]);
         for &radius in &[5., 8., 12., 16.] {
             for x in (4..200).step_by(6) {
                 for y in (4..200).step_by(6) {
@@ -318,4 +318,65 @@ fn following_the_field_around_a_pond_reaches_the_target() {
         stuck.len(),
         &stuck[..stuck.len().min(25)]
     );
+}
+
+/// Walking distance of the cell at `position`.
+fn distance_at(grid: &Grid, position: Vec2) -> Option<u32> {
+    let cell = ((position - grid.origin()) / CELL_SIZE).floor().as_ivec2();
+    grid.cells().find(|c| c.position == cell).unwrap().distance
+}
+
+#[test]
+fn distances_are_only_computed_within_the_radius() {
+    let mut grid = Grid::new(Vec2::ZERO, Vec2::new(FLOW_FIELD_RADIUS + 100., 40.), SMALL);
+    let target = Vec2::new(10., 20.);
+    grid.set_target(target);
+
+    let inside = target + Vec2::X * (FLOW_FIELD_RADIUS - CELL_SIZE);
+    let outside = target + Vec2::X * (FLOW_FIELD_RADIUS + CELL_SIZE);
+    assert!(distance_at(&grid, inside).is_some());
+    assert_eq!(distance_at(&grid, outside), None);
+}
+
+#[test]
+fn distances_towards_old_target_are_reset() {
+    let mut grid = Grid::new(
+        Vec2::ZERO,
+        Vec2::new(FLOW_FIELD_RADIUS * 2. + 100., 40.),
+        SMALL,
+    );
+    let left = Vec2::new(10., 20.);
+    grid.set_target(left);
+    grid.set_target(left + Vec2::X * (FLOW_FIELD_RADIUS * 2.));
+
+    // only reached from the old target
+    assert_eq!(distance_at(&grid, left), None);
+}
+
+#[test]
+fn only_grids_used_by_units_are_computed() {
+    let mut flow_field = FlowField::new(Vec2::ZERO, Vec2::splat(160.), [5., 12.]);
+    let target = Vec2::new(150., 80.);
+    let computed = |flow_field: &FlowField| {
+        flow_field
+            .grids()
+            .iter()
+            .map(|grid| grid.max_distance().is_some())
+            .collect::<Vec<_>>()
+    };
+
+    flow_field.set_target(target, [4.]);
+    assert_eq!(computed(&flow_field), [true, false]);
+
+    // the target is the same, but the large grid wasn't computed for it yet
+    flow_field.set_target(target, [10.]);
+    assert_eq!(computed(&flow_field), [false, true]);
+    assert!(flow_field.direction(Vec2::new(10., 80.), 10.).is_some());
+
+    // units larger than all clearances use the largest grid
+    flow_field.set_target(target, [20.]);
+    assert_eq!(computed(&flow_field), [false, true]);
+
+    flow_field.set_target(target, []);
+    assert_eq!(computed(&flow_field), [false, false]);
 }

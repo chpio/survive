@@ -8,17 +8,26 @@
 //! the player walk straight towards them instead, since the eight directions between cells would
 //! otherwise bend their path.
 //!
+//! Only the grids used by enemies (or shown by the debug overlay) are computed, and only within
+//! [`FLOW_FIELD_RADIUS`] around the player, so the cost doesn't grow with the size of the map or
+//! the number of grids. Enemies outside the radius have no field and walk straight at the player.
+//!
 //! The player can stand closer to an obstacle than a grid's clearance. So that the player stays
 //! reachable then, the cells around the player that are only blocked by the clearance can be
 //! walked through as well, but never cells inside an obstacle.
 
-use crate::{objects::player, perf};
+use crate::{
+    objects::{enemy::Enemy, player},
+    perf,
+};
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::*;
 use std::{cmp::Reverse, collections::BinaryHeap};
 
 pub mod debug;
+
+use debug::FlowFieldDebug;
 
 /// Edge length of a cell in pixels (a quarter tile). Small enough that a corridor one tile wide
 /// still has free cells for small enemies after the obstacles around it are inflated.
@@ -28,6 +37,11 @@ pub const CELL_SIZE: f32 = 4.;
 /// at least its radius, so it avoids gaps it would only just fit through. Enemies larger than all
 /// clearances use the largest one and may get stuck in narrow gaps.
 pub const CLEARANCES: &[f32] = &[5., 8., 12., 16.];
+
+/// Distance in px from the player up to which the walking distances are computed. A bit more than
+/// half the diagonal of the view at the default zoom (500 × 281 px at 16:9), so enemies just
+/// outside the view still find their way.
+pub const FLOW_FIELD_RADIUS: f32 = 320.;
 
 /// Cost of a straight and a diagonal step between cells (roughly 1 : √2).
 const STRAIGHT_COST: u32 = 10;
@@ -61,6 +75,8 @@ pub struct Grid {
     solid: Vec<bool>,
     /// Walking distance to the target per cell, `u32::MAX` if unreachable
     distance: Vec<u32>,
+    /// Indices of the cells with a distance, so only these are reset for the next target
+    reached: Vec<usize>,
     /// Target cell the distances were computed for
     target: Option<IVec2>,
     target_position: Vec2,
@@ -93,6 +109,7 @@ impl Grid {
             blocked: vec![false; len],
             solid: vec![false; len],
             distance: vec![u32::MAX; len],
+            reached: Vec::new(),
             target: None,
             target_position: Vec2::ZERO,
         }
@@ -232,13 +249,25 @@ impl Grid {
         }
     }
 
+    /// Forgets the target and the distances towards it, until the next [`Self::set_target`].
+    fn forget_target(&mut self) {
+        for &i in &self.reached {
+            self.distance[i] = u32::MAX;
+        }
+        self.reached.clear();
+        self.target = None;
+    }
+
+    /// Dijkstra search from `target`, limited to the cells within [`FLOW_FIELD_RADIUS`] of it.
     fn compute_distances(&mut self, target: IVec2) {
+        self.forget_target();
         self.target = Some(target);
-        self.distance.fill(u32::MAX);
         let Some(start) = self.index(target) else {
             return;
         };
         self.distance[start] = 0;
+        self.reached.push(start);
+        let max_cells = FLOW_FIELD_RADIUS / CELL_SIZE;
 
         let mut queue = BinaryHeap::from([Reverse((0, start))]);
         while let Some(Reverse((distance, index))) = queue.pop() {
@@ -254,10 +283,18 @@ impl Grid {
             }
             for &(next_index, cost) in &steps[..count] {
                 let next_distance = distance + cost;
-                if next_distance < self.distance[next_index] {
-                    self.distance[next_index] = next_distance;
-                    queue.push(Reverse((next_distance, next_index)));
+                if next_distance >= self.distance[next_index] {
+                    continue;
                 }
+                if self.distance[next_index] == u32::MAX {
+                    let offset = (self.cell_of(next_index) - target).as_vec2();
+                    if offset.length_squared() > max_cells.powi(2) {
+                        continue;
+                    }
+                    self.reached.push(next_index);
+                }
+                self.distance[next_index] = next_distance;
+                queue.push(Reverse((next_distance, next_index)));
             }
         }
     }
@@ -343,23 +380,38 @@ impl FlowField {
         }
     }
 
-    /// See [`Grid::set_target`].
-    pub fn set_target(&mut self, position: Vec2) {
-        for grid in &mut self.grids {
-            grid.set_target(position);
+    /// Index of the grid for units with `radius`: the one with the smallest clearance that is at
+    /// least `radius`, or the largest one for larger units.
+    fn grid_index(&self, radius: f32) -> Option<usize> {
+        self.grids
+            .iter()
+            .position(|grid| grid.clearance >= radius)
+            .or(self.grids.len().checked_sub(1))
+    }
+
+    /// See [`Grid::set_target`], only for the grids used by units with the given `radii`. All
+    /// other grids forget their target, so they compute it again once a unit needs them.
+    pub fn set_target(&mut self, position: Vec2, radii: impl IntoIterator<Item = f32>) {
+        let mut used = vec![false; self.grids.len()];
+        for radius in radii {
+            if let Some(i) = self.grid_index(radius) {
+                used[i] = true;
+            }
+        }
+        for (grid, used) in self.grids.iter_mut().zip(used) {
+            if used {
+                grid.set_target(position);
+            } else {
+                grid.forget_target();
+            }
         }
     }
 
-    /// Direction for a unit with `radius` to walk at `position` to reach the target. Uses the grid
-    /// with the smallest clearance that is at least `radius`, or the largest one for larger
-    /// units. `None` if the position is outside the map, at the target, or the target can't be
-    /// reached from there.
+    /// Direction for a unit with `radius` to walk at `position` to reach the target, using the
+    /// grid for its radius (see [`Self::grid_index`]). `None` if the position is outside the map,
+    /// at the target, or the target can't be reached from there.
     pub fn direction(&self, position: Vec2, radius: f32) -> Option<Vec2> {
-        self.grids
-            .iter()
-            .find(|grid| grid.clearance >= radius)
-            .or(self.grids.last())?
-            .direction(position)
+        self.grids[self.grid_index(radius)?].direction(position)
     }
 }
 
@@ -403,7 +455,7 @@ fn create_grids(
 }
 
 /// Marks cells near static, solid colliders as blocked and updates the distances whenever the
-/// obstacles or the player's cell change.
+/// obstacles or the player's cell change, in the grids used by enemies or the debug overlay.
 fn update_flow_field(
     mut flow_field: ResMut<FlowField>,
     colliders: Query<
@@ -418,6 +470,8 @@ fn update_flow_field(
     >,
     bodies: Query<&RigidBody>,
     player: Single<&Transform, With<player::Player>>,
+    enemies: Query<&Enemy>,
+    debug: Option<Res<FlowFieldDebug>>,
 ) {
     let grids_created = flow_field.is_changed();
     let flow_field = flow_field.bypass_change_detection();
@@ -438,7 +492,13 @@ fn update_flow_field(
         }
     }
 
-    flow_field.set_target(player.translation.xy());
+    // the shown grid is updated by its own clearance, which selects it
+    let shown = debug
+        .and_then(|debug| debug.grid)
+        .and_then(|i| flow_field.grids().get(i))
+        .map(Grid::clearance);
+    let radii = enemies.iter().map(|enemy| enemy.radius).chain(shown);
+    flow_field.set_target(player.translation.xy(), radii);
 }
 
 pub struct Plugin;
