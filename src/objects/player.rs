@@ -1,6 +1,6 @@
 use crate::{
     combat::{Attack, Health},
-    movement::{DesiredVelocity, Strength},
+    movement::{self, DesiredVelocity},
 };
 use avian2d::prelude::*;
 use bevy::prelude::*;
@@ -18,14 +18,7 @@ pub const STRENGTH: f32 = 6000.;
 
 /// Physics components of the player.
 pub fn physics() -> impl Bundle {
-    (
-        RigidBody::Dynamic,
-        SHAPE.collider(),
-        LockedAxes::ROTATION_LOCKED,
-        Mass(MASS),
-        NoAutoMass,
-        Strength(STRENGTH),
-    )
+    movement::body(SHAPE.collider(), MASS, STRENGTH)
 }
 
 pub const MAX_HEALTH: f32 = 100.;
@@ -62,10 +55,7 @@ fn move_player(
         direction.y += -1.;
     }
 
-    let new_velocity = direction.normalize_or_zero() * MOVE_SPEED;
-    if desired.0 != new_velocity {
-        desired.0 = new_velocity;
-    }
+    desired.set_if_neq(DesiredVelocity(direction.normalize_or_zero() * MOVE_SPEED));
 }
 
 pub struct Plugin;

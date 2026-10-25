@@ -1,13 +1,13 @@
 use crate::{
     combat::{Attack, Health},
     flowfield::FlowField,
-    movement::{DesiredVelocity, Strength},
+    movement::{self, DesiredVelocity},
     objects::player,
 };
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use std::{
-    f32::consts::{PI, TAU},
+    f32::consts::{GOLDEN_RATIO, PI, TAU},
     time::Duration,
 };
 
@@ -53,14 +53,7 @@ impl Enemy {
     /// Physics components of the enemy. Enemies are dynamic bodies, so they collide with
     /// obstacles, the player and each other.
     pub fn physics(self) -> impl Bundle {
-        (
-            RigidBody::Dynamic,
-            self.shape().collider(),
-            LockedAxes::ROTATION_LOCKED,
-            Mass(self.mass()),
-            NoAutoMass,
-            Strength(self.strength()),
-        )
+        movement::body(self.shape().collider(), self.mass(), self.strength())
     }
 
     /// Health and attack. Larger enemies last longer and push the player further (both grow with
@@ -98,7 +91,7 @@ impl Default for Separation {
 
 /// Direction an enemy wants to walk in, which it turns to face. Set by its navigation, so it
 /// doesn't change when the enemy is pushed or knocked back.
-#[derive(Component, Default)]
+#[derive(Component, Default, PartialEq)]
 pub struct Heading(pub Vec2);
 
 #[derive(Message)]
@@ -175,8 +168,8 @@ pub fn move_towards_player(
             .direction(position, enemy.radius)
             .unwrap_or_else(|| (player.translation.xy() - position).normalize_or_zero());
         // keep the last heading when standing on the player
-        if direction != Vec2::ZERO && heading.0 != direction {
-            heading.0 = direction;
+        if direction != Vec2::ZERO {
+            heading.set_if_neq(Heading(direction));
         }
 
         // finds every enemy whose personal space could overlap with this one's
@@ -199,7 +192,7 @@ pub fn move_towards_player(
                     // enemies spawn on the same spot, so pick a direction per entity when they
                     // overlap
                     let away = offset.try_normalize().unwrap_or_else(|| {
-                        Vec2::from_angle(entity.index_u32() as f32 * std::f32::consts::GOLDEN_RATIO)
+                        Vec2::from_angle(entity.index_u32() as f32 * GOLDEN_RATIO)
                     });
                     push += away * (1. - distance / range);
                 }
@@ -207,11 +200,9 @@ pub fn move_towards_player(
             },
         );
 
-        let new_velocity =
-            (direction + push * separation.strength).clamp_length_max(1.) * MOVE_SPEED;
-        if desired.0 != new_velocity {
-            desired.0 = new_velocity;
-        }
+        desired.set_if_neq(DesiredVelocity(
+            (direction + push * separation.strength).clamp_length_max(1.) * MOVE_SPEED,
+        ));
     }
 }
 

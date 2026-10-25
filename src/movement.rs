@@ -16,7 +16,7 @@ use bevy::prelude::*;
 const STIFFNESS: f32 = 45.;
 
 /// Velocity a body tries to move at, in px/s.
-#[derive(Component, Default)]
+#[derive(Component, Default, PartialEq)]
 pub struct DesiredVelocity(pub Vec2);
 
 /// Maximum force a body uses to follow its [`DesiredVelocity`], in mass · px/s².
@@ -27,6 +27,18 @@ pub struct Strength(pub f32);
 /// Position the body is pulled towards, `None` until the first physics step.
 #[derive(Component, Default)]
 struct Anchor(Option<Vec2>);
+
+/// Dynamic body moved by this module. Its rotation is locked, so contacts don't spin it.
+pub fn body(collider: Collider, mass: f32, strength: f32) -> impl Bundle {
+    (
+        RigidBody::Dynamic,
+        collider,
+        LockedAxes::ROTATION_LOCKED,
+        Mass(mass),
+        NoAutoMass,
+        Strength(strength),
+    )
+}
 
 fn apply_movement_forces(
     time: Res<Time>,
