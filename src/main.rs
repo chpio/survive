@@ -39,7 +39,12 @@ fn main() {
         )
         .insert_resource(Gravity::ZERO)
         .add_plugins(TiledPhysicsPlugin::<TiledPhysicsAvianBackend>::default())
-        .add_plugins(PhysicsPlugins::default().with_length_unit(movement::LENGTH_UNIT))
+        .add_plugins(
+            PhysicsPlugins::default()
+                .with_length_unit(movement::LENGTH_UNIT)
+                // physics runs at a fixed 64 Hz, so bodies would only move on some frames
+                .set(PhysicsInterpolationPlugin::interpolate_all()),
+        )
         .insert_resource(NarrowPhaseConfig {
             contact_tolerance: movement::CONTACT_TOLERANCE,
             ..default()
