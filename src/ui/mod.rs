@@ -211,6 +211,16 @@ fn paint_ui(
     let viewport = doc.viewport();
     if viewport.window_size != (width, height) || viewport.hidpi_scale != scale {
         doc.set_viewport(Viewport::new(width, height, scale, ColorScheme::Dark));
+        // Blitz aligns a node's inline layout in every measure pass. After a resize, taffy serves
+        // the final layout of unchanged nodes from its cache, so centered text (e.g. in buttons)
+        // keeps the alignment of a measure pass with a larger width and lands outside its box.
+        // A full relayout avoids that.
+        let ids: Vec<_> = doc.tree().iter().map(|(id, _)| id).collect();
+        for id in ids {
+            if let Some(node) = doc.get_node_mut(id) {
+                node.invalidate_layout_cache();
+            }
+        }
         if let Some(mut image) = images.get_mut(&ui_scene.image) {
             image.resize(Extent3d {
                 width,
