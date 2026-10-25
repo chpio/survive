@@ -24,6 +24,16 @@
 - Give the tileset's buildings, gravestones and bridge railings colliders before they are used on
   the map.
 
+## Releases
+
+- Build release executables in CI on `v*` tags and attach them as zips (executable plus `assets/`)
+  to the release: Linux natively, Windows cross-compiled with `x86_64-pc-windows-gnu` (MinGW and
+  the target added to the CI image). Before that:
+  - Move `dynamic_linking` and `file_watcher` into a `dev` feature (with a cargo alias so
+    `cargo run` stays the same), since a dynamically linked executable can't be shipped.
+  - Hide the console window on Windows with `#![windows_subsystem = "windows"]` in release builds.
+  - Try the Windows build locally first.
+
 ## Code
 
 - Let combat trigger a `Died` event instead of handling the deaths of players and enemies itself, so
