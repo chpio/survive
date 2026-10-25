@@ -24,6 +24,10 @@ const DARKNESS_Z: f32 = 8.;
 /// Edge length of the darkening rectangle in px, enough to cover the view at any zoom.
 const DARKNESS_SIZE: f32 = 8192.;
 
+/// Radius in px over which the mask is blurred, so the edges of shadows and of enemies partly in
+/// sight are soft.
+pub const BLUR: f32 = 6.;
+
 /// Texture of the mask, one pixel per cell, filtered linearly so edges are soft.
 #[derive(Resource)]
 pub struct SightMask(pub Handle<Image>);
@@ -57,6 +61,9 @@ pub struct SightMaterial {
     /// 0 to show the color where the mask is visible, 1 where it isn't
     #[uniform(0)]
     invert: f32,
+    /// See [`BLUR`]
+    #[uniform(0)]
+    blur: f32,
     #[texture(1)]
     #[sampler(2)]
     mask: Handle<Image>,
@@ -70,6 +77,7 @@ impl SightMaterial {
             // set to the mask's area once it is computed, invisible until then
             mask_area: Vec4::new(0., 0., 1., 1.),
             invert: 0.,
+            blur: BLUR,
             mask: mask.0.clone(),
         }
     }

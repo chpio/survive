@@ -47,8 +47,9 @@ lohnen weder Speicher noch Spielstand dafür. Kommt eine Karte dazu, lässt er s
 
 ## Darstellung
 
-- Die Maske wird in eine Textur geschrieben (ein Pixel pro Zelle, `R8Unorm`, lineare Filterung),
-  sodass Kanten weich werden.
+- Die Maske wird in eine Textur geschrieben (ein Pixel pro Zelle, `R8Unorm`, lineare Filterung).
+- Der Shader liest sie an 16 Punkten in einer Kreisscheibe mit dem Radius `BLUR` (6 px) und mittelt
+  sie, sodass Schattenkanten und angeschnittene Gegner weich auslaufen.
 - Das Material `SightMaterial` (eigener WESL-Shader) rechnet aus der Weltposition eines Pixels die
   Stelle in der Maske aus:
   - **Gegner**: Körper und Punkt verwenden es statt `ColorMaterial`. Die Deckkraft wird mit der

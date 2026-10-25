@@ -2,7 +2,7 @@ use avian2d::prelude::*;
 use bevy::prelude::*;
 use survival::sight::{CELL_SIZE, SIGHT_FADE, SIGHT_RADIUS, Sight};
 
-/// 600×600 px around the origin, with the player's cell centered at (2, 2).
+/// 600×600 px around the origin. A player at the origin is in the cell centered at (2, 2).
 fn sight() -> Sight {
     Sight::new(Vec2::splat(-300.), Vec2::splat(600.))
 }
@@ -91,7 +91,7 @@ fn window_is_centered_on_the_player() {
 #[test]
 fn shadows_keep_their_angle() {
     let mut sight = sight();
-    // seen from the player's cell at (2, 2) at about 63°
+    // seen from the player's cell at about 63°
     block(&mut sight, Rect::new(24., 54., 36., 66.));
     sight.set_center(Vec2::ZERO);
 
