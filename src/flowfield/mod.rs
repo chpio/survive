@@ -417,9 +417,10 @@ impl FlowField {
         }
     }
 
-    /// Direction for a unit with `radius` to walk at `position` to reach the target, using the
-    /// grid for its radius (see [`Self::grid_index`]). `None` if the position is outside the map,
-    /// at the target, or the target can't be reached from there.
+    /// Direction for a unit with `radius` to walk at `position` to reach the target. Uses the grid
+    /// with the smallest clearance that is at least `radius`, or the largest one for larger
+    /// units. `None` if the position is outside the map, at the target, or the target can't be
+    /// reached from there.
     pub fn direction(&self, position: Vec2, radius: f32) -> Option<Vec2> {
         self.grids[self.grid_index(radius)?].direction(position)
     }
