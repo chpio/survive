@@ -1,17 +1,23 @@
 //! Flow field towards the player, used by enemies to walk around obstacles.
 //!
-//! The map is divided into a grid of square cells. Cells covered by a static, solid collider are
-//! blocked. A Dijkstra search from the player's cell stores the walking distance to the player in
-//! every free cell, and units follow the decreasing distance.
+//! The map is divided into a grid of square cells. Cells an enemy can't stand in without
+//! overlapping a static, solid collider are blocked. A Dijkstra search from the player's cell stores the walking distance to the player in
+//! every free cell, and units follow the decreasing distance. Units with a free line of sight to
+//! the player walk straight towards them instead, since the eight directions between cells would
+//! otherwise bend their path.
 
-use crate::objects::player;
+use crate::objects::{enemy, player};
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::*;
 use std::{cmp::Reverse, collections::BinaryHeap};
 
-/// Edge length of a cell in pixels (half a tile).
-const CELL_SIZE: f32 = 8.;
+/// Edge length of a cell in pixels (a quarter tile). Small enough that a corridor one tile wide
+/// still has free cells after the obstacles around it are inflated by [`CLEARANCE`].
+pub const CELL_SIZE: f32 = 4.;
+
+/// Distance an enemy's center keeps from obstacles, so paths only lead through gaps it fits in.
+pub const CLEARANCE: f32 = enemy::SHAPE.radius;
 
 /// Cost of a straight and a diagonal step between cells (roughly 1 : √2).
 const STRAIGHT_COST: u32 = 10;
@@ -33,18 +39,22 @@ pub struct FlowField {
     grid: Option<Grid>,
 }
 
-struct Grid {
+pub struct Grid {
     /// World position of the bottom-left corner of the grid
     origin: Vec2,
     size: IVec2,
     blocked: Vec<bool>,
     /// Walking distance to the target per cell, `u32::MAX` if unreachable
     distance: Vec<u32>,
+    /// Target cell the distances were computed for
     target: Option<IVec2>,
+    target_position: Vec2,
 }
 
 impl Grid {
-    fn new(origin: Vec2, world_size: Vec2) -> Self {
+    /// Grid covering the area from `origin` (bottom-left corner) to `origin + world_size`, with
+    /// no obstacles and no target.
+    pub fn new(origin: Vec2, world_size: Vec2) -> Self {
         let size = (world_size / CELL_SIZE).ceil().as_ivec2();
         let len = (size.x * size.y) as usize;
         Self {
@@ -53,6 +63,7 @@ impl Grid {
             blocked: vec![false; len],
             distance: vec![u32::MAX; len],
             target: None,
+            target_position: Vec2::ZERO,
         }
     }
 
@@ -73,10 +84,16 @@ impl Grid {
         self.index(cell).map_or(u32::MAX, |i| self.distance[i])
     }
 
-    fn block(&mut self, aabb: &ColliderAabb) {
-        // shrink slightly so colliders that only touch a cell border don't block it
-        let min = self.cell(aabb.min + 0.01);
-        let max = self.cell(aabb.max - 0.01);
+    /// Blocks all cells whose center is closer than [`CLEARANCE`] to `obstacle`.
+    pub fn block(&mut self, obstacle: Rect) {
+        let obstacle = obstacle.inflate(CLEARANCE);
+        // cells whose center lies in the inflated rect
+        let min = ((obstacle.min - self.origin) / CELL_SIZE - 0.5)
+            .ceil()
+            .as_ivec2();
+        let max = ((obstacle.max - self.origin) / CELL_SIZE - 0.5)
+            .floor()
+            .as_ivec2();
         for y in min.y..=max.y {
             for x in min.x..=max.x {
                 if let Some(i) = self.index(IVec2::new(x, y)) {
@@ -84,6 +101,11 @@ impl Grid {
                 }
             }
         }
+    }
+
+    /// Removes all obstacles.
+    pub fn clear(&mut self) {
+        self.blocked.fill(false);
     }
 
     /// Neighbors of `cell` that can be walked to, with the cost of the step. Diagonal steps are
@@ -102,6 +124,15 @@ impl Grid {
                 Some((next, STRAIGHT_COST))
             }
         })
+    }
+
+    /// Computes the walking distances towards `position`, if it isn't the current target already.
+    pub fn set_target(&mut self, position: Vec2) {
+        self.target_position = position;
+        let target = self.cell(position);
+        if self.target != Some(target) {
+            self.compute_distances(target);
+        }
     }
 
     fn compute_distances(&mut self, target: IVec2) {
@@ -130,11 +161,19 @@ impl Grid {
         }
     }
 
+    /// Whether all cells on the line from `from` to `to` are free.
+    fn line_of_sight(&self, from: Vec2, to: Vec2) -> bool {
+        // samples half a cell apart can only skip a cell at its corner, which is still within
+        // the clearance around an obstacle
+        let steps = (from.distance(to) / (CELL_SIZE / 2.)).ceil().max(1.);
+        (0..=steps as u32).all(|i| self.is_free(self.cell(from.lerp(to, i as f32 / steps))))
+    }
+
     /// Unit vector from `cell` towards its neighbor closest to the target, if there is one.
     fn cell_direction(&self, cell: IVec2) -> Option<Vec2> {
         let current = self.distance(cell);
-        // blocked or unreachable cells point to any reachable neighbor, so units that ended up
-        // inside an obstacle find their way out
+        // blocked cells point to any reachable neighbor, so units pushed into the clearance
+        // around an obstacle find their way out
         let (next, distance) = NEIGHBORS
             .into_iter()
             .map(|offset| cell + offset)
@@ -143,11 +182,16 @@ impl Grid {
         (distance < current).then(|| (next - cell).as_vec2().normalize())
     }
 
-    /// Direction towards the target at `position`, interpolated between the four nearest cells.
-    fn direction(&self, position: Vec2) -> Option<Vec2> {
+    /// Direction to walk at `position` to reach the target: straight if it is in sight, otherwise
+    /// interpolated between the four nearest cells. `None` outside the grid, at the target, or if
+    /// the target can't be reached.
+    pub fn direction(&self, position: Vec2) -> Option<Vec2> {
         let cell = self.cell(position);
-        if self.target == Some(cell) {
+        if self.index(cell).is_none() || self.target.is_none() {
             return None;
+        }
+        if self.line_of_sight(position, self.target_position) {
+            return (self.target_position - position).try_normalize();
         }
 
         let local = (position - self.origin) / CELL_SIZE - 0.5;
@@ -171,7 +215,7 @@ impl Grid {
 
 impl FlowField {
     /// Direction to walk at `position` to reach the player. `None` if the position is outside
-    /// the map, in the player's cell, or the player can't be reached from there.
+    /// the map, at the player, or the player can't be reached from there.
     pub fn direction(&self, position: Vec2) -> Option<Vec2> {
         self.grid.as_ref()?.direction(position)
     }
@@ -216,18 +260,16 @@ fn update_flow_field(
             .iter()
             .any(|(aabb, body)| body.is_static() && aabb.is_changed());
     if obstacles_changed {
-        grid.blocked.fill(false);
+        grid.clear();
         for (aabb, body) in &obstacles {
             if body.is_static() {
-                grid.block(&aabb);
+                grid.block(Rect::from_corners(aabb.min, aabb.max));
             }
         }
+        grid.target = None;
     }
 
-    let target = grid.cell(player.translation.xy());
-    if obstacles_changed || grid.target != Some(target) {
-        grid.compute_distances(target);
-    }
+    grid.set_target(player.translation.xy());
 }
 
 pub struct Plugin;

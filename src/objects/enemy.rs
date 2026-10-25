@@ -1,4 +1,8 @@
-use crate::{flowfield::FlowField, objects::player};
+use crate::{
+    flowfield::FlowField,
+    movement::{DesiredVelocity, Strength},
+    objects::player,
+};
 use avian2d::prelude::*;
 use bevy::prelude::*;
 
@@ -6,7 +10,11 @@ use bevy::prelude::*;
 pub struct Enemy;
 
 /// Shape of the collider and the placeholder mesh.
-const SHAPE: Circle = Circle::new(5.);
+pub const SHAPE: Circle = Circle::new(5.);
+
+pub const MASS: f32 = 1.;
+/// Reaches full speed in 0.1 s.
+pub const STRENGTH: f32 = 1000.;
 
 #[derive(Message)]
 pub struct SpawnEnemy;
@@ -20,6 +28,19 @@ fn spawn_enemy_on_key(
     }
 }
 
+/// Physics components of an enemy. Enemies are dynamic bodies, so they collide with obstacles,
+/// the player and each other.
+pub fn physics() -> impl Bundle {
+    (
+        RigidBody::Dynamic,
+        SHAPE.collider(),
+        LockedAxes::ROTATION_LOCKED,
+        Mass(MASS),
+        NoAutoMass,
+        Strength(STRENGTH),
+    )
+}
+
 fn spawn_enemy(
     mut spawn_enemy: MessageReader<SpawnEnemy>,
     mut cmds: Commands,
@@ -30,10 +51,7 @@ fn spawn_enemy(
         cmds.spawn((
             Enemy,
             Name::new("Enemy"),
-            Sensor,
-            RigidBody::Kinematic,
-            SHAPE.collider(),
-            LockedAxes::ROTATION_LOCKED,
+            physics(),
             Mesh2d(meshes.add(SHAPE)),
             MeshMaterial2d(materials.add(Color::srgb(0.8, 0.2, 0.2))),
             // above the map layer at z = 0
@@ -45,7 +63,7 @@ fn spawn_enemy(
 fn move_towards_player(
     player: Single<&Transform, With<player::Player>>,
     flow_field: Res<FlowField>,
-    mut enemies: Query<(Entity, &Transform, &mut LinearVelocity), With<Enemy>>,
+    mut enemies: Query<(Entity, &Transform, &mut DesiredVelocity), With<Enemy>>,
 ) {
     const MOVE_SPEED: f32 = 100.;
     /// Enemies closer than this push each other apart
@@ -57,11 +75,10 @@ fn move_towards_player(
         .map(|(entity, transform, _)| (entity, transform.translation.xy()))
         .collect();
 
-    for (entity, transform, mut velocity) in &mut enemies {
+    for (entity, transform, mut desired) in &mut enemies {
         let position = transform.translation.xy();
 
-        // follow the flow field around obstacles, walk straight once in the player's cell or
-        // if the player can't be reached
+        // follow the flow field around obstacles, walk straight if the player can't be reached
         let direction = flow_field
             .direction(position)
             .unwrap_or_else(|| (player.translation.xy() - position).normalize_or_zero());
@@ -80,10 +97,10 @@ fn move_towards_player(
             separation += away * (1. - distance / SEPARATION_DISTANCE);
         }
 
-        let new_vel =
+        let new_velocity =
             (direction + separation * SEPARATION_WEIGHT).clamp_length_max(1.) * MOVE_SPEED;
-        if velocity.0 != new_vel {
-            velocity.0 = new_vel;
+        if desired.0 != new_velocity {
+            desired.0 = new_velocity;
         }
     }
 }

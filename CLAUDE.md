@@ -15,7 +15,7 @@ cargo clippy       # lint
 cargo fmt          # format
 ```
 
-There are no tests yet.
+Tests live in `tests/` (never inline) and run with `cargo test`. Game code is in the `survival` lib crate (`src/lib.rs`) so tests can use it; `src/main.rs` only builds the `App`.
 
 Build notes:
 - Bevy uses `default-features = false` with a hand-picked feature list in `Cargo.toml`. The commented-out lines mirror Bevy's default features. If a Bevy type or plugin is missing, the feature that provides it is probably commented out.
@@ -27,8 +27,8 @@ Build notes:
 
 - `src/main.rs` builds the `App`: window/image settings, FPS overlay, Tiled + Avian plugins (with `Gravity::ZERO`, top-down), and the game object plugins. `startup` spawns the camera, the player, and the `TiledMap`.
 - `src/objects/` holds one module per game object. Each module defines a marker `Component`, its systems, and a `pub struct Plugin` that registers them. New objects follow this pattern and get added to the plugin tuple in `main.rs`.
-- `src/flowfield.rs` keeps a grid over the map (8 px cells). Cells covered by static, non-sensor colliders are blocked, and a Dijkstra search from the player's cell gives each free cell its walking distance. Enemies follow it via `FlowField::direction` and add a separation force so they don't stack.
-- Movement is velocity-based. Systems set `LinearVelocity` on Avian bodies (player: `RigidBody::Dynamic`, enemies: `RigidBody::Kinematic` + `Sensor`) instead of changing `Transform` directly. The camera follows the player's `Transform` and keeps its own z.
+- `src/flowfield.rs` keeps a grid over the map (4 px cells). Cells closer than an enemy's radius to a static, non-sensor collider are blocked, and a Dijkstra search from the player's cell gives each free cell its walking distance. Enemies with a free line of sight walk straight at the player, the others follow the field via `FlowField::direction` and add a separation force so they don't stack.
+- Movement is force-based (`src/movement.rs`). Systems set a `DesiredVelocity` on Avian bodies (player and enemies: `RigidBody::Dynamic` with `Mass` and `Strength`) instead of changing `Transform` or `LinearVelocity` directly. In `FixedUpdate`, a spring towards an anchor moving at that velocity applies a force limited by `Strength`, so heavier and stronger bodies win when pushing each other. The camera follows the player's `Transform` and keeps its own z.
 
 ### Tiled map → ECS
 

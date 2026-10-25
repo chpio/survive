@@ -1,9 +1,3 @@
-#![recursion_limit = "256"]
-
-mod flowfield;
-mod objects;
-mod ui;
-
 use avian2d::prelude::*;
 use bevy::{
     dev_tools::{fps_overlay, render_debug},
@@ -12,6 +6,7 @@ use bevy::{
 };
 use bevy_ecs_tiled::prelude::*;
 use std::time::Duration;
+use survival::{flowfield, movement, objects, ui};
 
 fn main() {
     App::new()
@@ -51,7 +46,7 @@ fn main() {
             objects::player::Plugin,
             objects::well::Plugin,
         ))
-        .add_plugins(flowfield::Plugin)
+        .add_plugins((flowfield::Plugin, movement::Plugin))
         .add_plugins(ui::Plugin)
         .run();
 }
@@ -76,9 +71,7 @@ fn startup(
     commands.spawn((
         objects::player::Player,
         Name::new("Player"),
-        objects::player::SHAPE.collider(),
-        RigidBody::Dynamic,
-        LockedAxes::ROTATION_LOCKED,
+        objects::player::physics(),
         Mesh2d(meshes.add(objects::player::SHAPE)),
         MeshMaterial2d(materials.add(Color::srgb(0.2, 0.4, 0.9))),
         // above the map layer at z = 0
