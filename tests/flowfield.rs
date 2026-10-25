@@ -265,3 +265,57 @@ fn target_next_to_obstacle_is_not_reached_through_it() {
     assert_eq!(grid.direction(Vec2::new(74., 80.)), None);
     assert_eq!(grid.direction(Vec2::new(10., 80.)), None);
 }
+
+/// Follows the field from `start` in 1 px steps. Returns the closest distance to `target` it
+/// reached, and where it stopped making progress.
+fn follow(flow_field: &FlowField, radius: f32, start: Vec2, target: Vec2) -> (f32, Vec2) {
+    let mut position = start;
+    let mut closest = position.distance(target);
+    for _ in 0..2000 {
+        let Some(direction) = flow_field.direction(position, radius) else {
+            break;
+        };
+        position += direction;
+        closest = closest.min(position.distance(target));
+    }
+    (closest, position)
+}
+
+#[test]
+fn following_the_field_around_a_pond_reaches_the_target() {
+    let mut stuck = vec![];
+    for target in [
+        Vec2::new(100., 30.),
+        Vec2::new(100., 54.),
+        Vec2::new(130., 80.),
+    ] {
+        let mut flow_field = FlowField::new(Vec2::ZERO, Vec2::splat(200.), [5., 8., 12., 16.]);
+        // pond from 52..148 × 76..124
+        block_all(&mut flow_field, Rect::new(52., 76., 148., 124.));
+        flow_field.set_target(target);
+        for &radius in &[5., 8., 12., 16.] {
+            for x in (4..200).step_by(6) {
+                for y in (4..200).step_by(6) {
+                    let start = Vec2::new(x as f32, y as f32);
+                    // skip starts in the clearance or the pond, where the field only leads out
+                    if flow_field.direction(start, radius).is_none() {
+                        continue;
+                    }
+                    let (closest, end) = follow(&flow_field, radius, start, target);
+                    if closest > 3. {
+                        stuck.push(format!(
+                            "radius {radius}, target {target}, start {start}: stuck at {end}, \
+                             {closest:.1} px away"
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        stuck.is_empty(),
+        "{} stuck: {:#?}",
+        stuck.len(),
+        &stuck[..stuck.len().min(25)]
+    );
+}

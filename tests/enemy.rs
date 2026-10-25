@@ -4,8 +4,11 @@ use avian2d::prelude::*;
 use bevy::prelude::*;
 use common::SMALL;
 use survival::{
-    flowfield::FlowField,
-    objects::{enemy, player},
+    flowfield::{CLEARANCES, FlowField},
+    objects::{
+        enemy::{self, Enemy},
+        player,
+    },
 };
 
 #[test]
@@ -150,4 +153,62 @@ fn knockback_does_not_turn_enemy() {
     assert!(common::position(&app, enemy).x < -10.);
     let facing = facing(&app, enemy);
     assert!(facing.dot(Vec2::X) > 0.999, "facing {facing}");
+}
+
+/// Distance from the enemy's collider to the player's after it walked around a pond-like
+/// obstacle for 6 s, starting at `start` on the other side.
+fn gap_after_walking_around_pond(enemy: Enemy, start: Vec2, player_at: Vec2) -> f32 {
+    let pond = (Collider::rectangle(96., 48.), Vec2::ZERO);
+    let mut app = common::app();
+    let mut flow_field = FlowField::new(
+        Vec2::splat(-200.),
+        Vec2::splat(400.),
+        CLEARANCES.iter().copied(),
+    );
+    flow_field.block_collider(&pond.0, pond.1, Rotation::IDENTITY);
+    app.insert_resource(flow_field)
+        .add_systems(
+            PreUpdate,
+            |mut flow_field: ResMut<FlowField>,
+             player: Single<&Transform, With<player::Player>>| {
+                flow_field.set_target(player.translation.xy());
+            },
+        )
+        .add_systems(Update, enemy::move_towards_player);
+    common::spawn(&mut app, (RigidBody::Static, pond.0), pond.1);
+    let player = common::spawn(&mut app, (player::Player, player::physics()), player_at);
+    let entity = common::spawn(&mut app, (enemy, enemy.physics()), start);
+
+    common::run(&mut app, 6.);
+
+    common::position(&app, entity).distance(common::position(&app, player))
+        - enemy.radius
+        - player::SHAPE.radius
+}
+
+#[test]
+fn enemies_walk_around_pond_corners() {
+    let mut stuck = vec![];
+    for radius in [5., 8., 12.] {
+        let enemy = Enemy { radius };
+        // right below the pond, inside the clearance of the larger enemies, and further away
+        for player_at in [Vec2::new(0., -32.), Vec2::new(30., -70.)] {
+            for start in [
+                Vec2::new(-90., 60.),
+                Vec2::new(-30., 60.),
+                Vec2::new(0., 60.),
+                Vec2::new(40., 60.),
+                Vec2::new(100., 30.),
+                Vec2::new(-100., 0.),
+            ] {
+                let gap = gap_after_walking_around_pond(enemy, start, player_at);
+                if gap > 3. {
+                    stuck.push(format!(
+                        "radius {radius}, player {player_at}, start {start}: {gap:.1} px away"
+                    ));
+                }
+            }
+        }
+    }
+    assert!(stuck.is_empty(), "{stuck:#?}");
 }
