@@ -3,11 +3,12 @@
 //! The map is divided into a grid of square cells. Cells an enemy can't stand in without
 //! overlapping a static, solid collider are blocked. A Dijkstra search from the player's cell
 //! stores the walking distance to the player in every free cell, and units follow the decreasing
-//! distance. Since larger enemies don't fit through every gap, there is one grid per enemy size. Units with a free line of sight to
+//! distance. Since larger enemies don't fit through every gap, there is one grid per clearance in
+//! [`CLEARANCES`]. Units with a free line of sight to
 //! the player walk straight towards them instead, since the eight directions between cells would
 //! otherwise bend their path.
 
-use crate::objects::{enemy, player};
+use crate::objects::player;
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::*;
@@ -16,6 +17,11 @@ use std::{cmp::Reverse, collections::BinaryHeap};
 /// Edge length of a cell in pixels (a quarter tile). Small enough that a corridor one tile wide
 /// still has free cells for small enemies after the obstacles around it are inflated.
 pub const CELL_SIZE: f32 = 4.;
+
+/// Clearances in px with a grid each. An enemy uses the grid with the smallest clearance that is
+/// at least its radius, so it avoids gaps it would only just fit through. Enemies larger than all
+/// clearances use the largest one and may get stuck in narrow gaps.
+pub const CLEARANCES: &[f32] = &[5., 8., 12., 16.];
 
 /// Cost of a straight and a diagonal step between cells (roughly 1 : √2).
 const STRAIGHT_COST: u32 = 10;
@@ -34,8 +40,8 @@ const NEIGHBORS: [IVec2; 8] = [
 
 #[derive(Resource, Default)]
 pub struct FlowField {
-    /// One grid per enemy size, empty until a map is loaded
-    grids: Vec<(enemy::Size, Grid)>,
+    /// Grids for different clearances, sorted by clearance. Empty until a map is loaded.
+    grids: Vec<Grid>,
 }
 
 pub struct Grid {
@@ -105,9 +111,10 @@ impl Grid {
         }
     }
 
-    /// Removes all obstacles.
+    /// Removes all obstacles. The distances are computed again on the next [`Self::set_target`].
     pub fn clear(&mut self) {
         self.blocked.fill(false);
+        self.target = None;
     }
 
     /// Neighbors of `cell` that can be walked to, with the cost of the step. Diagonal steps are
@@ -216,11 +223,48 @@ impl Grid {
 }
 
 impl FlowField {
-    /// Direction for an enemy of `size` to walk at `position` to reach the player. `None` if the
-    /// position is outside the map, at the player, or the player can't be reached from there.
-    pub fn direction(&self, position: Vec2, size: enemy::Size) -> Option<Vec2> {
-        let (_, grid) = self.grids.iter().find(|(s, _)| *s == size)?;
-        grid.direction(position)
+    /// Grids covering the area from `origin` (bottom-left corner) to `origin + world_size`, one
+    /// per clearance.
+    pub fn new(origin: Vec2, world_size: Vec2, clearances: impl IntoIterator<Item = f32>) -> Self {
+        let mut grids: Vec<_> = clearances
+            .into_iter()
+            .map(|clearance| Grid::new(origin, world_size, clearance))
+            .collect();
+        grids.sort_by(|a, b| a.clearance.total_cmp(&b.clearance));
+        Self { grids }
+    }
+
+    /// See [`Grid::block`].
+    pub fn block(&mut self, obstacle: Rect) {
+        for grid in &mut self.grids {
+            grid.block(obstacle);
+        }
+    }
+
+    /// See [`Grid::clear`].
+    pub fn clear(&mut self) {
+        for grid in &mut self.grids {
+            grid.clear();
+        }
+    }
+
+    /// See [`Grid::set_target`].
+    pub fn set_target(&mut self, position: Vec2) {
+        for grid in &mut self.grids {
+            grid.set_target(position);
+        }
+    }
+
+    /// Direction for a unit with `radius` to walk at `position` to reach the target. Uses the grid
+    /// with the smallest clearance that is at least `radius`, or the largest one for larger
+    /// units. `None` if the position is outside the map, at the target, or the target can't be
+    /// reached from there.
+    pub fn direction(&self, position: Vec2, radius: f32) -> Option<Vec2> {
+        self.grids
+            .iter()
+            .find(|grid| grid.clearance >= radius)
+            .or(self.grids.last())?
+            .direction(position)
     }
 }
 
@@ -239,16 +283,11 @@ fn create_grids(
         };
         let bottom_left =
             asset.world_space_from_tiled_position(anchor, Vec2::new(0., asset.rect.height()));
-        flow_field.grids = enemy::Size::ALL
-            .map(|size| {
-                let grid = Grid::new(
-                    transform.translation.xy() + bottom_left,
-                    asset.rect.size(),
-                    size.radius(),
-                );
-                (size, grid)
-            })
-            .into();
+        *flow_field = FlowField::new(
+            transform.translation.xy() + bottom_left,
+            asset.rect.size(),
+            CLEARANCES.iter().copied(),
+        );
     }
 }
 
@@ -260,24 +299,22 @@ fn update_flow_field(
     player: Single<&Transform, With<player::Player>>,
 ) {
     let grids_created = flow_field.is_changed();
+    let flow_field = flow_field.bypass_change_detection();
+
     let obstacles_changed = grids_created
         || obstacles
             .iter()
             .any(|(aabb, body)| body.is_static() && aabb.is_changed());
-
-    for (_, grid) in &mut flow_field.bypass_change_detection().grids {
-        if obstacles_changed {
-            grid.clear();
-            for (aabb, body) in &obstacles {
-                if body.is_static() {
-                    grid.block(Rect::from_corners(aabb.min, aabb.max));
-                }
+    if obstacles_changed {
+        flow_field.clear();
+        for (aabb, body) in &obstacles {
+            if body.is_static() {
+                flow_field.block(Rect::from_corners(aabb.min, aabb.max));
             }
-            grid.target = None;
         }
-
-        grid.set_target(player.translation.xy());
     }
+
+    flow_field.set_target(player.translation.xy());
 }
 
 pub struct Plugin;

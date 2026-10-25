@@ -1,13 +1,17 @@
 use bevy::prelude::*;
-use survival::{flowfield::Grid, objects::enemy::Size};
+use survival::flowfield::{FlowField, Grid};
+
+/// Radii of a small and a large enemy
+const SMALL: f32 = 5.;
+const LARGE: f32 = 12.;
 
 /// Empty 160×160 grid for small enemies with its bottom-left corner at the origin.
 fn grid() -> Grid {
-    grid_for(Size::Small)
+    grid_for(SMALL)
 }
 
-fn grid_for(size: Size) -> Grid {
-    Grid::new(Vec2::ZERO, Vec2::splat(160.), size.radius())
+fn grid_for(radius: f32) -> Grid {
+    Grid::new(Vec2::ZERO, Vec2::splat(160.), radius)
 }
 
 /// Wall at x = 76..84 over the whole height, except for a gap at `gap_min..gap_max`.
@@ -110,7 +114,7 @@ fn follows_target_when_it_moves() {
 
 #[test]
 fn corridor_one_tile_wide_is_closed_for_large_enemies() {
-    let mut grid = grid_for(Size::Large);
+    let mut grid = grid_for(LARGE);
     wall_with_gap(&mut grid, 72., 88.);
     grid.set_target(Vec2::new(150., 80.));
 
@@ -119,10 +123,30 @@ fn corridor_one_tile_wide_is_closed_for_large_enemies() {
 
 #[test]
 fn corridor_two_tiles_wide_is_open_for_large_enemies() {
-    let mut grid = grid_for(Size::Large);
+    let mut grid = grid_for(LARGE);
     wall_with_gap(&mut grid, 64., 96.);
     grid.set_target(Vec2::new(150., 80.));
 
     let direction = grid.direction(Vec2::new(10., 80.)).unwrap();
     assert!(direction.x > 0.9, "{direction}");
+}
+
+#[test]
+fn unlisted_radius_uses_next_larger_grid() {
+    let mut flow_field = FlowField::new(Vec2::ZERO, Vec2::splat(160.), [12., 5., 8.]);
+    // corridor 16 px wide: open for a clearance of 5, closed for 8 and 12
+    wall_with_gap_in(&mut flow_field, 72., 88.);
+    flow_field.set_target(Vec2::new(150., 80.));
+
+    let start = Vec2::new(10., 80.);
+    assert!(flow_field.direction(start, 5.).is_some());
+    // would fit, but uses the grid with a clearance of 8
+    assert_eq!(flow_field.direction(start, 6.5), None);
+    // larger than all grids, uses the largest one
+    assert_eq!(flow_field.direction(start, 20.), None);
+}
+
+fn wall_with_gap_in(flow_field: &mut FlowField, gap_min: f32, gap_max: f32) {
+    flow_field.block(Rect::new(76., 0., 84., gap_min));
+    flow_field.block(Rect::new(76., gap_max, 84., 160.));
 }

@@ -5,10 +5,12 @@ use bevy::prelude::*;
 use survival::{
     flowfield::FlowField,
     objects::{
-        enemy::{self, Size},
+        enemy::{self, Enemy},
         player,
     },
 };
+
+const SMALL: Enemy = Enemy { radius: 5. };
 
 #[test]
 fn enemy_does_not_walk_through_wall() {
@@ -19,27 +21,27 @@ fn enemy_does_not_walk_through_wall() {
         (RigidBody::Static, Collider::rectangle(10., 100.)),
         Vec2::new(30., 0.),
     );
-    let enemy = common::spawn(&mut app, enemy::physics(Size::Small), Vec2::ZERO);
+    let enemy = common::spawn(&mut app, SMALL.physics(), Vec2::ZERO);
     common::set_desired_velocity(&mut app, enemy, Vec2::new(100., 0.));
 
     // enough to cross the wall several times over
     common::run(&mut app, 2.);
 
     let x = common::position(&app, enemy).x;
-    assert!(x <= 25. - Size::Small.radius() + 0.5, "enemy at x = {x}");
+    assert!(x <= 25. - SMALL.radius + 0.5, "enemy at x = {x}");
 }
 
 #[test]
 fn overlapping_enemies_are_pushed_apart() {
     let mut app = common::app();
-    let a = common::spawn(&mut app, enemy::physics(Size::Small), Vec2::ZERO);
-    let b = common::spawn(&mut app, enemy::physics(Size::Small), Vec2::new(1., 0.));
+    let a = common::spawn(&mut app, SMALL.physics(), Vec2::ZERO);
+    let b = common::spawn(&mut app, SMALL.physics(), Vec2::new(1., 0.));
 
     common::run(&mut app, 1.);
 
     let distance = common::position(&app, a).distance(common::position(&app, b));
     assert!(
-        distance >= Size::Small.radius() * 2. - 0.5,
+        distance >= SMALL.radius * 2. - 0.5,
         "enemies {distance} apart"
     );
 }
@@ -52,13 +54,7 @@ fn enemies_keep_distance_from_each_other() {
     // far enough away that the enemies don't reach the player
     common::spawn(&mut app, player::Player, Vec2::new(500., 0.));
     let enemies: Vec<_> = (0..6)
-        .map(|i| {
-            common::spawn(
-                &mut app,
-                (enemy::Enemy, enemy::physics(Size::Small)),
-                Vec2::new(0., i as f32),
-            )
-        })
+        .map(|i| common::spawn(&mut app, (SMALL, SMALL.physics()), Vec2::new(0., i as f32)))
         .collect();
 
     common::run(&mut app, 1.);
@@ -71,7 +67,7 @@ fn enemies_keep_distance_from_each_other() {
         .fold(f32::INFINITY, f32::min);
     // colliders alone only keep them `2 * radius` apart
     assert!(
-        min_distance > Size::Small.radius() * 2. + 2.,
+        min_distance > SMALL.radius * 2. + 2.,
         "closest enemies {min_distance} apart"
     );
 }
@@ -82,20 +78,12 @@ fn larger_separation_keeps_enemies_further_away() {
     app.init_resource::<FlowField>()
         .add_systems(Update, enemy::move_towards_player);
     common::spawn(&mut app, player::Player, Vec2::new(500., 0.));
-    let small = common::spawn(
-        &mut app,
-        (enemy::Enemy, enemy::physics(Size::Small)),
-        Vec2::ZERO,
-    );
+    let small = common::spawn(&mut app, (SMALL, SMALL.physics()), Vec2::ZERO);
     let large = enemy::Separation {
         radius: 20.,
         ..default()
     };
-    let large = common::spawn(
-        &mut app,
-        (enemy::Enemy, enemy::physics(Size::Small), large),
-        Vec2::new(0., 1.),
-    );
+    let large = common::spawn(&mut app, (SMALL, SMALL.physics(), large), Vec2::new(0., 1.));
 
     common::run(&mut app, 1.);
 
