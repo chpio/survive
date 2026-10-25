@@ -2,8 +2,8 @@
 //!
 //! The Dioxus `VirtualDom` drives a Blitz document, which is laid out and painted into a Vello
 //! scene. The render world renders that scene with Bevy's own wgpu device into an `Image`, which
-//! is shown as a fullscreen `ImageNode`. Both only happen when the HUD changed (after input, a
-//! re-render, a resize or a redraw request from Blitz); otherwise the image keeps its content.
+//! is shown as a fullscreen `ImageNode`. Both only happen when the HUD changed (after a mouse
+//! button, a re-render, a resize or a redraw request from Blitz); otherwise the image keeps its content.
 //!
 //! Blitz gets all mouse input. Where the HUD [blocks the pointer](blocks_pointer), it reports a
 //! picking hit on its image above the sprites, so the game world only gets the pointer elsewhere
@@ -195,15 +195,23 @@ fn setup(world: &mut World) {
 fn forward_input(
     mut ui: NonSendMut<UiDocument>,
     mut cursor_moved: MessageReader<CursorMoved>,
+    mut cursor_left: MessageReader<CursorLeft>,
     mut mouse_buttons: MessageReader<MouseButtonInput>,
 ) {
     let ui = &mut *ui;
 
+    // no repaint of its own: Blitz requests a redraw when a move changes something (hover,
+    // selection), so moving over the game world doesn't repaint the HUD
     for event in cursor_moved.read() {
-        ui.needs_paint = true;
         ui.cursor = event.position;
         let event = pointer_event(ui.cursor, MouseEventButton::Main, ui.buttons);
         ui.doc.handle_ui_event(UiEvent::PointerMove(event));
+    }
+
+    // ends the hover, otherwise an element left through the window's edge would stay hovered
+    if cursor_left.read().count() > 0 {
+        let event = pointer_event(ui.cursor, MouseEventButton::Main, ui.buttons);
+        ui.doc.handle_ui_event(UiEvent::PointerLeave(event));
     }
 
     for event in mouse_buttons.read() {
@@ -213,6 +221,8 @@ fn forward_input(
             MouseButton::Middle => (MouseEventButton::Auxiliary, MouseEventButtons::Auxiliary),
             _ => continue,
         };
+        // unlike moves, Blitz doesn't request a redraw for everything a click changes (the end
+        // of `:active`, a toggled checkbox)
         ui.needs_paint = true;
         let event = match event.state {
             ButtonState::Pressed => {
