@@ -5,6 +5,11 @@
 //! limited by the body's [`Strength`]. Bodies pushing each other therefore win by strength and
 //! mass, instead of whoever sets their velocity last.
 //!
+//! When the desired velocity changes, the body first changes its velocity straight to it at full
+//! strength, with the anchor kept at the body, and only then follows the anchor again. Otherwise
+//! the anchor would fall behind while the body accelerates or brakes, and pull it back once it
+//! reached its velocity.
+//!
 //! Following a position rather than only a velocity lets a body hold its ground against weaker
 //! pushers. A pure velocity controller reacts one step late to contact impulses and slowly drifts.
 
@@ -34,9 +39,14 @@ pub struct DesiredVelocity(pub Vec2);
 #[require(DesiredVelocity, Anchor)]
 pub struct Strength(pub f32);
 
-/// Position the body is pulled towards, `None` until the first physics step.
 #[derive(Component, Default)]
-struct Anchor(Option<Vec2>);
+struct Anchor {
+    /// Position the body is pulled towards, as of the previous physics step. `None` to start at
+    /// the body's current position.
+    position: Option<Vec2>,
+    /// Whether the body is still changing its velocity to a new desired velocity.
+    adjusting: bool,
+}
 
 /// Dynamic body moved by this module. Its rotation is locked, so contacts don't spin it. It has no
 /// friction, so it slides along obstacles and other bodies when pushing against them at an angle,
@@ -60,32 +70,37 @@ fn apply_movement_forces(
         Forces,
         &Position,
         &ComputedMass,
-        &DesiredVelocity,
+        Ref<DesiredVelocity>,
         &Strength,
         &mut Anchor,
     )>,
 ) {
     for (mut forces, position, mass, desired, strength, mut anchor) in &mut bodies {
         let mass = mass.value();
+        let velocity_error = desired.0 - forces.linear_velocity();
+        anchor.adjusting |= desired.is_changed();
+
+        if anchor.adjusting {
+            // the force that reaches the desired velocity within this step, unless that takes more
+            // than full strength
+            let force = velocity_error * mass / time.delta_secs();
+            anchor.adjusting = force.length() > strength.0;
+            // start from where the body is after this step
+            anchor.position = None;
+            forces.apply_force(force.clamp_length_max(strength.0));
+            continue;
+        }
+
         let spring = mass * STIFFNESS * STIFFNESS;
         let damping = 2. * mass * STIFFNESS;
-
-        let target = anchor.0.unwrap_or(position.0) + desired.0 * time.delta_secs();
+        let target = anchor
+            .position
+            .map_or(position.0, |anchor| anchor + desired.0 * time.delta_secs());
         let offset = target - position.0;
-        let force = offset * spring + (desired.0 - forces.linear_velocity()) * damping;
-
-        anchor.0 = Some(
-            if force.length() > strength.0 && force.dot(desired.0) > 0. {
-                // accelerating at full strength: keep the anchor at the body, so it doesn't run
-                // ahead and make the body overshoot once it reaches its speed
-                position.0
-            } else {
-                // pushed or blocked: hold on to the anchor, but no further away than the spring
-                // reaches full strength, so the body doesn't snap back once it is free
-                position.0 + offset.clamp_length_max(strength.0 / spring)
-            },
-        );
-
+        let force = offset * spring + velocity_error * damping;
+        // pushed or blocked: hold on to the anchor, but no further away than the spring reaches
+        // full strength, so the body doesn't snap back once it is free
+        anchor.position = Some(position.0 + offset.clamp_length_max(strength.0 / spring));
         forces.apply_force(force.clamp_length_max(strength.0));
     }
 }
