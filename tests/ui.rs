@@ -58,3 +58,29 @@ fn positions_are_logical_pixels() {
     assert!(blocks_pointer(&doc, Vec2::new(95., 50.)));
     assert!(!blocks_pointer(&doc, Vec2::new(105., 50.)));
 }
+
+/// A panel at the right edge, as the HUD's.
+fn right_panel() -> Element {
+    rsx! {
+        div {
+            class: "blocks-pointer",
+            style: "position: absolute; right: 8px; top: 8px; width: 100px; height: 100px;",
+        }
+    }
+}
+
+#[test]
+fn panel_is_hit_after_the_window_grew() {
+    let mut doc = DioxusDocument::new(VirtualDom::new(right_panel), DocumentConfig::default());
+    doc.initial_build();
+    {
+        let mut inner = doc.inner_mut();
+        inner.set_viewport(Viewport::new(400, 200, 1., ColorScheme::Dark));
+        inner.resolve(0.);
+        survival::ui::resize(&mut inner, Viewport::new(1200, 600, 1., ColorScheme::Dark));
+        inner.resolve(0.);
+    }
+
+    // beyond the old width of 400 px
+    assert!(blocks_pointer(&doc.inner(), Vec2::new(1150., 50.)));
+}

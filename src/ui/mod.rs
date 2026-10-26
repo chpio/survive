@@ -62,6 +62,7 @@ use std::{
     },
     time::Instant,
 };
+use style::selector_parser::RestyleDamage;
 use stylesheet::{Stylesheet, StylesheetLoader};
 
 /// The Dioxus document and the channels between it and the game. Not `Send`, so it is stored as
@@ -437,17 +438,10 @@ fn paint_ui(
     let viewport = doc.viewport();
     if viewport.window_size != (width, height) || viewport.hidpi_scale != scale {
         ui.needs_paint = true;
-        doc.set_viewport(Viewport::new(width, height, scale, ColorScheme::Dark));
-        // Blitz aligns a node's inline layout in every measure pass. After a resize, taffy serves
-        // the final layout of unchanged nodes from its cache, so centered text (e.g. in buttons)
-        // keeps the alignment of a measure pass with a larger width and lands outside its box.
-        // A full relayout avoids that.
-        let ids: Vec<_> = doc.tree().iter().map(|(id, _)| id).collect();
-        for id in ids {
-            if let Some(node) = doc.get_node_mut(id) {
-                node.invalidate_layout_cache();
-            }
-        }
+        resize(
+            &mut doc,
+            Viewport::new(width, height, scale, ColorScheme::Dark),
+        );
         if let Some(mut image) = images.get_mut(&ui_scene.image) {
             image.resize(Extent3d {
                 width,
@@ -478,6 +472,26 @@ fn paint_ui(
         0,
     );
     measure(perf::Step::HudScene, started);
+}
+
+/// Sets the document's viewport after the window changed its size or scale, so that the next
+/// `resolve` lays out and hit-tests everything for the new size.
+pub fn resize(doc: &mut BaseDocument, viewport: Viewport) {
+    doc.set_viewport(viewport);
+    let ids: Vec<_> = doc.tree().iter().map(|(id, _)| id).collect();
+    for id in ids {
+        if let Some(node) = doc.get_node_mut(id) {
+            // Blitz aligns a node's inline layout in every measure pass. After a resize, taffy
+            // serves the final layout of unchanged nodes from its cache, so centered text (e.g. in
+            // buttons) keeps the alignment of a measure pass with a larger width and lands outside
+            // its box. A full relayout avoids that.
+            node.invalidate_layout_cache();
+            // Hits only reach a node within the area its subtree covers, which Blitz only
+            // recomputes for damaged nodes and not on a resize. After the window grew, the HUD
+            // (positioned at the right edge) would lie outside the old area and miss all hits.
+            node.insert_damage(RestyleDamage::RECALCULATE_OVERFLOW);
+        }
+    }
 }
 
 fn init_vello_renderer(mut commands: Commands, device: Res<RenderDevice>) {

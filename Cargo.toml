@@ -36,6 +36,8 @@ dioxus = { version = "=0.8.0-alpha.3", default-features = false, features = ["ma
 dioxus-native-dom = "=0.8.0-alpha.3"
 ron = "0.12"
 serde = { version = "1", features = ["derive"] }
+# Blitz's style engine, the same version and features, to mark nodes for recomputation (ui::resize)
+style = { package = "stylo", version = "0.22" }
 vello = { version = "0.11", default-features = false, features = ["wgpu"] }
 
 [dependencies.bevy]
