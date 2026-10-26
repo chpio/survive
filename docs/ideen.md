@@ -20,12 +20,41 @@
 - Werden einmalig ausgelöst. Art und Anzahl der Gegner sind Properties am Spawnpunkt.
 - Optional gestaffelt: zuerst kleine Gegner, danach große.
 
+## Spawnen
+
+- **Ort:** In Zellen, die der Spieler gerade nicht sieht (`Sight`), etwa hinter Gebäuden. Sie
+  müssen innerhalb des Flowfield-Radius liegen und im Gitter für den Radius des Gegners frei sein.
+  Die Sichtbarkeit mit dem Radius des Gegners prüfen, damit nichts hervorschaut.
+- **Mindestabstand:** Über die Flowfield-Distanz messen, nicht über die Luftlinie, sonst stehen
+  Gegner direkt hinter einer dünnen Wand.
+- **Timing:** Wellen mit Pausen und einem Budget pro Welle. Die Gegner einer Welle versetzt spawnen,
+  gern in Gruppen.
+- **Verhalten:** Angriffs-Tokens, damit nur wenige Gegner gleichzeitig angreifen und der Rest wartet
+  oder den Spieler umkreist.
+- **Weitere Ideen:**
+  - Ein AI Director, der die Anspannung steuert.
+  - Bevorzugt in Laufrichtung des Spielers spawnen.
+  - Zurückgefallene Gegner recyceln.
+  - Feste Populationen pro Gebiet.
+  - Reize wie Lärm locken Gegner an.
+  - Bei Nacht mehr Gegner (siehe Licht).
+
 ## Fog of War
 
 - Unerkundete Bereiche sind schwarz, erkundete bleiben sichtbar, aber ohne Gegner.
 - Dazu eine echte Sichtlinie: Wände und Gebäude werfen Schatten. Die Schattenformen lassen sich aus
   den Tiled-Kollidern berechnen.
 - Ein Sichtradius um den Spieler.
+
+## Licht
+
+- **Tag und Nacht:** Ein Umgebungslicht-Faktor im Shader (`assets/shaders/sight.wesl`),
+  multipliziert mit der vorhandenen Sichtmaske.
+- **Color Grading:** LUTs pro Tageszeit, zwischen denen überblendet wird. Vorher testen, ob Bevys
+  `ColorGrading` an der 2D-Kamera funktioniert.
+- **Lichtquellen:** Eine Komponente an normalen Entities. Jedes Licht wird als Quad mit weichem
+  Abfall (etwa per `smoothstep`) additiv in eine Lightmap gezeichnet. Schatten gibt es nur für
+  wenige große Lichter.
 
 ## Radien um den Spieler (drei Kreise ineinander)
 
@@ -133,12 +162,24 @@
 - **Tod:** Bisher heilt `combat` den Spieler und entfernt alle Gegner. Das Laden des letzten
   Brunnen-Stands ersetzt das. Vorher den TODO-Punkt umsetzen, dass `combat` ein `Died`-Event
   auslöst.
+- **Wellen und Story:** Die Grundrichtung sieht keine Vampire-Survivors-Wellen vor. Wellen passen
+  aber zum Verteidigen eines Brunnens und zur Nacht. Festlegen, ob es sie auch sonst gibt oder ob
+  dort nur Hinterhalte und feste Populationen spawnen.
+- **Flowfield beim Spawnen:** Die Distanzen gibt es nur für Gitter, die gerade ein Gegner (oder das
+  Debug-Overlay) nutzt, und nur innerhalb des Flowfield-Radius. Der Spawner muss das Gitter für die
+  Größe des neuen Gegners anfordern und wartet bis zur nächsten Suche.
+- **Sicht zwischen den Radien:** Zwischen Sichtweite (200 px) und Flowfield-Radius (320 px) ist jede
+  Zelle unsichtbar. Ohne weitere Regel spawnen Gegner vor allem dort, nicht hinter Gebäuden in der
+  Nähe. Der Mindestabstand bzw. eine Gewichtung entscheidet, was gewollt ist.
+- **Licht und Sicht:** Sieht der Spieler beleuchtete Bereiche außerhalb seiner Sicht, etwa ein
+  Lagerfeuer hinter einer Wand? Und zählt ein Gegner im Dunkeln als sichtbar? Davon hängt ab, wo
+  nachts gespawnt werden darf.
 
 ## Mögliche Reihenfolge
 
 Jeder Schritt baut auf dem vorherigen auf:
 
-1. Hinterhalte und Aktivierungsradien
+1. Hinterhalte und Aktivierungsradien, Spawnen außer Sicht
 2. Flowfield-Optimierung (zusammen mit dem Performance-Punkt in `TODO.md`)
 3. Items und Inventar
 4. Truhen und Gebiets-Level
@@ -146,4 +187,4 @@ Jeder Schritt baut auf dem vorherigen auf:
 6. Speichern
 7. Fog of War
 
-Grafik (Sprites, neues Tileset) läuft unabhängig nebenher.
+Grafik (Sprites, neues Tileset) und Licht laufen unabhängig nebenher.
