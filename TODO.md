@@ -18,6 +18,13 @@
 - Balance the combat values in `player::combat()` and `Enemy::combat`: five enemies touching the
   player kill it within a few seconds.
 
+## Input
+
+- Pens under Wayland: the compositor only sends them through the tablet protocol, which winit
+  0.30 (Bevy 0.20) doesn't support, so the game gets no events at all (under X11 they arrive as
+  mouse input). Check again with the next Bevy/winit update, which may bring a pointer API with
+  pen support; until then, the only workaround would be running under XWayland.
+
 ## Map
 
 - Give the tileset's buildings, gravestones and bridge railings colliders before they are used on

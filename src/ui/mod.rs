@@ -5,9 +5,9 @@
 //! is shown as a fullscreen `ImageNode`. Both only happen when the HUD changed (after a mouse
 //! button, a re-render, a resize or a redraw request from Blitz); otherwise the image keeps its content.
 //!
-//! Blitz gets all mouse input. Where the HUD [blocks the pointer](blocks_pointer), it reports a
-//! picking hit on its image above the sprites, so the game world only gets the pointer elsewhere
-//! (see `docs/ui-events.md`).
+//! Blitz gets all mouse input and touches. Where the HUD [blocks the pointer](blocks_pointer), it
+//! reports a picking hit on its image above the sprites, so the game world only gets the pointer
+//! elsewhere (see `docs/ui-events.md`).
 
 mod hud;
 mod stylesheet;
@@ -23,7 +23,11 @@ use crate::{
 use anyrender_vello::VelloScenePainter;
 use avian2d::prelude::PhysicsGizmos;
 use bevy::{
-    input::{ButtonState, mouse::MouseButtonInput},
+    input::{
+        ButtonState,
+        mouse::MouseButtonInput,
+        touch::{TouchInput, TouchPhase},
+    },
     picking::{
         PickingSystems,
         backend::{HitData, PointerHits},
@@ -203,6 +207,7 @@ fn forward_input(
     mut cursor_moved: MessageReader<CursorMoved>,
     mut cursor_left: MessageReader<CursorLeft>,
     mut mouse_buttons: MessageReader<MouseButtonInput>,
+    mut touches: MessageReader<TouchInput>,
 ) {
     let ui = &mut *ui;
 
@@ -210,13 +215,23 @@ fn forward_input(
     // selection), so moving over the game world doesn't repaint the HUD
     for event in cursor_moved.read() {
         ui.cursor = event.position;
-        let event = pointer_event(ui.cursor, MouseEventButton::Main, ui.buttons);
+        let event = pointer_event(
+            BlitzPointerId::Mouse,
+            ui.cursor,
+            MouseEventButton::Main,
+            ui.buttons,
+        );
         ui.doc.handle_ui_event(UiEvent::PointerMove(event));
     }
 
     // ends the hover, otherwise an element left through the window's edge would stay hovered
     if cursor_left.read().count() > 0 {
-        let event = pointer_event(ui.cursor, MouseEventButton::Main, ui.buttons);
+        let event = pointer_event(
+            BlitzPointerId::Mouse,
+            ui.cursor,
+            MouseEventButton::Main,
+            ui.buttons,
+        );
         ui.doc.handle_ui_event(UiEvent::PointerLeave(event));
     }
 
@@ -233,13 +248,60 @@ fn forward_input(
         let event = match event.state {
             ButtonState::Pressed => {
                 ui.buttons |= flag;
-                UiEvent::PointerDown(pointer_event(ui.cursor, button, ui.buttons))
+                UiEvent::PointerDown(pointer_event(
+                    BlitzPointerId::Mouse,
+                    ui.cursor,
+                    button,
+                    ui.buttons,
+                ))
             }
             ButtonState::Released => {
                 ui.buttons -= flag;
-                UiEvent::PointerUp(pointer_event(ui.cursor, button, ui.buttons))
+                UiEvent::PointerUp(pointer_event(
+                    BlitzPointerId::Mouse,
+                    ui.cursor,
+                    button,
+                    ui.buttons,
+                ))
             }
         };
+        ui.doc.handle_ui_event(event);
+    }
+
+    // a finger (or a pen the system reports as touch) is a pointer that is only there while it
+    // touches, pressing the main button
+    for touch in touches.read() {
+        let id = BlitzPointerId::Finger(touch.id);
+        let event = match touch.phase {
+            TouchPhase::Started => UiEvent::PointerDown(pointer_event(
+                id,
+                touch.position,
+                MouseEventButton::Main,
+                MouseEventButtons::Primary,
+            )),
+            TouchPhase::Moved => UiEvent::PointerMove(pointer_event(
+                id,
+                touch.position,
+                MouseEventButton::Main,
+                MouseEventButtons::Primary,
+            )),
+            TouchPhase::Ended => UiEvent::PointerUp(pointer_event(
+                id,
+                touch.position,
+                MouseEventButton::Main,
+                MouseEventButtons::None,
+            )),
+            TouchPhase::Canceled => UiEvent::PointerCancel(pointer_event(
+                id,
+                touch.position,
+                MouseEventButton::Main,
+                MouseEventButtons::None,
+            )),
+        };
+        // like clicks, touching and lifting change more than Blitz requests redraws for
+        if touch.phase != TouchPhase::Moved {
+            ui.needs_paint = true;
+        }
         ui.doc.handle_ui_event(event);
     }
 }
@@ -269,12 +331,14 @@ fn pick_hud(
 }
 
 fn pointer_event(
+    id: BlitzPointerId,
     position: Vec2,
     button: MouseEventButton,
     buttons: MouseEventButtons,
 ) -> BlitzPointerEvent {
     BlitzPointerEvent {
-        id: BlitzPointerId::Mouse,
+        id,
+        // also each finger, so Blitz ends the hover when it is lifted
         is_primary: true,
         // the document is never scrolled, so all coordinates are the same
         coords: PointerCoords {

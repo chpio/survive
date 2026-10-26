@@ -28,7 +28,9 @@ mit der Markierung `ui::Hud`.
 
 1. **Blitz bekommt weiterhin alles.** `forward_input` bleibt unverändert, damit Hover-Effekte,
    Loslassen außerhalb eines Buttons usw. im HUD stimmen. Das gilt auch über der Welt, denn Blitz
-   muss merken, wenn die Maus einen Button verlässt.
+   muss merken, wenn die Maus einen Button verlässt. Berührungen gehen als eigene Zeiger mit
+   Finger-ID an Blitz. Für Stifte hat winit 0.30 keine Schnittstelle: Unter X11 (XWayland) kommen
+   sie als Maus an, unter Wayland gar nicht (siehe `TODO.md`).
 2. **Kein Bevy-UI-Picking.** Das Feature `ui_picking` ist aus. Sonst würde Bevys UI-Picking den
    bildschirmfüllenden `ImageNode` überall treffen. Bevys UI dient nur noch dem `ImageNode` und
    dem FPS-Overlay, und beide brauchen kein Picking.
