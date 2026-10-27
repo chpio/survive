@@ -4,7 +4,7 @@ Design-Notiz, Stand Oktober 2026. Ergänzt „Speicherstand und große Welt“. 
 
 ## State statt ECS als Wahrheit
 
-`MapState` und `CellState` bleiben die Wahrheit, Entities sind nur die Darstellung.
+`GroupState` und `CellState` bleiben die Wahrheit, Entities sind nur die Darstellung.
 
 Alternative ECS als Wahrheit verworfen:
 

@@ -115,19 +115,18 @@
 
 ## Speichern
 
+Ausgearbeitet in den Notizen unter [Speichern/](Speichern/). Die Grundsätze:
+
 - Nur an festen Speicherpunkten, also an den Brunnen. Beim Tod wird der letzte Brunnen-Stand
   geladen.
-- Gespeichert wird nur, was sich gegenüber der Tiled-Karte geändert hat: offene Truhen, ausgelöste
+- Gespeichert wird nur, was sich gegenüber Tiled geändert hat: offene Truhen, ausgelöste
   Hinterhalte, aktive Brunnen, Items am Boden, Spieler mit Inventar, erkundeter Fog of War
   (Bitmaske).
-- Veränderbare Objekte bekommen `Persistent` mit Kartenname und Tiled-ID. Der Zustand steckt in
-  Komponenten wie `Opened` oder `Triggered`.
+- Jedes Tiled-Objekt hat eine Objekt-ID und eine Gruppen-ID als Custom Properties. Ein Tiled-Skript
+  vergibt sie beim Speichern der Karte, ein CI-Test prüft auf fehlende und doppelte IDs. Weder
+  Dateiname noch Tiled-ID taugen als Schlüssel.
+- Objekt-Zustände liegen pro Gruppe, abgelegte Items in Zellen eines festen Rasters.
 - Laden: Karte normal spawnen, danach gespeicherte Zustände anwenden.
-- Items brauchen eine eigene stabile ID, weil sich Entity-IDs bei jedem Start ändern.
-- Struktur `SaveGame` als RON, mit Versionsnummer. Zuerst in eine temporäre Datei schreiben, dann
-  umbenennen. Die Spielerposition ist die ID des Brunnens.
-- Optional statt Tiled-IDs eine Property `uuid` per Tiled-Script, mit CI-Prüfung auf doppelte oder
-  fehlende Werte.
 
 ## Items mit der Maus aufheben
 
@@ -151,11 +150,10 @@
 - **Sichtweite oder Sichtlinie:** Werden Gegner hinter einer Wand innerhalb der Sichtweite aktiv,
   obwohl der Spieler sie nicht sieht? Für Hinterhalte vermutlich gewollt, aber festlegen.
 - **Brunnen und Truhen als Objekte:** Der Brunnen ist bisher ein Tile mit `type="well"` in einer
-  Tile-Ebene und hat damit keine Tiled-ID. Für `Persistent` und die Brunnen-ID als Spielerposition
-  müssen Brunnen (und Truhen) Tile-Objekte werden, oder die Tile-Position dient als Schlüssel.
-- **Stabile IDs früh einführen:** Wird die Karte für das neue Tileset neu gebaut, ändern sich die
-  Tiled-IDs und alte Speicherstände passen nicht mehr. Die `uuid`-Property sollte daher vor dem
-  ersten Speicherstand kommen, den jemand behalten will.
+  Tile-Ebene und kann damit keine Objekt-ID tragen. Für den gespeicherten Zustand und die
+  Brunnen-ID als Spielerposition müssen Brunnen (und Truhen) Tile-Objekte werden.
+- **Tiled-Skript früh einführen:** Objekte ohne Objekt-ID lassen sich nicht speichern. Das Skript
+  sollte daher vor dem ersten Speicherstand kommen, den jemand behalten will.
 - **Gewicht als Masse:** `Strength` begrenzt nur die Kraft. Ein schwererer Spieler beschleunigt
   langsamer und wird schwerer weggeschubst, erreicht aber dieselbe Höchstgeschwindigkeit. Soll
   Überladung auch langsamer machen, muss zusätzlich `DesiredVelocity` skaliert werden.
