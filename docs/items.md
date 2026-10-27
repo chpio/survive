@@ -8,7 +8,7 @@
 - Inventarfenster im HUD, per Taste geöffnet.
 
 Noch nicht dabei: Benutzen, Ausrüstung, Stufen, Gewicht als Masse, Haltbarkeit, Speichern. Das
-Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md](ideen.md)).
+Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md](ideen/ideen.md)).
 
 ## Item-Definitionen
 

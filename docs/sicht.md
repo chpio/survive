@@ -63,7 +63,7 @@ lohnen weder Speicher noch Spielstand dafür. Kommt eine Karte dazu, lässt er s
 ## Spiellogik
 
 - Unsichtbare Gegner bleiben aktiv: Sie laufen, greifen an und lassen sich treffen. Die Sicht ist
-  vorerst rein optisch. Die Aktivierung bei Sicht (siehe [ideen.md](ideen.md)) baut später darauf
+  vorerst rein optisch. Die Aktivierung bei Sicht (siehe [ideen.md](ideen/ideen.md)) baut später darauf
   auf (`Sight::visibility`).
 
 ## Code
