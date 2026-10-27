@@ -70,7 +70,7 @@ Parameter, wer sie setzt, ist ihm egal.
   der Tod. Ein lebender kommt nach dem Entladen seiner Karte im Tiled-Stand zurück, mit Position und
   Leben aus Tiled.
 - Läuft ein fester Gegner in eine andere Karte und wird seine eigene neu geladen, darf er nicht
-  doppelt entstehen. Vor dem Spawnen per Objekt-ID prüfen, ob er noch lebt.
+  doppelt entstehen. Vor dem Spawnen per Gruppen- und Objekt-ID prüfen, ob er noch lebt.
 
 ### Wellen
 
@@ -186,7 +186,7 @@ Ausgearbeitet in [speichern.md](../speichern.md). Die Grundsätze:
 - Nur an festen Speicherpunkten, also an den Brunnen. Beim Tod wird der letzte Brunnen-Stand
   geladen.
 - Gespeichert wird nur, was sich gegenüber Tiled geändert hat: offene Truhen, ausgelöste
-  Hinterhalte, aktive Brunnen, Items am Boden, Spieler mit Inventar.
+  Hinterhalte, aktive Brunnen, getötete feste Gegner, Items am Boden, Spieler mit Inventar.
 - Jede Karte hat eine Karten-ID, jedes Tiled-Objekt eine Objekt-ID und eine Gruppen-ID (die
   Karten-ID seiner ursprünglichen Karte), alle als Custom Properties. Ein Tiled-Skript
   vergibt sie beim Speichern der Karte, ein CI-Test prüft auf fehlende und doppelte IDs. Weder
