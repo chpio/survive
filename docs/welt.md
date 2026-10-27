@@ -85,6 +85,9 @@ sie durch die fehlenden Kollider.
   Karte steht. Dafür reichen die Rechtecke der geladenen Karten, mit etwas Puffer am Rand, sonst
   flackern Gegner an der Grenze.
 - Steht er auf keiner, wird er despawnt. Gegner werden nicht gespeichert.
+- Feste Gegner aus Tiled-Objekten entstehen beim Laden ihrer Karte neu. Läuft einer in eine andere
+  geladene Karte und wird seine eigene neu geladen, darf er nicht doppelt entstehen: vor dem
+  Spawnen per Objekt-ID prüfen, ob er noch lebt.
 - Alternative: nur beim Entladen einer Karte die Gegner in ihrem Rechteck prüfen.
 - Verworfen: Gegner als Kinder der Karte. Läuft ein Gegner in eine andere Karte, gehört er noch zur
   alten und verschwindet mit ihr, außer man hängt ihn bei jedem Kartenwechsel um.

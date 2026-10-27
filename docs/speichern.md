@@ -7,11 +7,13 @@ Noch nicht umgesetzt. Baut auf der großen Welt auf ([welt.md](welt.md)).
 - Gespeichert wird nur an festen Speicherpunkten, also an den Brunnen, und beim Beenden. Beim Tod
   wird der letzte Brunnen-Stand geladen.
 - Gespeichert wird nur, was vom Tiled-Stand abweicht: offene Truhen, ausgelöste Hinterhalte,
-  aktive Brunnen, Items am Boden, Spieler mit Inventar.
+  aktive Brunnen, getötete feste Gegner, Items am Boden, Spieler mit Inventar.
 - Abgelegte Items bleiben für immer liegen, auch über viele Brunnen hinweg. Deshalb wächst der
   Speicherstand mit der Welt, und die Item-Zellen werden wie die Gruppen nur bei Bedarf gelesen.
 - Frühere Brunnen-Stände bleiben ladbar (siehe „Historie“).
 - Gegner werden nicht gespeichert. Sie verschwinden mit ihrer Karte (siehe [welt.md](welt.md)).
+  Ausnahme sind feste Gegner, die in Tiled als Objekte stehen (Story, Spezialgegner): Von ihnen wird
+  nur der Tod gespeichert, als `Removed` wie bei jedem anderen Objekt.
 - Die Welt ist groß und wird nur stückweise geladen. Gespeichert und gelesen werden deshalb nur die
   Teile, die sich geändert haben bzw. gebraucht werden.
 
@@ -80,6 +82,8 @@ struct GroupState {
 enum ObjectState {
     Removed,
     Well { used: bool },
+    /// Trigger-Zone eines Hinterhalts
+    Triggered,
 }
 
 /// Abgelegte Items in einer Rasterzelle.

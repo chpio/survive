@@ -27,7 +27,9 @@ entscheidet, wo Gegner sind: die Welt (Population), der Level-Designer (Hinterha
 
 - Eine Objekt-Ebene pro Hinterhalt (z. B. „Hinterhalt Brücke“, gesammelt unter einer
   Gruppen-Ebene „Hinterhalte“). Darin eine oder mehrere Trigger-Zonen und die Spawnpunkte. Beim
-  Auslösen gelten die Spawnpunkte derselben Ebene, `Triggered` kommt an die Ebene.
+  Auslösen gelten die Spawnpunkte derselben Ebene.
+- Ebenen haben keine Objekt-ID (siehe [speichern.md](../speichern.md)). Ausgelöst wird deshalb an
+  den Trigger-Zonen vermerkt, bei mehreren Zonen an allen der Ebene.
 - Werden einmalig ausgelöst. Art und Anzahl der Gegner sind Properties am Spawnpunkt.
 - Optional gestaffelt: zuerst kleine Gegner, danach große (z. B. `delay` am Spawnpunkt).
 - Mehr Spawnpunkte als Gegner. Beim Auslösen werden nur passende genommen: nicht sichtbar, mit
@@ -40,13 +42,20 @@ entscheidet, wo Gegner sind: die Welt (Population), der Level-Designer (Hinterha
 
 ### Director (wie Left 4 Dead)
 
+Ein allgemeines Werkzeug, unabhängig von Brunnen oder anderen Story-Elementen. Er kennt nur seine
+Parameter, wer sie setzt, ist ihm egal.
+
 - **Intensität:** Steigt, wenn der Spieler Schaden nimmt, Gegner nah sind oder in der Nähe Gegner
   sterben. Sie fällt langsam wieder ab.
 - **Phasen:** Aufbau (spawnen, bis die Intensität einen Höchstwert erreicht), Höhepunkt kurz halten,
   Abklingen, Ruhe ohne Spawns. Die Ruhephasen unterscheiden ihn von Vampire-Survivors-Wellen.
 - **Budget pro Aufbauphase:** In Gruppen spawnen, bevorzugt in Laufrichtung des Spielers.
-- **Modifikatoren:** Nacht (siehe Licht) und Gebiets-Level erhöhen das Budget, ein aktiver Brunnen
-  setzt es in seiner Nähe auf null. Um einen inaktiven Brunnen ist der Director aggressiv.
+- **Parameter:** Budget, Höchstwert der Intensität, Dauer von Höhepunkt und Ruhe, erlaubte
+  Gegnerarten. Ein Budget von null schaltet ihn aus.
+- **Woher die Parameter kommen:** aus Zonen in Tiled (Properties an der Zone, wie `level`), in denen
+  der Spieler gerade steht, und aus Modifikatoren im Code, die sie verrechnen. Beispiele: Nacht
+  (siehe Licht) und Gebiets-Level erhöhen das Budget, eine Schutzzone setzt es auf null. Ein aktiver
+  Brunnen wäre so eine Schutzzone, ein inaktiver eine Zone mit hohem Budget.
 
 ### Feste Populationen
 
@@ -56,8 +65,12 @@ entscheidet, wo Gegner sind: die Welt (Population), der Level-Designer (Hinterha
 - Vorhersehbar: Erkunden lohnt sich, und der Spieler kann Gebiete meiden oder säubern.
 - **Einzelne feste Gegner:** In Tiled als Objekte platziert, für die Story, Spezialgegner mit
   eigenem Loot oder Endgegner. Werte und Loot als Properties, wie bei Story-Waffen nur für
-  Einzelstücke. Sie bekommen `Persistent`, damit ein getöteter Gegner tot bleibt. Sonst werden
-  Gegner nicht gespeichert.
+  Einzelstücke. Als Tiled-Objekte haben sie eine Objekt-ID: Ein getöteter landet als `Removed` im
+  Zustand seiner Gruppe und bleibt tot (siehe [speichern.md](../speichern.md)). Gespeichert wird nur
+  der Tod. Ein lebender kommt nach dem Entladen seiner Karte im Tiled-Stand zurück, mit Position und
+  Leben aus Tiled.
+- Läuft ein fester Gegner in eine andere Karte und wird seine eigene neu geladen, darf er nicht
+  doppelt entstehen. Vor dem Spawnen per Objekt-ID prüfen, ob er noch lebt.
 
 ### Wellen
 
@@ -213,8 +226,9 @@ Ausgearbeitet in [speichern.md](../speichern.md). Die Grundsätze:
 - **Tod:** Bisher heilt `combat` den Spieler und entfernt alle Gegner. Das Laden des letzten
   Brunnen-Stands ersetzt das. Vorher den TODO-Punkt umsetzen, dass `combat` ein `Died`-Event
   auslöst.
-- **Mischung der Spawn-Ansätze:** Welche Ansätze wo gelten, z. B. ob der Director überall mit
-  niedriger Grundintensität läuft oder nur in Gebieten mit inaktivem Brunnen.
+- **Mischung der Spawn-Ansätze:** Welche Ansätze wo gelten. Der Director ist ein allgemeines
+  Werkzeug, offen ist nur, welche Zonen ihn wie einstellen und ob es eine Grundeinstellung außerhalb
+  aller Zonen gibt.
 - **Flowfield beim Spawnen:** Die Distanzen gibt es nur für Gitter, die gerade ein Gegner (oder das
   Debug-Overlay) nutzt, und nur innerhalb des Flowfield-Radius. Der Spawner muss das Gitter für die
   Größe des neuen Gegners anfordern und wartet bis zur nächsten Suche.
