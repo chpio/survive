@@ -174,7 +174,8 @@ Ausgearbeitet in [speichern.md](../speichern.md). Die Grundsätze:
   geladen.
 - Gespeichert wird nur, was sich gegenüber Tiled geändert hat: offene Truhen, ausgelöste
   Hinterhalte, aktive Brunnen, Items am Boden, Spieler mit Inventar.
-- Jedes Tiled-Objekt hat eine Objekt-ID und eine Gruppen-ID als Custom Properties. Ein Tiled-Skript
+- Jede Karte hat eine Karten-ID, jedes Tiled-Objekt eine Objekt-ID und eine Gruppen-ID (die
+  Karten-ID seiner ursprünglichen Karte), alle als Custom Properties. Ein Tiled-Skript
   vergibt sie beim Speichern der Karte, ein CI-Test prüft auf fehlende und doppelte IDs. Weder
   Dateiname noch Tiled-ID taugen als Schlüssel.
 - Objekt-Zustände liegen pro Gruppe, abgelegte Items in Zellen eines festen Rasters.

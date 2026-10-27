@@ -24,8 +24,10 @@ Der Zustand eines Objekts braucht einen Schlüssel, der Umbenennen, Verschieben 
   (UUID) als Custom Property. Die Tiled-ID taugt nicht, weil Tiled sie beim Einfügen in eine andere
   Karte neu vergibt. Dateiname der Karte und Kartenindex der World taugen auch nicht, sie ändern sich
   beim Umbenennen bzw. beim Bearbeiten der `.world`-Datei.
-- **Gruppen-ID:** Zweite ID pro Objekt. Sie zeigt auf die Karte, in der das Objekt angelegt wurde,
-  und ändert sich nie, auch nicht beim Verschieben in eine andere Karte. Die Gruppe bestimmt, in
+- **Karten-ID:** Jede Karte bekommt ebenfalls eine eigene, dauerhafte UUID als Custom Property
+  der Karte. Sie übersteht Umbenennen und Verschieben der `.tmx`-Datei.
+- **Gruppen-ID:** Zweite ID pro Objekt, die Karten-ID der Karte, in der das Objekt angelegt wurde.
+  Sie ändert sich nie, auch nicht beim Verschieben in eine andere Karte. Die Gruppe bestimmt, in
   welchem Speicher-Chunk der Zustand liegt (siehe unten). So ist der Zustand immer direkt
   auffindbar, zusammengehörige Objekte liegen meist im selben Chunk, und beim Speichern wird wenig
   neu geschrieben.
@@ -35,12 +37,15 @@ Der Zustand eines Objekts braucht einen Schlüssel, der Umbenennen, Verschieben 
 ### Tiled-Skript
 
 - JavaScript im Extensions-Ordner von Tiled, hängt sich an `tiled.assetAboutToBeSaved`. Es setzt
-  fehlende Objekt-IDs und Gruppen automatisch, damit nichts vergessen wird.
+  fehlende Karten-IDs, Objekt-IDs und Gruppen automatisch, damit nichts vergessen wird. Neue
+  Objekte bekommen die Karten-ID der Karte als Gruppe.
 - **Doppelte IDs in einer Karte** entstehen beim Duplizieren. Das Objekt mit der niedrigsten
   Tiled-ID behält die ID, die anderen bekommen eine neue, weil Tiled-IDs pro Karte hochzählen.
 - **Doppelte IDs über Karten:** Das Skript sieht nur die aktuelle Karte und kann Verschieben nicht
   von Kopieren unterscheiden. Ein CI-Test findet solche Fälle, entschieden wird von Hand.
-- **CI-Test:** prüft alle Karten auf fehlende und doppelte IDs.
+- **Doppelte Karten-IDs** entstehen, wenn eine `.tmx`-Datei kopiert wird. Auch sie findet der
+  CI-Test.
+- **CI-Test:** prüft alle Karten auf fehlende und doppelte Karten- und Objekt-IDs.
 - Das Skript sollte vor dem ersten Speicherstand kommen, den jemand behalten will. Objekte ohne
   Objekt-ID lassen sich nicht speichern.
 - Brunnen und Truhen müssen dafür Tile-Objekte werden. Der Brunnen ist bisher ein Tile mit
