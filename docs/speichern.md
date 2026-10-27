@@ -22,10 +22,10 @@ Noch nicht umgesetzt. Baut auf der großen Welt auf ([welt.md](welt.md)).
 Der Zustand eines Objekts braucht einen Schlüssel, der Umbenennen, Verschieben und Teilen von Karten
 übersteht.
 
-- **Objekt-ID:** Jedes Tiled-Objekt bekommt eine eigene, dauerhafte, weltweit eindeutige ID
-  als Custom Property. Die Tiled-ID taugt nicht, weil Tiled sie beim Einfügen in eine andere
-  Karte neu vergibt. Dateiname der Karte und Kartenindex der World taugen auch nicht, sie ändern sich
-  beim Umbenennen bzw. beim Bearbeiten der `.world`-Datei.
+- **Objekt-ID:** Jedes Tiled-Objekt bekommt eine eigene, dauerhafte ID als Custom Property. Die
+  Tiled-ID taugt nicht, weil Tiled sie beim Einfügen in eine andere Karte neu vergibt. Dateiname der
+  Karte und Kartenindex der World taugen auch nicht, sie ändern sich beim Umbenennen bzw. beim
+  Bearbeiten der `.world`-Datei.
 - **Karten-ID:** Jede Karte bekommt ebenfalls eine eigene, dauerhafte ID als Custom Property
   der Karte. Sie übersteht Umbenennen und Verschieben der `.tmx`-Datei.
 - **Gruppen-ID:** Zweite ID pro Objekt, die Karten-ID der Karte, in der das Objekt angelegt wurde.
@@ -37,7 +37,11 @@ Der Zustand eines Objekts braucht einen Schlüssel, der Umbenennen, Verschieben 
   über die Objekt-ID (keine räumliche Gruppierung).
 - **Format:** 8 zufällige Bytes als 16 Hex-Ziffern (z. B. `3f9a0c27b1e4d856`), als String-Property.
   Im Spiel ein `u64` (`ObjectId`, `GroupId`). Keine UUID: Bindestriche, Version und Variante
-  bringen nichts. Bei 64 Bit sind Kollisionen praktisch ausgeschlossen, und der CI-Test fände sie.
+  bringen nichts.
+- **Eindeutigkeit:** Ein Objekt ist über Gruppen- und Objekt-ID zusammen bestimmt, also 16 Bytes,
+  denn sein Zustand liegt in seiner Gruppe unter seiner Objekt-ID. Die Objekt-ID muss deshalb nur
+  innerhalb ihrer Gruppe eindeutig sein, Karten-IDs dagegen weltweit. Bei 64 Bit sind Kollisionen
+  praktisch ausgeschlossen, und der CI-Test fände sie.
 
 ### Tiled-Skript
 
@@ -46,11 +50,13 @@ Der Zustand eines Objekts braucht einen Schlüssel, der Umbenennen, Verschieben 
   Objekte bekommen die Karten-ID der Karte als Gruppe.
 - **Doppelte IDs in einer Karte** entstehen beim Duplizieren. Das Objekt mit der niedrigsten
   Tiled-ID behält die ID, die anderen bekommen eine neue, weil Tiled-IDs pro Karte hochzählen.
-- **Doppelte IDs über Karten:** Das Skript sieht nur die aktuelle Karte und kann Verschieben nicht
-  von Kopieren unterscheiden. Ein CI-Test findet solche Fälle, entschieden wird von Hand.
+- **Doppelte IDs über Karten:** Ein in eine andere Karte kopiertes Objekt behält Gruppe und
+  Objekt-ID. Das Skript sieht nur die aktuelle Karte und kann Verschieben nicht von Kopieren
+  unterscheiden. Ein CI-Test findet solche Fälle, entschieden wird von Hand.
 - **Doppelte Karten-IDs** entstehen, wenn eine `.tmx`-Datei kopiert wird. Auch sie findet der
   CI-Test.
-- **CI-Test:** prüft alle Karten auf fehlende und doppelte Karten- und Objekt-IDs.
+- **CI-Test:** prüft alle Karten auf fehlende IDs, doppelte Karten-IDs und doppelte Objekt-IDs
+  innerhalb einer Gruppe.
 - Das Skript sollte vor dem ersten Speicherstand kommen, den jemand behalten will. Objekte ohne
   Objekt-ID lassen sich nicht speichern.
 - Brunnen und Truhen müssen dafür Tile-Objekte werden. Der Brunnen ist bisher ein Tile mit
