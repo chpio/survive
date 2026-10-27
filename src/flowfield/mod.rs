@@ -448,7 +448,7 @@ pub(crate) fn map_area(
     maps: &Query<(&Transform, &TilemapAnchor)>,
     assets: &Res<Assets<TiledMapAsset>>,
 ) -> Option<(Vec2, Vec2)> {
-    let asset = event.get_map_asset(assets)?;
+    let asset = event.map_asset(assets)?;
     let (transform, anchor) = maps.get(event.origin).ok()?;
     let bottom_left =
         asset.world_space_from_tiled_position(anchor, Vec2::new(0., asset.rect.height()));

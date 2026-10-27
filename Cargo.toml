@@ -105,7 +105,7 @@ features = [
 ]
 
 [dependencies.bevy_ecs_tiled]
-version = "0.14"
+version = "0.15"
 features = ["avian"]
 
 [profile.dev]

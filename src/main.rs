@@ -108,10 +108,10 @@ fn startup(
 
                 // a tile layer's colliders are merged into one, so the property applies to the
                 // whole layer. Objects can have it themselves or on their tile.
-                let object = collider_created.event().get_object(&assets);
+                let object = collider_created.event().object(&assets);
                 let blocks_sight = collider_created
                     .event()
-                    .get_layer(&assets)
+                    .layer(&assets)
                     .is_some_and(|layer| blocks_sight(&layer.properties))
                     || object.as_ref().is_some_and(|obj| {
                         blocks_sight(&obj.properties)
