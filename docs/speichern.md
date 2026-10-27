@@ -21,10 +21,10 @@ Der Zustand eines Objekts braucht einen Schlüssel, der Umbenennen, Verschieben 
 übersteht.
 
 - **Objekt-ID:** Jedes Tiled-Objekt bekommt eine eigene, dauerhafte, weltweit eindeutige ID
-  (UUID) als Custom Property. Die Tiled-ID taugt nicht, weil Tiled sie beim Einfügen in eine andere
+  als Custom Property. Die Tiled-ID taugt nicht, weil Tiled sie beim Einfügen in eine andere
   Karte neu vergibt. Dateiname der Karte und Kartenindex der World taugen auch nicht, sie ändern sich
   beim Umbenennen bzw. beim Bearbeiten der `.world`-Datei.
-- **Karten-ID:** Jede Karte bekommt ebenfalls eine eigene, dauerhafte UUID als Custom Property
+- **Karten-ID:** Jede Karte bekommt ebenfalls eine eigene, dauerhafte ID als Custom Property
   der Karte. Sie übersteht Umbenennen und Verschieben der `.tmx`-Datei.
 - **Gruppen-ID:** Zweite ID pro Objekt, die Karten-ID der Karte, in der das Objekt angelegt wurde.
   Sie ändert sich nie, auch nicht beim Verschieben in eine andere Karte. Die Gruppe bestimmt, in
@@ -32,7 +32,10 @@ Der Zustand eines Objekts braucht einen Schlüssel, der Umbenennen, Verschieben 
   auffindbar, zusammengehörige Objekte liegen meist im selben Chunk, und beim Speichern wird wenig
   neu geschrieben.
 - Verworfen: Raster für Objekte (der Zustand geht beim Verschieben verloren) und Hash-Bucketing
-  über die UUID (keine räumliche Gruppierung).
+  über die Objekt-ID (keine räumliche Gruppierung).
+- **Format:** 8 zufällige Bytes als 16 Hex-Ziffern (z. B. `3f9a0c27b1e4d856`), als String-Property.
+  Im Spiel ein `u64` (`ObjectId`, `GroupId`). Keine UUID: Bindestriche, Version und Variante
+  bringen nichts. Bei 64 Bit sind Kollisionen praktisch ausgeschlossen, und der CI-Test fände sie.
 
 ### Tiled-Skript
 
