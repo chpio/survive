@@ -169,7 +169,7 @@ entscheidet, wo Gegner sind: die Welt (Population), der Level-Designer (Hinterha
 
 ## Speichern
 
-Ausgearbeitet in den Notizen unter [Speichern/](Speichern/). Die Grundsätze:
+Ausgearbeitet in [speichern.md](../speichern.md). Die Grundsätze:
 
 - Nur an festen Speicherpunkten, also an den Brunnen. Beim Tod wird der letzte Brunnen-Stand
   geladen.

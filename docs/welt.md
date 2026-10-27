@@ -6,7 +6,7 @@
   den Spieler. Das ist Voraussetzung für das Spiel, deshalb von Anfang an.
 - Flowfield, Sicht und Gegner funktionieren über Kartengrenzen hinweg.
 - Diese Version speichert nichts: Eine entladene Karte kommt beim nächsten Laden im Tiled-Stand
-  zurück. Das Speichern baut darauf auf (Notizen in [ideen/Speichern/](ideen/Speichern/)).
+  zurück. Das Speichern baut darauf auf ([speichern.md](speichern.md)).
 
 ## Karten
 
