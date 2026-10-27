@@ -13,31 +13,85 @@
 - Ein aktiver Brunnen heilt, dient als Speicherpunkt, und in seiner Nähe spawnen keine Gegner.
 - An jedem Brunnen gibt es ein Stück Story. Am Ende stehen die Quelle des Fluchs und ein Endgegner.
 
-## Hinterhalte
-
-- Trigger-Zonen in Tiled, die mit Spawnpunkt-Objekten verknüpft sind (Objekt-Referenz als
-  Property).
-- Werden einmalig ausgelöst. Art und Anzahl der Gegner sind Properties am Spawnpunkt.
-- Optional gestaffelt: zuerst kleine Gegner, danach große.
-
 ## Spawnen
+
+Mehrere Ansätze, die sich nicht ausschließen. Je nach Gebiet und Situation gilt einer allein oder
+eine Mischung, auch gleichzeitig. Keiner muss umgesetzt werden. Sie unterscheiden sich darin, wer
+entscheidet, wo Gegner sind: die Welt (Population), der Level-Designer (Hinterhalt), die Situation
+(Director) oder ein Ereignis (Wellen).
+
+- **Gemeinsame Basis:** `SpawnEnemy` bringt neben dem Gegner auch die Position mit. Die Quellen
+  entscheiden, was wo spawnt, `spawn_enemy` baut nur die Entity.
+
+### Hinterhalte
+
+- Eine Objekt-Ebene pro Hinterhalt (z. B. „Hinterhalt Brücke“, gesammelt unter einer
+  Gruppen-Ebene „Hinterhalte“). Darin eine oder mehrere Trigger-Zonen und die Spawnpunkte. Beim
+  Auslösen gelten die Spawnpunkte derselben Ebene, `Triggered` kommt an die Ebene.
+- Werden einmalig ausgelöst. Art und Anzahl der Gegner sind Properties am Spawnpunkt.
+- Optional gestaffelt: zuerst kleine Gegner, danach große (z. B. `delay` am Spawnpunkt).
+- Mehr Spawnpunkte als Gegner. Beim Auslösen werden nur passende genommen: nicht sichtbar, mit
+  einer Laufdistanz über einem Minimum, erreichbar. So läuft derselbe Hinterhalt je nach Richtung
+  des Spielers anders ab.
+- Die Laufdistanz gibt es nur innerhalb des Flowfield-Radius. Spawnpunkte deshalb in diesem Radius
+  um die Trigger-Zone legen, sonst bleibt nur die Sichtprüfung.
+- Spawnpunkte haben keinen Kollider. Sie brauchen ein Observer auf das Erzeugen von Objekten, nicht
+  auf `ColliderCreated`.
+
+### Director (wie Left 4 Dead)
+
+- **Intensität:** Steigt, wenn der Spieler Schaden nimmt, Gegner nah sind oder in der Nähe Gegner
+  sterben. Sie fällt langsam wieder ab.
+- **Phasen:** Aufbau (spawnen, bis die Intensität einen Höchstwert erreicht), Höhepunkt kurz halten,
+  Abklingen, Ruhe ohne Spawns. Die Ruhephasen unterscheiden ihn von Vampire-Survivors-Wellen.
+- **Budget pro Aufbauphase:** In Gruppen spawnen, bevorzugt in Laufrichtung des Spielers.
+- **Modifikatoren:** Nacht (siehe Licht) und Gebiets-Level erhöhen das Budget, ein aktiver Brunnen
+  setzt es in seiner Nähe auf null. Um einen inaktiven Brunnen ist der Director aggressiv.
+
+### Feste Populationen
+
+- Jedes Gebiet hat eine feste Menge Gegner, die von Anfang an auf der Karte stehen und schlafen,
+  bis der Spieler in die Sichtweite kommt (siehe Radien um den Spieler).
+- Getötete bleiben tot, oder das Gebiet füllt sich nach einer Weile wieder auf.
+- Vorhersehbar: Erkunden lohnt sich, und der Spieler kann Gebiete meiden oder säubern.
+- **Einzelne feste Gegner:** In Tiled als Objekte platziert, für die Story, Spezialgegner mit
+  eigenem Loot oder Endgegner. Werte und Loot als Properties, wie bei Story-Waffen nur für
+  Einzelstücke. Sie bekommen `Persistent`, damit ein getöteter Gegner tot bleibt. Sonst werden
+  Gegner nicht gespeichert.
+
+### Wellen
+
+- Für Ereignisse wie das Verteidigen eines Brunnens oder die Nacht.
+- Ein Budget pro Welle, Pausen dazwischen. Die Gegner einer Welle versetzt spawnen, gern in
+  Gruppen.
+
+### Ort außer Sicht (für Director und Wellen)
 
 - **Ort:** In Zellen, die der Spieler gerade nicht sieht (`Sight`), etwa hinter Gebäuden. Sie
   müssen innerhalb des Flowfield-Radius liegen und im Gitter für den Radius des Gegners frei sein.
   Die Sichtbarkeit mit dem Radius des Gegners prüfen, damit nichts hervorschaut.
 - **Mindestabstand:** Über die Flowfield-Distanz messen, nicht über die Luftlinie, sonst stehen
   Gegner direkt hinter einer dünnen Wand.
-- **Timing:** Wellen mit Pausen und einem Budget pro Welle. Die Gegner einer Welle versetzt spawnen,
-  gern in Gruppen.
-- **Verhalten:** Angriffs-Tokens, damit nur wenige Gegner gleichzeitig angreifen und der Rest wartet
-  oder den Spieler umkreist.
-- **Weitere Ideen:**
-  - Ein AI Director, der die Anspannung steuert.
-  - Bevorzugt in Laufrichtung des Spielers spawnen.
-  - Zurückgefallene Gegner recyceln.
-  - Feste Populationen pro Gebiet.
-  - Reize wie Lärm locken Gegner an.
-  - Bei Nacht mehr Gegner (siehe Licht).
+- **Gewichtung:** Ein Band in der Laufdistanz (etwa 120–250 px). Darin werden Zellen bevorzugt,
+  deren Laufdistanz klein ist gegenüber der Luftlinie, also Zellen hinter etwas, statt Zellen im
+  offenen Feld knapp außerhalb der Sichtweite.
+
+### Zusammenspiel
+
+- Der Director zählt alle Gegner in der Nähe, egal aus welcher Quelle, sonst stapeln sich die
+  Ansätze. Ein ausgelöster Hinterhalt ist ein erzwungener Höhepunkt, danach gibt der Director Ruhe.
+- Jeder Gegner merkt sich seine Quelle. Sie bestimmt, was passiert, wenn er weit zurückfällt: Ein
+  Gegner der Population schläft ein und bleibt, wo er ist. Ein Gegner des Directors wird recycelt
+  und geht zurück ins Budget.
+- Die Mischung pro Gebiet als Property an der Gebiets-Zone (wie `level`). Beispiele: ein Wald mit
+  einer Wolfs-Population und ruhigem Director, das Gebiet um einen verfluchten Brunnen mit
+  aggressivem Director und Hinterhalten.
+
+### Verhalten
+
+- Angriffs-Tokens, damit nur wenige Gegner gleichzeitig angreifen und der Rest wartet oder den
+  Spieler umkreist.
+- Reize wie Lärm locken Gegner an.
 
 ## Fog of War
 
@@ -160,9 +214,8 @@ Ausgearbeitet in den Notizen unter [Speichern/](Speichern/). Die Grundsätze:
 - **Tod:** Bisher heilt `combat` den Spieler und entfernt alle Gegner. Das Laden des letzten
   Brunnen-Stands ersetzt das. Vorher den TODO-Punkt umsetzen, dass `combat` ein `Died`-Event
   auslöst.
-- **Wellen und Story:** Die Grundrichtung sieht keine Vampire-Survivors-Wellen vor. Wellen passen
-  aber zum Verteidigen eines Brunnens und zur Nacht. Festlegen, ob es sie auch sonst gibt oder ob
-  dort nur Hinterhalte und feste Populationen spawnen.
+- **Mischung der Spawn-Ansätze:** Welche Ansätze wo gelten, z. B. ob der Director überall mit
+  niedriger Grundintensität läuft oder nur in Gebieten mit inaktivem Brunnen.
 - **Flowfield beim Spawnen:** Die Distanzen gibt es nur für Gitter, die gerade ein Gegner (oder das
   Debug-Overlay) nutzt, und nur innerhalb des Flowfield-Radius. Der Spawner muss das Gitter für die
   Größe des neuen Gegners anfordern und wartet bis zur nächsten Suche.
