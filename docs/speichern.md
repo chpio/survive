@@ -260,19 +260,29 @@ saves/
 
 ### Commit
 
-1. Geänderte Gruppen und Zellen als neue Dateien in `groups/` bzw. `cells/` schreiben, `fsync`.
-   Existiert eine Datei mit dem Hash schon, entfällt das Schreiben.
-2. Neuen Index als temporäre Datei schreiben, `fsync`.
-3. Auf den endgültigen Namen umbenennen, Verzeichnis `fsync`.
+1. Jede geänderte Gruppe und Zelle als temporäre Datei in `groups/` bzw. `cells/` schreiben
+   (`<hash>.tmp`), `fsync`, auf `<hash>` umbenennen. Existiert eine Datei mit dem Hash schon, entfällt
+   das Schreiben.
+2. `groups/` und `cells/` `fsync`. Sonst könnte nach einem Absturz die Umbenennung des Index
+   dauerhaft sein, die der Chunks aber nicht: Über Verzeichnisse hinweg garantiert das Dateisystem
+   keine Reihenfolge.
+3. Neuen Index als temporäre Datei schreiben (`save_0043.idx.tmp`), `fsync`.
+4. Auf den endgültigen Namen umbenennen, Verzeichnis `fsync`.
 
-Absturz vor Schritt 3: Es gibt keinen neuen Index, der vorherige gilt. Übrig bleiben nur verwaiste
-Chunk-Dateien.
+Chunks nie direkt unter ihrem Hash schreiben: Nach einem Absturz mitten im Schreiben läge dort eine
+leere oder abgeschnittene Datei. Der nächste Commit mit demselben Inhalt würde sie für vorhanden
+halten und der neue Index auf sie verweisen. Durch das Umbenennen gibt es unter einem Hash nur
+vollständige Dateien.
+
+Absturz vor Schritt 4: Es gibt keinen neuen Index, der vorherige gilt. Übrig bleiben nur verwaiste
+Chunk-Dateien und `.tmp`-Dateien. Die `.tmp`-Dateien werden beim Start gelöscht, nachdem der Lock
+geholt ist.
 
 ### Verwaiste Dateien und GC
 
 - Entstehen nur durch einen Absturz während eines Commits und durch gelöschte `suspend`-Indizes.
-- Selten, klein und harmlos. Durch Content-Hashing werden sie wiederverwendet, wenn derselbe Inhalt
-  erneut gespeichert wird.
+- Selten, klein und harmlos, da sie durch das Umbenennen immer vollständig sind. Durch
+  Content-Hashing werden sie wiederverwendet, wenn derselbe Inhalt erneut gespeichert wird.
 - Vorerst kein GC. Nachrüsten, sobald Stände gelöscht werden können: Mark-and-Sweep über alle
   Indizes, `groups/` und `cells/` getrennt aufräumen. Nie parallel zu einem Commit (z. B. am Ende
   des Speicher-Tasks).
@@ -290,9 +300,10 @@ Chunk-Dateien.
 ### Beim Start
 
 1. Lock holen.
-2. `suspend`-Index lesen, falls vorhanden, sonst den neuesten Index.
-3. Globale Daten übernehmen, Spieler spawnen.
-4. Chunks noch nicht lesen. Im Speicher steht nur der Index.
+2. Übrig gebliebene `.tmp`-Dateien eines abgebrochenen Commits löschen.
+3. `suspend`-Index lesen, falls vorhanden, sonst den neuesten Index.
+4. Globale Daten übernehmen, Spieler spawnen.
+5. Chunks noch nicht lesen. Im Speicher steht nur der Index.
 
 ### Beim Laden einer Karte
 
