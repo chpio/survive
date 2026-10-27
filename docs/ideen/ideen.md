@@ -177,12 +177,13 @@ Ausgearbeitet in den Notizen unter [Speichern/](Speichern/). Die Grundsätze:
 
 Jeder Schritt baut auf dem vorherigen auf:
 
-1. Hinterhalte und Aktivierungsradien, Spawnen außer Sicht
-2. Flowfield-Optimierung (zusammen mit dem Performance-Punkt in `TODO.md`)
-3. Items und Inventar
-4. Truhen und Gebiets-Level
-5. Brunnen
-6. Speichern
-7. Fog of War
+1. Große Welt aus mehreren Karten ([welt.md](../welt.md))
+2. Hinterhalte und Aktivierungsradien, Spawnen außer Sicht
+3. Flowfield-Optimierung (zusammen mit dem Performance-Punkt in `TODO.md`)
+4. Items und Inventar
+5. Truhen und Gebiets-Level
+6. Brunnen
+7. Speichern
+8. Fog of War
 
 Grafik (Sprites, neues Tileset) und Licht laufen unabhängig nebenher.
