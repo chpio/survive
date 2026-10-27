@@ -95,10 +95,9 @@ entscheidet, wo Gegner sind: die Welt (Population), der Level-Designer (Hinterha
 
 ## Fog of War
 
-- Unerkundete Bereiche sind schwarz, erkundete bleiben sichtbar, aber ohne Gegner.
-- Dazu eine echte Sichtlinie: Wände und Gebäude werfen Schatten. Die Schattenformen lassen sich aus
-  den Tiled-Kollidern berechnen.
-- Ein Sichtradius um den Spieler.
+- Sichtradius und Sichtlinie sind umgesetzt ([sicht.md](../sicht.md)).
+- Erkundete Bereiche (unerkundete schwarz, erkundete sichtbar, aber ohne Gegner) erst, wenn es eine
+  Weltkarte oder Minimap gibt. Dann müssen sie auch gespeichert werden.
 
 ## Licht
 
@@ -174,8 +173,7 @@ Ausgearbeitet in [speichern.md](../speichern.md). Die Grundsätze:
 - Nur an festen Speicherpunkten, also an den Brunnen. Beim Tod wird der letzte Brunnen-Stand
   geladen.
 - Gespeichert wird nur, was sich gegenüber Tiled geändert hat: offene Truhen, ausgelöste
-  Hinterhalte, aktive Brunnen, Items am Boden, Spieler mit Inventar, erkundeter Fog of War
-  (Bitmaske).
+  Hinterhalte, aktive Brunnen, Items am Boden, Spieler mit Inventar.
 - Jedes Tiled-Objekt hat eine Objekt-ID und eine Gruppen-ID als Custom Properties. Ein Tiled-Skript
   vergibt sie beim Speichern der Karte, ein CI-Test prüft auf fehlende und doppelte IDs. Weder
   Dateiname noch Tiled-ID taugen als Schlüssel.
@@ -237,6 +235,5 @@ Jeder Schritt baut auf dem vorherigen auf:
 5. Truhen und Gebiets-Level
 6. Brunnen
 7. Speichern
-8. Fog of War
 
 Grafik (Sprites, neues Tileset) und Licht laufen unabhängig nebenher.

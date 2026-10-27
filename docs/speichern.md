@@ -8,6 +8,9 @@ Noch nicht umgesetzt. Baut auf der großen Welt auf ([welt.md](welt.md)).
   wird der letzte Brunnen-Stand geladen.
 - Gespeichert wird nur, was vom Tiled-Stand abweicht: offene Truhen, ausgelöste Hinterhalte,
   aktive Brunnen, Items am Boden, Spieler mit Inventar.
+- Abgelegte Items bleiben für immer liegen, auch über viele Brunnen hinweg. Deshalb wächst der
+  Speicherstand mit der Welt, und die Item-Zellen werden wie die Gruppen nur bei Bedarf gelesen.
+- Frühere Brunnen-Stände bleiben ladbar (siehe „Historie“).
 - Gegner werden nicht gespeichert. Sie verschwinden mit ihrer Karte (siehe [welt.md](welt.md)).
 - Die Welt ist groß und wird nur stückweise geladen. Gespeichert und gelesen werden deshalb nur die
   Teile, die sich geändert haben bzw. gebraucht werden.
@@ -83,7 +86,6 @@ struct DroppedItem {
     kind: ItemId,
     count: u32,
     pos: Vec2,       // Weltkoordinaten
-    dropped_at: f64, // Spielzeit, falls Items verfallen sollen
 }
 ```
 
@@ -311,6 +313,22 @@ vorladen, wenn der Spieler sich nähert.
 - Bevy: `WindowPlugin { close_when_requested: false, .. }`, `WindowCloseRequested` abfangen,
   speichern, dann `AppExit`. Gleiches für „Beenden“ im Menü.
 
+## Historie
+
+Gehört zur ersten Version. Weil Indizes und Chunks unveränderlich sind und nie überschrieben werden,
+ist jeder frühere Brunnen-Stand noch vollständig auf der Platte.
+
+- Jeder Index enthält dazu den Brunnen (seine Objekt-ID), Datum und Spielzeit. Die Liste im Menü
+  liest nur die Indizes, keine Chunks.
+- Einen älteren Stand laden:
+  1. Index lesen, aktuellen und gespeicherten Stand leeren, Index und globale Daten übernehmen.
+  2. Gespawnte Items despawnen und die World neu spawnen (`RespawnTiledWorld`). Die Karten laden
+     ihre Gruppen und Zellen dann wie beim Start nach.
+- Ungespeicherte Änderungen gehen dabei verloren wie beim Tod, das Menü fragt deshalb nach.
+- Neuere Stände bleiben erhalten. Das nächste Speichern hängt einen neuen Index an, die Liste bleibt
+  nach Zeit geordnet. Optional vermerkt jeder Index seinen Vorgänger, dann lassen sich Zweige
+  erkennen.
+
 ## Tests
 
 - Round-Trip eines Spielstands durch RON und MessagePack mit zstd, Gleichheit prüfen.
@@ -326,12 +344,14 @@ vorladen, wenn der Spieler sich nähert.
 - Gegner weckt schlafende Items: Die neuen Positionen landen nach dem Einschlafen im State.
 - Unveränderte Gruppe entladen und wieder laden: Zustand stimmt, Datei wird neu gelesen.
 - Geänderte Gruppe entladen: Der State bleibt im Speicher und landet im nächsten Commit.
+- Älteren Stand laden: Gruppen, Zellen und globale Daten entsprechen ihm, neuere Indizes bleiben
+  unverändert, und das nächste Speichern legt einen neuen Index an.
 
 ## Offen
 
-- Zellgröße des Item-Rasters.
-- Verschwinden abgelegte Items nach einiger Zeit? Falls ja: Zeitstempel pro Item.
-- Erkundeter Fog of War (Bitmaske): als eigener Chunk-Typ oder in den globalen Daten?
-- Historie im Spiel anbieten (zu früherem Brunnen zurück)?
-- Stände löschen können? Dann ist GC nötig.
-- Export eines einzelnen Stands (Index und referenzierte Chunks in eine Datei).
+- **Zellgröße des Item-Rasters:** Startwert 256 px (16 Tiles) als Konstante, später
+  ausprobieren. Kleinere Zellen schreiben pro Änderung weniger, ergeben aber mehr Dateien und mehr
+  Lesezugriffe beim Laden einer Karte.
+- **Stände löschen:** später. Dann ist GC nötig.
+- **Export** eines einzelnen Stands (Index und referenzierte Chunks in eine Datei): vielleicht
+  später.
