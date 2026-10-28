@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A top-down 2D survival game built with Bevy 0.20, Avian2D 0.8 physics, and `bevy_ecs_tiled` 0.14 (with the `avian` feature) for Tiled maps. These three must stay on mutually compatible versions; check with `cargo outdated --root-deps-only`.
+A top-down 2D survival game built with Bevy 0.20, Avian2D 0.8 physics, and `bevy_ecs_tiled` 0.15 (with the `avian` feature) for Tiled maps. These three must stay on mutually compatible versions; check with `cargo outdated --root-deps-only`.
 
 ## Commands
 
