@@ -1,0 +1,20 @@
+{
+    "maps": [
+        {
+            "fileName": "map.tmx",
+            "height": 672,
+            "width": 336,
+            "x": 0,
+            "y": 0
+        },
+        {
+            "fileName": "map_east.tmx",
+            "height": 256,
+            "width": 384,
+            "x": 336,
+            "y": 192
+        }
+    ],
+    "onlyShowAdjacentMaps": false,
+    "type": "world"
+}

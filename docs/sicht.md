@@ -27,9 +27,10 @@ lohnen weder Speicher noch Spielstand dafür. Kommt eine Karte dazu, lässt er s
 
 ## Sichtmaske
 
-- Ein Zellraster über die Karte (4 px wie beim Flowfield). Eine Zelle ist undurchsichtig, wenn ihr
-  Mittelpunkt in der Form eines Kolliders mit `BlocksSight` liegt. Neu berechnet wird das nur, wenn
-  sich diese Kollider ändern.
+- Ein Zellraster pro Karte (4 px wie beim Flowfield, siehe [welt.md](welt.md)). Eine Zelle ist
+  undurchsichtig, wenn ihr Mittelpunkt in der Form eines Kolliders mit `BlocksSight` liegt. Neu
+  berechnet wird das nur, wenn sich diese Kollider ändern. Das Fenster der Maske setzt seine
+  undurchsichtigen Zellen aus den geladenen Karten zusammen.
 - Die Maske deckt ein quadratisches Fenster um die Zelle des Spielers ab, so groß wie der
   Sichtradius (`SIGHT_RADIUS`, 200 px), plus ein Rand mit 0. Neu berechnet wird sie nur, wenn der
   Spieler die Zelle wechselt.

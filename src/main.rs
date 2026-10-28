@@ -1,7 +1,7 @@
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::*;
-use survival::{combat, flowfield, items, movement, objects, perf, settings, sight, ui};
+use survival::{combat, flowfield, items, movement, objects, perf, settings, sight, ui, world};
 
 fn main() {
     App::new()
@@ -47,7 +47,7 @@ fn main() {
             items::definitions::Plugin,
             items::input::Plugin,
         ))
-        .add_plugins((sight::Plugin, sight::render::Plugin))
+        .add_plugins((sight::Plugin, sight::render::Plugin, world::Plugin))
         .add_plugins((settings::Plugin, ui::Plugin, perf::Plugin))
         .run();
 }
@@ -76,18 +76,23 @@ fn startup(
         objects::player::combat(),
         Mesh2d(meshes.add(objects::player::SHAPE)),
         MeshMaterial2d(materials.add(Color::srgb(0.2, 0.4, 0.9))),
-        // above the map layer at z = 0
-        Transform::from_xyz(50., -50., 10.),
+        // above the map layers
+        Transform::from_translation(objects::player::START.extend(10.)),
     ));
 
+    // bevy_ecs_tiled gives the settings to each map it loads, and the maps' events bubble up to
+    // the world
     commands
         .spawn((
-            TiledMap(asset_server.load("map.tmx")),
+            TiledWorld(asset_server.load("world.world")),
+            // grows with the view in `world::update_chunking`
+            TiledWorldChunking::new(world::MIN_LOADED_DISTANCE, world::MIN_LOADED_DISTANCE),
             TilemapRenderSettings {
                 render_chunk_size: UVec2::new(3, 1),
                 y_sort: true,
             },
-            TilemapAnchor::Center,
+            // the maps' positions are those in the .world file, with y pointing up
+            TilemapAnchor::TopLeft,
             // layers 2 apart: y-sorting moves the chunks by up to 1.5, and the upper layers stay
             // below the items (z = 5) and the units (z = 10)
             TiledMapLayerZOffset(2.),

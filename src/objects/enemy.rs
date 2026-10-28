@@ -5,9 +5,10 @@ use crate::{
     objects::player,
     perf,
     sight::render::{SightMask, SightMaterial},
+    world::MapArea,
 };
 use avian2d::prelude::*;
-use bevy::prelude::*;
+use bevy::{prelude::*, time::common_conditions::on_timer};
 use std::{
     f32::consts::{GOLDEN_RATIO, TAU},
     time::Duration,
@@ -153,8 +154,8 @@ fn spawn_enemy(
             enemy.separation(),
             enemy.physics(),
             enemy.combat(),
-            // above the map layer at z = 0
-            Transform::from_xyz(50., -50., 10.),
+            // above the map layers
+            Transform::from_translation(player::START.extend(10.)),
             // shown through its children
             Visibility::default(),
             children![(
@@ -285,6 +286,28 @@ pub fn face_heading(
     }
 }
 
+/// How far in px an enemy may stand outside the loaded maps before it is despawned, so enemies
+/// walking along the edge of a map don't vanish.
+pub const UNLOAD_MARGIN: f32 = 16.;
+
+/// Despawns enemies that stand on no loaded map, since the obstacles around them are gone with the
+/// maps. Enemies aren't saved, so they are gone for good.
+pub fn despawn_outside_maps(
+    enemies: Query<(Entity, &Transform), With<Enemy>>,
+    maps: Query<&MapArea>,
+    mut commands: Commands,
+) {
+    for (entity, transform) in &enemies {
+        let position = transform.translation.xy();
+        if !maps
+            .iter()
+            .any(|map| map.0.inflate(UNLOAD_MARGIN).contains(position))
+        {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
 pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
@@ -308,6 +331,7 @@ impl bevy::app::Plugin for Plugin {
                         stop.run_if(not(active)),
                     )
                         .in_set(perf::Step::Enemies),
+                    despawn_outside_maps.run_if(on_timer(Duration::from_secs(1))),
                 ),
             );
     }

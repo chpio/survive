@@ -1,7 +1,7 @@
-//! Debug overlay for one grid of the flow field. Blocked cells are red, unreachable ones dark, and
-//! reachable ones colored by their walking distance to the player (green near, purple far). An
-//! arrow in each cell shows the direction the field leads in. Units with a free line of sight
-//! walk straight at the player instead, which the arrows don't show.
+//! Debug overlay for the window of one grid of the flow field. Blocked cells are red, unreachable
+//! ones dark, and reachable ones colored by their walking distance to the player (green near,
+//! purple far). An arrow in each cell shows the direction the field leads in. Units with a free
+//! line of sight walk straight at the player instead, which the arrows don't show.
 
 use super::{CELL_SIZE, FlowField};
 use crate::perf;
@@ -30,7 +30,7 @@ impl FlowFieldDebug {
     }
 }
 
-/// Sprite with one pixel per cell, stretched over the grid.
+/// Sprite with one pixel per cell, stretched over the grid's window.
 #[derive(Component)]
 struct Overlay;
 
@@ -71,8 +71,9 @@ fn draw_overlay(
     };
     visibility.set_if_neq(Visibility::Inherited);
 
-    let size = grid.size().as_uvec2();
-    transform.translation = grid.origin().extend(OVERLAY_Z);
+    let window = grid.window();
+    let size = window.size.as_uvec2();
+    transform.translation = window.world_rect().min.extend(OVERLAY_Z);
     sprite.custom_size = Some(size.as_vec2() * CELL_SIZE);
     let Some(mut image) = images.get_mut(&sprite.image) else {
         return;
@@ -92,7 +93,8 @@ fn draw_overlay(
             _ => Color::srgba(0., 0., 0., 0.4),
         };
         // image rows go from top to bottom, grid rows from bottom to top
-        let pixel = UVec2::new(cell.position.x as u32, size.y - 1 - cell.position.y as u32);
+        let local = (cell.position - window.min).as_uvec2();
+        let pixel = UVec2::new(local.x, size.y - 1 - local.y);
         let _ = image.set_color_at(pixel.x, pixel.y, color);
 
         if let Some(direction) = cell.direction {

@@ -1,20 +1,25 @@
 //! What the player can see (see `docs/sicht.md`).
 //!
-//! Colliders with [`BlocksSight`] are rasterized into a grid of opaque cells over the map. Around
-//! the player's cell, a mask stores how visible each cell is: invisible behind an opaque cell or
+//! Colliders with [`BlocksSight`] are rasterized per map into its [`OpaqueCells`]. Around the
+//! player's cell, a mask stores how visible each cell is: invisible behind an opaque cell or
 //! outside [`SIGHT_RADIUS`], fully visible otherwise, fading out towards the radius. The mask
 //! covers a square window of a fixed size that moves along with the player, and is only computed
-//! again when the player enters another cell. [`render`] draws it.
+//! again when the player enters another cell or the loaded maps change. The opaque cells of the
+//! window are put together from those of the loaded maps then; outside of them, nothing blocks the
+//! sight. [`render`] draws it.
 
 pub mod render;
 
-use crate::{flowfield, objects::player::Player, perf};
+use crate::{
+    cells::{self, CellRect, Raster},
+    objects::player::Player,
+    perf,
+    world::{self, MapRaster},
+};
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use bevy_ecs_tiled::prelude::*;
 
-/// Edge length of a cell in px, the same as the flow field's.
-pub const CELL_SIZE: f32 = flowfield::CELL_SIZE;
+pub use crate::cells::CELL_SIZE;
 
 /// Distance in px from the player up to which it sees.
 pub const SIGHT_RADIUS: f32 = 200.;
@@ -31,6 +36,10 @@ const WINDOW_RADIUS: i32 = SIGHT_CELLS + 1;
 
 /// Edge length of the window in cells.
 pub const WINDOW_SIZE: i32 = 2 * WINDOW_RADIUS + 1;
+
+/// Distance in px from the player up to which the maps must be loaded, so the window has all
+/// opaque cells.
+pub const REACH: f32 = (WINDOW_RADIUS + 1) as f32 * CELL_SIZE;
 
 /// Marks a collider whose shape blocks the sight, see `docs/sicht.md`.
 #[derive(Component, Default, Clone, Copy, Debug)]
@@ -62,104 +71,86 @@ fn fade() -> Vec<u8> {
         .collect()
 }
 
-/// Opaque cells over the map and the mask of visible cells around the player.
+/// Cells of one map that block the sight, a component of the map's entity.
+#[derive(Component, Clone, Debug)]
+pub struct OpaqueCells(Raster<bool>);
+
+impl OpaqueCells {
+    /// No opaque cells yet on the map covering `area`.
+    pub fn new(area: Rect) -> Self {
+        Self(Raster::new(CellRect::covering(area), false))
+    }
+
+    /// Makes all cells whose center lies in the shape of `collider` at `position` and `rotation`
+    /// opaque.
+    pub fn block_collider(&mut self, collider: &Collider, position: Vec2, rotation: Rotation) {
+        let area = collider.aabb(position, rotation, 0.);
+        let cells =
+            CellRect::centers_in(Rect::from_corners(area.min, area.max)).intersect(self.0.rect());
+        for cell in cells.cells() {
+            if collider.distance_to_point(position, rotation, cells::center(cell), true) <= 0. {
+                self.0[cell] = true;
+            }
+        }
+    }
+}
+
+impl MapRaster for OpaqueCells {
+    fn new(area: Rect) -> Self {
+        Self::new(area)
+    }
+
+    fn add_collider(&mut self, collider: &Collider, position: Vec2, rotation: Rotation) {
+        self.block_collider(collider, position, rotation);
+    }
+}
+
+/// The mask of visible cells around the player.
 #[derive(Resource)]
 pub struct Sight {
-    /// World position of the bottom-left corner of the grid
-    origin: Vec2,
-    size: IVec2,
-    opaque: Vec<bool>,
     /// See [`fade`]
     fade: Vec<u8>,
-    /// Visibility per cell of the window (0–255), row by row from the bottom
-    mask: Vec<u8>,
-    /// Cell of the grid at the bottom-left corner of the window, centered on the player's cell
-    window_origin: IVec2,
+    /// Opaque cells of the window, put together from the loaded maps
+    opaque: Raster<bool>,
+    /// Visibility per cell of the window (0–255)
+    mask: Raster<u8>,
     /// Player's cell the mask was computed for, `None` while it is outdated
     center: Option<IVec2>,
 }
 
 impl Default for Sight {
-    /// No map, so nothing blocks the sight.
     fn default() -> Self {
-        Self::new(Vec2::ZERO, Vec2::ZERO)
+        let window = CellRect::around(IVec2::ZERO, WINDOW_RADIUS);
+        Self {
+            fade: fade(),
+            opaque: Raster::new(window, false),
+            mask: Raster::new(window, 0),
+            center: None,
+        }
     }
 }
 
 impl Sight {
-    /// Grid covering the area from `origin` (bottom-left corner) to `origin + world_size`, without
-    /// opaque cells. Outside of it, nothing blocks the sight.
-    pub fn new(origin: Vec2, world_size: Vec2) -> Self {
-        let size = (world_size / CELL_SIZE).ceil().as_ivec2();
-        Self {
-            origin,
-            size,
-            opaque: vec![false; (size.x * size.y) as usize],
-            fade: fade(),
-            mask: vec![0; (WINDOW_SIZE * WINDOW_SIZE) as usize],
-            window_origin: IVec2::ZERO,
-            center: None,
-        }
-    }
-
-    fn cell(&self, position: Vec2) -> IVec2 {
-        ((position - self.origin) / CELL_SIZE).floor().as_ivec2()
-    }
-
-    fn cell_center(&self, cell: IVec2) -> Vec2 {
-        self.origin + (cell.as_vec2() + 0.5) * CELL_SIZE
-    }
-
-    fn index(&self, cell: IVec2) -> Option<usize> {
-        (cell.cmpge(IVec2::ZERO).all() && cell.cmplt(self.size).all())
-            .then(|| (cell.y * self.size.x + cell.x) as usize)
-    }
-
     fn is_opaque(&self, cell: IVec2) -> bool {
-        self.index(cell).is_some_and(|i| self.opaque[i])
+        self.opaque.get(cell).is_some_and(|&opaque| opaque)
     }
 
-    fn window_index(&self, cell: IVec2) -> Option<usize> {
-        let local = cell - self.window_origin;
-        (local.cmpge(IVec2::ZERO).all() && local.cmplt(IVec2::splat(WINDOW_SIZE)).all())
-            .then(|| (local.y * WINDOW_SIZE + local.x) as usize)
-    }
-
-    /// Makes all cells whose center lies in the shape of `collider` at `position` and `rotation`
-    /// opaque. The mask is computed again on the next [`Self::set_center`].
-    pub fn block_collider(&mut self, collider: &Collider, position: Vec2, rotation: Rotation) {
-        let area = collider.aabb(position, rotation, 0.);
-        let min = self.cell(area.min).max(IVec2::ZERO);
-        let max = self.cell(area.max).min(self.size - 1);
-        for y in min.y..=max.y {
-            for x in min.x..=max.x {
-                let cell = IVec2::new(x, y);
-                let center = self.cell_center(cell);
-                if collider.distance_to_point(position, rotation, center, true) <= 0. {
-                    let i = self.index(cell).unwrap();
-                    self.opaque[i] = true;
-                }
-            }
-        }
-        self.center = None;
-    }
-
-    /// Removes all opaque cells.
-    pub fn clear(&mut self) {
-        self.opaque.fill(false);
-        self.center = None;
-    }
-
-    /// Computes the mask around `position`, if it isn't in the cell it was computed for. Returns
-    /// whether it was computed.
-    pub fn set_center(&mut self, position: Vec2) -> bool {
-        let center = self.cell(position);
+    /// Computes the mask around `position` with the opaque cells of the loaded `maps`, if it
+    /// isn't in the cell it was computed for. Returns whether it was computed.
+    pub fn set_center(&mut self, position: Vec2, maps: &[&OpaqueCells]) -> bool {
+        let center = cells::cell(position);
         if self.center == Some(center) {
             return false;
         }
         self.center = Some(center);
-        self.window_origin = center - IVec2::splat(WINDOW_RADIUS);
-        self.mask.fill(0);
+        let min = center - WINDOW_RADIUS;
+        self.opaque.reset(min, false);
+        for map in maps {
+            for cell in self.opaque.rect().intersect(map.0.rect()).cells() {
+                self.opaque[cell] |= map.0[cell];
+            }
+        }
+        self.mask.reset(min, 0);
         self.light(center);
         for octant in OCTANTS {
             self.cast(center, 1, 1., 0., octant);
@@ -167,9 +158,15 @@ impl Sight {
         true
     }
 
+    /// Forgets the center, so the mask is computed again on the next [`Self::set_center`], e.g.
+    /// after maps were loaded or changed.
+    pub fn forget_center(&mut self) {
+        self.center = None;
+    }
+
     /// Marks `cell` as in sight.
     fn light(&mut self, cell: IVec2) {
-        if let Some(i) = self.window_index(cell) {
+        if let Some(i) = self.mask.rect().index(cell) {
             self.mask[i] = self.fade[i];
         }
     }
@@ -224,55 +221,37 @@ impl Sight {
         if self.center.is_none() {
             return 0.;
         }
-        self.window_index(self.cell(position))
-            .map_or(0., |i| self.mask[i] as f32 / 255.)
+        self.mask
+            .get(cells::cell(position))
+            .map_or(0., |&mask| mask as f32 / 255.)
     }
 
     /// Visibility per cell of the window (0–255), row by row from the bottom.
     pub fn mask(&self) -> &[u8] {
-        &self.mask
+        self.mask.values()
     }
 
     /// Area of the world the mask covers.
     pub fn window_rect(&self) -> Rect {
-        let min = self.origin + self.window_origin.as_vec2() * CELL_SIZE;
-        Rect::from_corners(min, min + Vec2::splat(WINDOW_SIZE as f32 * CELL_SIZE))
+        self.mask.rect().world_rect()
     }
 }
 
-/// Covers the map with a new grid when it is (re)loaded.
-fn create_grid(
-    mut map_created: MessageReader<TiledEvent<MapCreated>>,
-    maps: Query<(&Transform, &TilemapAnchor)>,
-    assets: Res<Assets<TiledMapAsset>>,
-    mut sight: ResMut<Sight>,
-) {
-    for event in map_created.read() {
-        if let Some((origin, size)) = flowfield::map_area(event, &maps, &assets) {
-            *sight = Sight::new(origin, size);
-        }
-    }
-}
-
-/// Rasterizes the colliders blocking the sight whenever they change, and computes the mask when
-/// the player enters another cell. Only marks the resource as changed then, so the texture is only
-/// written when the mask changed.
+/// Computes the mask when the player enters another cell or the loaded maps change. Only marks
+/// the resource as changed then, so the texture is only written when the mask changed.
 fn update_sight(
     mut sight: ResMut<Sight>,
-    blockers: Query<(&Collider, &Position, &Rotation, Ref<ColliderAabb>), With<BlocksSight>>,
+    maps: Query<Ref<OpaqueCells>>,
+    mut unloaded: RemovedComponents<OpaqueCells>,
     player: Single<&Transform, With<Player>>,
 ) {
-    let grid_created = sight.is_changed();
-    let mut changed = false;
     let inner = sight.bypass_change_detection();
-    if grid_created || blockers.iter().any(|(.., aabb)| aabb.is_changed()) {
-        inner.clear();
-        for (collider, position, rotation, _) in &blockers {
-            inner.block_collider(collider, position.0, *rotation);
-        }
+    let unloaded = unloaded.read().count() > 0;
+    if unloaded || maps.iter().any(|map| map.is_changed()) {
+        inner.forget_center();
     }
-    changed |= inner.set_center(player.translation.xy());
-    if changed {
+    let maps: Vec<_> = maps.iter().map(Ref::into_inner).collect();
+    if inner.set_center(player.translation.xy(), &maps) {
         sight.set_changed();
     }
 }
@@ -284,7 +263,10 @@ impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Sight>().add_systems(
             PreUpdate,
-            (create_grid, update_sight)
+            (
+                world::rasterize::<OpaqueCells, With<BlocksSight>>,
+                update_sight,
+            )
                 .chain()
                 .in_set(perf::Step::Sight),
         );

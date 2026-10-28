@@ -2,11 +2,12 @@ use crate::common::{self, SMALL};
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use survival::{
-    flowfield::{CLEARANCES, FlowField},
+    flowfield::{self, FlowField},
     objects::{
         enemy::{self, Enemy},
         player,
     },
+    world::MapArea,
 };
 
 #[test]
@@ -153,27 +154,27 @@ fn knockback_does_not_turn_enemy() {
     assert!(facing.dot(Vec2::X) > 0.999, "facing {facing}");
 }
 
+fn spawn_map(app: &mut App, area: Rect) -> Entity {
+    app.world_mut()
+        .spawn((MapArea(area), Transform::default()))
+        .id()
+}
+
 /// Distance from the enemy's collider to the player's after it walked around a pond-like
 /// obstacle for 6 s, starting at `start` on the other side.
 fn gap_after_walking_around_pond(enemy: Enemy, start: Vec2, player_at: Vec2) -> f32 {
-    let pond = (Collider::rectangle(96., 48.), Vec2::ZERO);
-    let mut app = common::app();
-    let mut flow_field = FlowField::new(
-        Vec2::splat(-200.),
-        Vec2::splat(400.),
-        CLEARANCES.iter().copied(),
+    let mut app = common::app_with(flowfield::Plugin);
+    app.add_systems(Update, enemy::move_towards_player);
+    let map = spawn_map(&mut app, Rect::new(-200., -200., 200., 200.));
+    common::spawn(
+        &mut app,
+        (
+            RigidBody::Static,
+            Collider::rectangle(96., 48.),
+            ChildOf(map),
+        ),
+        Vec2::ZERO,
     );
-    flow_field.block_collider(&pond.0, pond.1, Rotation::IDENTITY);
-    app.insert_resource(flow_field)
-        .add_systems(
-            PreUpdate,
-            |mut flow_field: ResMut<FlowField>,
-             player: Single<&Transform, With<player::Player>>| {
-                flow_field.set_target(player.translation.xy(), CLEARANCES.iter().copied());
-            },
-        )
-        .add_systems(Update, enemy::move_towards_player);
-    common::spawn(&mut app, (RigidBody::Static, pond.0), pond.1);
     let player = common::spawn(&mut app, (player::Player, player::physics()), player_at);
     let entity = common::spawn(&mut app, (enemy, enemy.physics()), start);
 
@@ -230,4 +231,40 @@ fn enemy_slides_along_obstacle_instead_of_sticking() {
 
     let position = common::position(&app, enemy);
     assert!(position.x > 48. && position.y > -24., "enemy at {position}");
+}
+
+#[test]
+fn enemy_outside_the_loaded_maps_is_despawned() {
+    let mut app = common::app();
+    app.add_systems(Update, enemy::despawn_outside_maps);
+    spawn_map(&mut app, Rect::new(0., 0., 160., 160.));
+    let inside = common::spawn(&mut app, (SMALL, SMALL.physics()), Vec2::new(80., 80.));
+    let near_edge = common::spawn(
+        &mut app,
+        (SMALL, SMALL.physics()),
+        Vec2::new(160. + enemy::UNLOAD_MARGIN / 2., 80.),
+    );
+    let outside = common::spawn(&mut app, (SMALL, SMALL.physics()), Vec2::new(200., 80.));
+
+    app.update();
+
+    assert!(app.world().get_entity(inside).is_ok());
+    assert!(app.world().get_entity(near_edge).is_ok());
+    assert!(app.world().get_entity(outside).is_err());
+}
+
+#[test]
+fn enemy_walking_onto_a_neighbor_map_stays() {
+    let mut app = common::app();
+    app.add_systems(Update, enemy::despawn_outside_maps);
+    spawn_map(&mut app, Rect::new(0., 0., 160., 160.));
+    spawn_map(&mut app, Rect::new(160., 0., 320., 160.));
+    let enemy = common::spawn(&mut app, (SMALL, SMALL.physics()), Vec2::new(100., 80.));
+    common::set_desired_velocity(&mut app, enemy, Vec2::new(100., 0.));
+
+    common::run(&mut app, 1.);
+
+    assert!(app.world().get_entity(enemy).is_ok());
+    let x = common::position(&app, enemy).x;
+    assert!(x > 180., "enemy at x = {x}");
 }

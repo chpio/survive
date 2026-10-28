@@ -9,6 +9,9 @@ use std::time::Duration;
 #[derive(Default, Clone, Component)]
 pub struct Player;
 
+/// Where the player starts, on the first map.
+pub const START: Vec2 = Vec2::new(218., -386.);
+
 /// Shape of the collider and the placeholder mesh.
 pub const SHAPE: Circle = Circle::new(5.);
 

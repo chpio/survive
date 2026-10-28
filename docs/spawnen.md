@@ -17,7 +17,7 @@ immer an derselben Stelle.
 ## Gemeinsame Basis
 
 - Bisher enthält `SpawnEnemy` nur den Gegner (seinen Radius), `spawn_enemy` setzt ihn immer auf
-  `(50, -50)`.
+  den Startpunkt des Spielers (`player::START`).
 - Künftig bringt `SpawnEnemy` auch die Position mit. Die Quellen entscheiden, was wo spawnt,
   `spawn_enemy` baut nur die Entity. Die Debug-Tasten und der HUD-Button geben ihren Ort ebenfalls
   mit, etwa die Mausposition.
