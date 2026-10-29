@@ -4,11 +4,15 @@
 //! cooldown is over: the player hits all enemies around it, an awake enemy hits the player. A hit
 //! deals damage and knocks the target away from the attacker with an impulse, so lighter units
 //! fly further. Enemies without health are despawned. When the player dies, the round starts
-//! over: all enemies are removed and the player is healed.
+//! over: all enemies are removed and the player is healed. Used items with a healing effect heal
+//! their user.
 
-use crate::objects::{
-    enemy::{self, Asleep, Enemy},
-    player::Player,
+use crate::{
+    items::{Effect, ItemUsed},
+    objects::{
+        enemy::{self, Asleep, Enemy},
+        player::Player,
+    },
 };
 use avian2d::prelude::*;
 use bevy::{ecs::query::QueryFilter, prelude::*};
@@ -101,6 +105,18 @@ fn despawn_dead_enemies(mut commands: Commands, enemies: Query<(Entity, &Health)
     }
 }
 
+/// Applies the effects of used items to their users' health.
+fn apply_item_effects(mut used: MessageReader<ItemUsed>, mut healths: Query<&mut Health>) {
+    for &ItemUsed { by, effect } in used.read() {
+        let Ok(mut health) = healths.get_mut(by) else {
+            continue;
+        };
+        match effect {
+            Effect::Heal(amount) => health.current = (health.current + amount).min(health.max),
+        }
+    }
+}
+
 /// Starts the round over when the player dies: removes all enemies and heals the player.
 fn restart_on_player_death(
     mut commands: Commands,
@@ -125,9 +141,11 @@ pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        // also registered by `items::Plugin`, but combat works without items
+        app.add_message::<ItemUsed>().add_systems(
             Update,
             (
+                apply_item_effects,
                 attack::<With<Player>, With<Enemy>>,
                 // sleeping enemies can be hit, but don't attack
                 attack::<(With<Enemy>, Without<Asleep>), With<Player>>.run_if(enemy::active),

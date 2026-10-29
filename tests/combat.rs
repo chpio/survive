@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use std::time::Duration;
 use survival::{
     combat::{self, Attack, Health},
+    items::{Effect, ItemUsed},
     objects::{
         enemy::{self, Enemy},
         player,
@@ -176,4 +177,24 @@ fn player_death_starts_over() {
         .iter(app.world())
         .count();
     assert_eq!(enemies, 0);
+}
+
+#[test]
+fn used_healing_item_heals_up_to_the_maximum() {
+    let mut app = app();
+    let player = spawn_player(&mut app, Vec2::ZERO);
+    let heal = |app: &mut App, amount| {
+        app.world_mut().write_message(ItemUsed {
+            by: player,
+            effect: Effect::Heal(amount),
+        });
+        app.update();
+    };
+    app.world_mut().get_mut::<Health>(player).unwrap().current = 50.;
+
+    heal(&mut app, 30.);
+    assert_eq!(health(&app, player).current, 80.);
+
+    heal(&mut app, 30.);
+    assert_eq!(health(&app, player).current, health(&app, player).max);
 }

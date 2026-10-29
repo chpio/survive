@@ -6,8 +6,9 @@
 - Items entstehen per Debug-Taste. Gegner-Drops, Truhen und Platzierung in Tiled kommen später.
 - Aufheben per Mausklick auf das Item, mit Reichweitenprüfung.
 - Inventarfenster im HUD, per Taste geöffnet.
+- Benutzen von Items mit einer Wirkung (Heiltrank, Apfel heilen), nachträglich dazugekommen.
 
-Noch nicht dabei: Benutzen, Ausrüstung, Stufen, Gewicht als Masse, Haltbarkeit, Speichern. Das
+Noch nicht dabei: Ausrüstung, Stufen, Gewicht als Masse, Haltbarkeit, Speichern. Das
 Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md](ideen/ideen.md)).
 
 ## Item-Definitionen
@@ -16,8 +17,10 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
 
   ```ron
   {
-      "healing_potion": (name: "Heiltrank", weight: 0.5, stackable: true, color: (0.8, 0.2, 0.2)),
-      "apple": (name: "Apfel", weight: 0.2, stackable: true, color: (0.3, 0.8, 0.2)),
+      "healing_potion": (name: "Heiltrank", weight: 0.5, stackable: true, color: (0.8, 0.2, 0.2),
+          effect: Some(Heal(30.))),
+      "apple": (name: "Apfel", weight: 0.2, stackable: true, color: (0.3, 0.8, 0.2),
+          effect: Some(Heal(5.))),
       "sword": (name: "Schwert", weight: 3.0, stackable: false, color: (0.7, 0.7, 0.8)),
   }
   ```
@@ -27,6 +30,8 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
   Tests setzen sie dadurch direkt, ohne Asset-System.
 - `color` ist der Platzhalter, bis es Sprites gibt. `weight` wird im Inventar angezeigt und wirkt
   später auf die Masse.
+- `effect` ist optional und sagt, was das Benutzen eines Items bewirkt (`Effect`). Ohne `effect`
+  lässt sich ein Item nicht benutzen. Bisher gibt es nur `Heal(Lebenspunkte)`.
 
 ## Items als Entities
 
@@ -66,6 +71,16 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
     `Transform`, Sichtbarkeit und `Pickable` setzen.
 - Am Boden werden Stapel nicht zusammengeführt.
 
+## Benutzen
+
+- `UseItem { item }` benutzt ein Item im Besitz. Hat sein Typ eine Wirkung, wird es verbraucht:
+  Ein Stapel verliert eins, das letzte Item wird despawnt. Dann meldet `ItemUsed { by, effect }`
+  die Wirkung für den Besitzer. Items ohne Wirkung und Items am Boden bleiben unverändert.
+- Das Item-Modul wendet Wirkungen nicht selbst an. Das tun die Module, die sie betreffen: `combat`
+  heilt bei `Effect::Heal` bis höchstens zum Maximum. Neue Wirkungen sind eine neue Variante von
+  `Effect` und ein System in dem Modul, das sie umsetzt.
+- Ein Item wird auch bei voller Gesundheit verbraucht.
+
 ## Inventarfenster
 
 - Taste I öffnet und schließt das Fenster. Das Spiel läuft dabei weiter.
@@ -73,6 +88,7 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
   Gewicht. Dazu kommt das Gesamtgewicht.
 - Pro Zeile gibt es die Buttons „Ablegen“ (ganzer Stapel) und bei Stapeln „1 ablegen“. Beide
   schicken `hud::Action::DropItem { item, count }`, das Spiel schreibt daraus `DropItem`.
+- Items mit Wirkung haben zusätzlich „Benutzen“: `hud::Action::UseItem(item)` wird zu `UseItem`.
 - Das Fenster hat die Klasse `blocks-pointer`. Klicks darauf erreichen die Welt nicht.
 
 ## Debug-Taste
@@ -87,18 +103,20 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
 
 Drei Plugins, damit die Tests ohne Asset-System und Eingabe auskommen:
 
-- `src/items/mod.rs`: `Item`, `Stack`, `HeldBy`/`Inventory`, `ItemDefinitions`, die Messages
-  `PickUp` und `DropItem` und die Systeme dazu (`items::Plugin`).
+- `src/items/mod.rs`: `Item`, `Stack`, `HeldBy`/`Inventory`, `ItemDefinitions`, `Effect`, die
+  Messages `PickUp`, `DropItem`, `UseItem` und `ItemUsed` und die Systeme dazu (`items::Plugin`).
+- `src/combat/mod.rs`: Heilen bei `ItemUsed`.
 - `src/items/definitions.rs`: Asset-Loader für `items.ron` und Übernahme in die Ressource
   (`items::definitions::Plugin`).
 - `src/items/input.rs`: Aufheben per Klick, Hervorhebung, Debug-Taste (`items::input::Plugin`).
 - `src/ui/hud.rs`: Inventarfenster. `src/ui/mod.rs`: Taste I, Zustand und `Action::DropItem`.
 - `tests/items.rs`: Aufheben mit und ohne Stapeln, Ablegen eines ganzen Stapels, Abspalten beim
-  Ablegen, keine Stapelung nicht stapelbarer Items.
+  Ablegen, keine Stapelung nicht stapelbarer Items, Benutzen (Stapel, letztes Item, ohne Wirkung,
+  am Boden) und ob sich `assets/items.ron` lesen lässt.
+- `tests/combat.rs`: Heilen durch `ItemUsed` bis zum Maximum.
 
 ## Danach
 
-- Benutzen (Heiltrank heilt) über ein Event pro Item-Typ.
 - Gewicht als Masse des Spielers. Überladung macht auch langsamer (siehe [ideen.md](ideen/ideen.md)).
 - Gegner-Drops mit Loot-Tabellen.
 - Tooltip mit Namen beim Hover.

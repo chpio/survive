@@ -2,21 +2,23 @@ use crate::common;
 use bevy::prelude::*;
 use std::collections::BTreeMap;
 use survival::items::{
-    self, DROP_DISTANCE, DropItem, HeldBy, Inventory, Item, ItemDefinition, ItemDefinitions,
-    PickUp, Stack,
+    self, DROP_DISTANCE, DropItem, Effect, HeldBy, Inventory, Item, ItemDefinition,
+    ItemDefinitions, ItemId, ItemUsed, PickUp, Stack, UseItem,
 };
 
 fn app() -> App {
     let mut app = common::app_with(items::Plugin);
-    let definition = |stackable| ItemDefinition {
+    let definition = |stackable, effect| ItemDefinition {
         name: String::new(),
         weight: 1.,
         stackable,
         color: (1., 1., 1.),
+        effect,
     };
     app.insert_resource(ItemDefinitions(BTreeMap::from([
-        ("apple".into(), definition(true)),
-        ("sword".into(), definition(false)),
+        ("apple".into(), definition(true, None)),
+        ("potion".into(), definition(true, Some(Effect::Heal(30.)))),
+        ("sword".into(), definition(false, None)),
     ])));
     app
 }
@@ -173,4 +175,97 @@ fn dropping_part_of_a_stack_splits_it() {
         .query_filtered::<&Stack, (With<Item>, Without<HeldBy>)>();
     let dropped: Vec<_> = dropped.iter(app.world()).map(|stack| stack.0).collect();
     assert_eq!(dropped, [2]);
+}
+
+/// An item held by `owner`, a stack of `count` if `count` is given.
+fn spawn_held(app: &mut App, id: &str, count: Option<u32>, owner: Entity) -> Entity {
+    let item = spawn_item(app, id, count);
+    pick_up(app, item, owner);
+    app.update();
+    item
+}
+
+fn use_item(app: &mut App, item: Entity) {
+    app.world_mut().write_message(UseItem { item });
+}
+
+/// The items used in the last update.
+fn used(app: &App) -> Vec<ItemUsed> {
+    app.world()
+        .resource::<Messages<ItemUsed>>()
+        .iter_current_update_messages()
+        .copied()
+        .collect()
+}
+
+#[test]
+fn using_one_of_a_stack_reduces_it_and_reports_the_effect() {
+    let mut app = app();
+    let owner = spawn_owner(&mut app, Vec2::ZERO);
+    let potion = spawn_held(&mut app, "potion", Some(3), owner);
+
+    use_item(&mut app, potion);
+    app.update();
+
+    assert_eq!(stack(&app, potion), Some(2));
+    assert_eq!(
+        used(&app),
+        [ItemUsed {
+            by: owner,
+            effect: Effect::Heal(30.)
+        }]
+    );
+}
+
+#[test]
+fn using_the_last_item_uses_it_up() {
+    let mut app = app();
+    let owner = spawn_owner(&mut app, Vec2::ZERO);
+    let potion = spawn_held(&mut app, "potion", Some(1), owner);
+
+    // twice in the same frame, but there is only one
+    use_item(&mut app, potion);
+    use_item(&mut app, potion);
+    app.update();
+
+    assert!(app.world().get_entity(potion).is_err());
+    assert_eq!(inventory(&app, owner), []);
+    assert_eq!(used(&app).len(), 1);
+}
+
+#[test]
+fn items_without_effect_are_not_used() {
+    let mut app = app();
+    let owner = spawn_owner(&mut app, Vec2::ZERO);
+    let apple = spawn_held(&mut app, "apple", Some(2), owner);
+
+    use_item(&mut app, apple);
+    app.update();
+
+    assert_eq!(stack(&app, apple), Some(2));
+    assert_eq!(used(&app), []);
+}
+
+#[test]
+fn items_on_the_ground_cannot_be_used() {
+    let mut app = app();
+    let potion = spawn_item(&mut app, "potion", Some(1));
+
+    use_item(&mut app, potion);
+    app.update();
+
+    assert_eq!(stack(&app, potion), Some(1));
+    assert_eq!(used(&app), []);
+}
+
+#[test]
+fn definitions_file_parses() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/items.ron");
+    let definitions: BTreeMap<ItemId, ItemDefinition> =
+        ron::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        definitions[&ItemId::from("healing_potion")].effect,
+        Some(Effect::Heal(30.))
+    );
+    assert_eq!(definitions[&ItemId::from("sword")].effect, None);
 }

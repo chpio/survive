@@ -32,6 +32,8 @@ pub struct InventoryRow {
     pub count: u32,
     /// Weight of all items in the row in kg
     pub weight: f32,
+    /// Whether the item has an effect when used
+    pub usable: bool,
 }
 
 /// Requests from the HUD to the game.
@@ -50,6 +52,8 @@ pub enum Action {
         item: Entity,
         count: u32,
     },
+    /// Uses one of the item
+    UseItem(Entity),
 }
 
 pub fn app() -> Element {
@@ -143,6 +147,9 @@ fn inventory(rows: Vec<InventoryRow>, send: Callback<Action>) -> Element {
                     span { class: "name", "{row.name}" }
                     span { class: "count", "{row.count}×" }
                     span { class: "weight", "{row.weight:.1} kg" }
+                    if row.usable {
+                        button { onclick: move |_| send(Action::UseItem(row.item)), "Benutzen" }
+                    }
                     if row.count > 1 {
                         button { onclick: move |_| send(Action::DropItem { item: row.item, count: 1 }), "1 ablegen" }
                     }

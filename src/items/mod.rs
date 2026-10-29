@@ -4,6 +4,8 @@
 //! item shows a sprite at its position. Picked up, it is hidden and attached to its owner through
 //! [`HeldBy`], which Bevy mirrors in the owner's [`Inventory`]. Picking up a stackable item merges
 //! it into a stack of the same type the owner already holds, dropping part of a stack splits it.
+//! Using a held item uses it up and sends [`ItemUsed`] with its type's [`Effect`], which other
+//! modules apply (e.g. combat heals).
 
 pub mod definitions;
 pub mod input;
@@ -33,6 +35,16 @@ pub struct ItemDefinition {
     pub stackable: bool,
     /// sRGB color of the placeholder sprite
     pub color: (f32, f32, f32),
+    /// What using one item does, `None` if items of this type can't be used
+    #[serde(default)]
+    pub effect: Option<Effect>,
+}
+
+/// What using an item does to its owner.
+#[derive(Clone, Copy, PartialEq, Debug, Deserialize)]
+pub enum Effect {
+    /// Restores this much health, up to the maximum
+    Heal(f32),
 }
 
 impl ItemDefinition {
@@ -139,6 +151,20 @@ pub struct DropItem {
     pub count: u32,
 }
 
+/// Uses one of the held `item`: it is used up, and its owner gets the effect of its type. Items
+/// without an effect stay.
+#[derive(Message, Clone, Copy, Debug)]
+pub struct UseItem {
+    pub item: Entity,
+}
+
+/// `by` used an item with `effect`, which the modules dealing with it apply.
+#[derive(Message, Clone, Copy, PartialEq, Debug)]
+pub struct ItemUsed {
+    pub by: Entity,
+    pub effect: Effect,
+}
+
 fn pick_up(
     mut commands: Commands,
     mut pick_ups: MessageReader<PickUp>,
@@ -233,7 +259,38 @@ fn drop_items(
     }
 }
 
-/// Picking up and dropping items. The item types come from [`definitions::Plugin`], the player's
+fn use_items(
+    mut commands: Commands,
+    mut uses: MessageReader<UseItem>,
+    mut used: MessageWriter<ItemUsed>,
+    definitions: Res<ItemDefinitions>,
+    mut items: Query<(&Item, Option<&mut Stack>, &HeldBy)>,
+    // items used up this frame, which are only despawned once the commands are applied
+    mut used_up: Local<Vec<Entity>>,
+) {
+    used_up.clear();
+    for &UseItem { item } in uses.read() {
+        if used_up.contains(&item) {
+            continue;
+        }
+        let Ok((Item(id), stack, &HeldBy(by))) = items.get_mut(item) else {
+            continue;
+        };
+        let Some(effect) = definitions.get(id).and_then(|definition| definition.effect) else {
+            continue;
+        };
+        match stack {
+            Some(mut stack) if stack.0 > 1 => stack.0 -= 1,
+            _ => {
+                commands.entity(item).despawn();
+                used_up.push(item);
+            }
+        }
+        used.write(ItemUsed { by, effect });
+    }
+}
+
+/// Picking up, dropping and using items. The item types come from [`definitions::Plugin`], the player's
 /// input from [`input::Plugin`].
 pub struct Plugin;
 
@@ -241,7 +298,9 @@ impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_message::<PickUp>()
             .add_message::<DropItem>()
+            .add_message::<UseItem>()
+            .add_message::<ItemUsed>()
             .init_resource::<ItemDefinitions>()
-            .add_systems(Update, (pick_up, drop_items).chain());
+            .add_systems(Update, (pick_up, drop_items, use_items).chain());
     }
 }

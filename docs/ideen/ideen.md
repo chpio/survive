@@ -92,7 +92,7 @@ Umgesetzt, siehe `src/flowfield/`:
 ## Inventar
 
 Die erste Version ist umgesetzt ([items.md](../items.md)): Items als Entities mit `HeldBy` und
-`Inventory`, Stapeln, Definitionen in RON und das Inventarfenster im HUD.
+`Inventory`, Stapeln, Definitionen in RON, Benutzen und das Inventarfenster im HUD.
 
 - Items sind eigene Entities, die per Relationship am Besitzer hängen (Spieler, Gegner, Truhe).
   Grund: Haltbarkeit und Verzauberungen machen jedes Exemplar einzigartig.
@@ -105,8 +105,9 @@ Die erste Version ist umgesetzt ([items.md](../items.md)): Items als Entities mi
 - Überladung macht auch langsamer. `Strength` begrenzt nur die Kraft: Ein schwererer Spieler
   beschleunigt langsamer, erreicht aber dieselbe Höchstgeschwindigkeit. Deshalb wird zusätzlich
   die `DesiredVelocity` des Spielers mit dem Gewicht herunterskaliert.
-- Noch offen: Benutzen über Events, Gewicht als Masse, Icons statt der Platzhalterfarbe,
-  Ausrüstung wirkt auf Kampfwerte.
+- Benutzen ist umgesetzt: Die Wirkung steht in der Definition, `ItemUsed` meldet sie.
+- Noch offen: Gewicht als Masse, Icons statt der Platzhalterfarbe, Ausrüstung wirkt auf
+  Kampfwerte.
 
 ## Speichern
 
@@ -159,7 +160,7 @@ Jeder Schritt baut auf dem vorherigen auf:
 2. Hinterhalte und Aktivierungsradien, Spawnen außer Sicht ([spawnen.md](../spawnen.md),
    umgesetzt)
 3. Flowfield-Optimierung (umgesetzt)
-4. Items und Inventar (erste Version umgesetzt, offen: Benutzen, Gewicht als Masse)
+4. Items und Inventar (erste Version und Benutzen umgesetzt, offen: Gewicht als Masse)
 5. Truhen und Gebiets-Level
 6. Brunnen
 7. Speichern

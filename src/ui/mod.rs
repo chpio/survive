@@ -15,7 +15,7 @@ mod stylesheet;
 use crate::{
     combat::Health,
     flowfield::{FlowField, debug::FlowFieldDebug},
-    items::{DropItem, Inventory, Item, ItemDefinitions, Stack},
+    items::{DropItem, Inventory, Item, ItemDefinitions, Stack, UseItem},
     objects::{enemy, player::Player},
     perf,
     settings::{Menu, Settings},
@@ -366,6 +366,7 @@ fn sync_state(
     definitions: Res<ItemDefinitions>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut drop_item: MessageWriter<DropItem>,
+    mut use_item: MessageWriter<UseItem>,
     enemies: Query<(), With<enemy::Enemy>>,
     flow_field: Res<FlowField>,
     mut flow_field_debug: ResMut<FlowFieldDebug>,
@@ -407,6 +408,9 @@ fn sync_state(
             hud::Action::DropItem { item, count } => {
                 drop_item.write(DropItem { item, count });
             }
+            hud::Action::UseItem(item) => {
+                use_item.write(UseItem { item });
+            }
         }
     }
 
@@ -423,6 +427,7 @@ fn sync_state(
                     name: definition.map_or_else(|| id.0.clone(), |d| d.name.clone()),
                     count,
                     weight: definition.map_or(0., |d| d.weight) * count as f32,
+                    usable: definition.is_some_and(|d| d.effect.is_some()),
                 }
             })
             .collect()
