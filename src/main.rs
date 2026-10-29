@@ -1,3 +1,5 @@
+use std::num::NonZero;
+
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::*;
@@ -5,7 +7,18 @@ use survival::{combat, flowfield, items, movement, objects, perf, settings, sigh
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
+        .add_plugins(
+            DefaultPlugins
+                .set(ImagePlugin::default_nearest())
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        // queue only one frame on the GPU, so input shows up a frame earlier
+                        desired_maximum_frame_latency: NonZero::new(1),
+                        ..default()
+                    }),
+                    ..default()
+                }),
+        )
         .add_plugins(TiledPlugin::default())
         .add_systems(Startup, startup)
         .add_systems(Update, update_camera_position)
