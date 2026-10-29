@@ -83,7 +83,8 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
 
 ## Inventarfenster
 
-- Tab öffnet und schließt das Fenster. Es steht direkt über der Leiste, unten mittig. Das
+- Tab öffnet und schließt das Fenster. Escape schließt zuerst das Popup der Auswahl, dann das
+  Fenster; erst danach öffnet Escape das Einstellungsmenü. Es steht direkt über der Leiste, unten mittig. Das
   Spiel läuft dabei weiter.
 - Das HUD bekommt im `hud::State` die Items des Spielers: Entity, Typ, Name, Farbe, Anzahl,
   Gewicht und ob sie benutzbar sind. Dazu kommt das Gesamtgewicht.

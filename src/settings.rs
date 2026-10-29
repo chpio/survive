@@ -104,7 +104,9 @@ pub enum Menu {
     Open,
 }
 
-fn toggle_menu(
+/// Escape opens and closes the menu. Windows the HUD shows close first and take the key away
+/// (see `ui::sync_state`), so the menu only opens once none is left.
+pub fn toggle_menu(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     menu: Res<State<Menu>>,
     mut next_menu: ResMut<NextState<Menu>>,

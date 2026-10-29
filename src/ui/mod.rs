@@ -21,7 +21,7 @@ use crate::{
     },
     objects::{enemy, player::Player},
     perf,
-    settings::{Menu, Settings},
+    settings::{self, Menu, Settings},
     spawning::out_of_sight::SpawnOutOfSight,
 };
 use anyrender_vello::VelloScenePainter;
@@ -402,7 +402,7 @@ fn sync_state(
     player: Query<(Entity, &Health, Option<&Inventory>, Option<&Hotbar>), With<Player>>,
     items: Query<(&Item, Option<&Stack>)>,
     definitions: Res<ItemDefinitions>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut keyboard_input: ResMut<ButtonInput<KeyCode>>,
     // one parameter, since a system has at most 16
     (mut drop_item, mut use_item, mut assign_slot, mut use_slot): (
         MessageWriter<DropItem>,
@@ -422,6 +422,19 @@ fn sync_state(
 ) {
     let ui = &mut *ui;
     let player = player.single().ok();
+    // Escape closes the topmost window: the menu above everything (in `settings`), then the
+    // selection's popup, then the inventory. Taken away here, so the menu doesn't open as well.
+    if *menu.get() == Menu::Closed && keyboard_input.just_pressed(KeyCode::Escape) {
+        let closed = if ui.selected.is_some() {
+            ui.selected = None;
+            true
+        } else {
+            std::mem::replace(&mut ui.show_inventory, false)
+        };
+        if closed {
+            keyboard_input.clear_just_pressed(KeyCode::Escape);
+        }
+    }
     if keyboard_input.just_pressed(KeyCode::Tab) {
         ui.show_inventory = !ui.show_inventory;
     }
@@ -767,7 +780,14 @@ impl bevy::app::Plugin for Plugin {
                 PreUpdate,
                 (forward_input, pick_hud.in_set(PickingSystems::Backend)),
             )
-            .add_systems(Update, (update_stylesheet, sync_state))
+            .add_systems(
+                Update,
+                (
+                    update_stylesheet,
+                    // before the menu, so Escape closes the HUD's windows first
+                    sync_state.before(settings::toggle_menu),
+                ),
+            )
             .add_systems(PostUpdate, paint_ui);
 
         app.sub_app_mut(RenderApp)
