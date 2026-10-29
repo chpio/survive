@@ -28,13 +28,11 @@
     asleep, which is fine for now.
   - Item effects in `assets/items.ron` (healing of the potion and the apple).
 
-## HUD
-
-- Hotbar for the inventory: a bar of slots along the bottom edge of the screen, always visible,
-  with items the player assigns to it and keys (e.g. 1–9) to use them. The inventory window stays
-  for the full list.
-
 ## Input
+
+- Rebindable keys: the bindings (WASD, Tab, 1–5, the debug keys) in one place, e.g. a resource
+  loaded from and saved to the settings, with a section in the settings menu to change them. The
+  systems read the binding instead of a fixed `KeyCode`.
 
 - Pens under Wayland: the compositor only sends them through the tablet protocol, which winit
   0.30 (Bevy 0.20) doesn't support, so the game gets no events at all (under X11 they arrive as

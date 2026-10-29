@@ -99,6 +99,7 @@ fn startup(
         Name::new("Player"),
         objects::player::physics(),
         objects::player::combat(),
+        items::hotbar::Hotbar::default(),
         Mesh2d(meshes.add(objects::player::SHAPE)),
         MeshMaterial2d(materials.add(Color::srgb(0.2, 0.4, 0.9))),
         // above the map layers

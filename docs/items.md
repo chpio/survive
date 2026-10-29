@@ -83,13 +83,57 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
 
 ## Inventarfenster
 
-- Taste I öffnet und schließt das Fenster. Das Spiel läuft dabei weiter.
-- Das HUD bekommt im `hud::State` die Liste der Items des Spielers: Entity, Name, Anzahl,
-  Gewicht. Dazu kommt das Gesamtgewicht.
-- Pro Zeile gibt es die Buttons „Ablegen“ (ganzer Stapel) und bei Stapeln „1 ablegen“. Beide
-  schicken `hud::Action::DropItem { item, count }`, das Spiel schreibt daraus `DropItem`.
-- Items mit Wirkung haben zusätzlich „Benutzen“: `hud::Action::UseItem(item)` wird zu `UseItem`.
+- Tab öffnet und schließt das Fenster. Es steht direkt über der Leiste, unten mittig. Das
+  Spiel läuft dabei weiter.
+- Das HUD bekommt im `hud::State` die Items des Spielers: Entity, Typ, Name, Farbe, Anzahl,
+  Gewicht und ob sie benutzbar sind. Dazu kommt das Gesamtgewicht.
+- Die Items stehen als Kacheln in einem Raster mit sechs Spalten, das mit ihnen wächst. Es gibt
+  kein Slot-Limit, die Grenze ist das Gewicht. Sortiert wird automatisch: benutzbare Items zuerst,
+  dann nach Name. Manuelles Sortieren gibt es nicht, ohne Abbauen und Bauen gibt es wenige
+  Item-Arten.
+- Ein Klick auf eine Kachel wählt sie aus. Ein Popup über der Kachel zeigt Name, Anzahl und
+  Gewicht mit den Buttons „Benutzen“ (bei Items mit Wirkung), „1 ablegen“ (bei Stapeln) und „Ablegen“. Sie
+  schicken `hud::Action::UseItem(item)` bzw. `hud::Action::DropItem { item, count }`, das Spiel
+  schreibt daraus `UseItem` bzw. `DropItem`. Als Popup verändert es die Größe des Fensters
+  nicht, sodass die Kacheln an ihrem Platz bleiben.
+- Ein Rechtsklick auf eine Kachel benutzt das Item direkt. Bei offenem Inventar ist das der
+  einzige Weg zu benutzen, die Leiste belegt dann nur.
+- Auswahl und die Kachel unter dem Zeiger kennt das Spiel (`hud::Action::Select`,
+  `hud::Action::Hover`), weil die Tasten der Leiste beim Spiel ankommen, nicht beim HUD.
 - Das Fenster hat die Klasse `blocks-pointer`. Klicks darauf erreichen die Welt nicht.
+
+## Leiste
+
+- Fünf Slots am unteren Bildschirmrand, immer sichtbar, Tasten 1–5 (`items::hotbar`).
+- Ein Slot hält einen Item-Typ, kein einzelnes Item: `Hotbar([Option<ItemId>; SLOTS])` am Spieler.
+  Er zeigt, wie viele Items dieses Typs der Spieler hat, und behält den Typ auch bei 0 (dann
+  abgeblendet), damit der Trank-Slot nach dem letzten Trank nicht verschwindet.
+- Nur benutzbare Typen (mit `effect`) kommen in die Leiste.
+- Fährt der Zeiger über eine Kachel oder einen Slot, wird der Item-Typ überall hervorgehoben, im
+  Inventar und in der Leiste. Das hält das HUD selbst, das Spiel braucht es nicht.
+- Im Spiel (Inventar zu) benutzen Taste oder Klick auf den Slot ihn: `UseSlot { owner, slot }`,
+  daraus wird `UseItem` für das erste gehaltene Item des Typs.
+- Bei offenem Inventar werden Slots bedient wie Kacheln (eine gemeinsame Funktion `cell` im HUD,
+  `hud::Target` für beide): Rechtsklick benutzt, Hover hebt den Typ hervor.
+- Klicken und Ziehen wirken exakt gleich. Ein Klick nimmt eine Kachel oder einen Slot auf (er ist
+  dann ausgewählt und zeigt das Popup), der nächste Klick legt sie dort ab, wo er hinklickt, wie
+  das Loslassen beim Ziehen. Beides landet in `ui::put_down`:
+  - auf einem anderen Slot: Der Typ kommt dorthin, sofern er benutzbar ist. Stand er schon in
+    einem Slot, tauschen die beiden (`AssignSlot`: Ein Typ steht nur in einem Slot, sein alter
+    Slot bekommt den bisherigen Inhalt des Ziel-Slots).
+  - auf einer Kachel oder außerhalb von Kacheln und Slots: Ein Slot wird geleert, eine Kachel
+    bleibt, wie sie ist.
+  - auf sich selbst: nichts. Die Auswahl endet trotzdem.
+- Solange eine benutzbare Kachel oder ein Slot ausgewählt ist, sind die Slots hervorgehoben.
+- Die Tasten 1–5 legen bei offenem Inventar die Kachel oder den Slot unter dem Zeiger auf ihren
+  Slot (wie bei Minecraft), sonst die Auswahl.
+- Das HUD schickt nur `hud::Action::Click`, `hud::Action::Drop` und `hud::Action::Hover`. Was
+  daraus wird, entscheidet `ui::sync_state` an einer Stelle.
+- Blitz kennt kein Drag & Drop. Das HUD baut es aus Pointer-Events: Drücken auf Kachel oder Slot
+  merkt sich den Typ, erst eine Bewegung über 4 px macht daraus ein Ziehen (sonst ist es ein
+  Klick), Loslassen schickt `Drop` mit dem Feld darunter. Ein Element `.root` über dem ganzen Fenster, ohne
+  `blocks-pointer`, bekommt die Bewegungen und das Loslassen überall. Das gezogene Symbol sitzt
+  neben dem Zeiger, damit es nicht unter ihm liegt und das Loslassen abfängt.
 
 ## Debug-Taste
 
@@ -109,11 +153,18 @@ Drei Plugins, damit die Tests ohne Asset-System und Eingabe auskommen:
 - `src/items/definitions.rs`: Asset-Loader für `items.ron` und Übernahme in die Ressource
   (`items::definitions::Plugin`).
 - `src/items/input.rs`: Aufheben per Klick, Hervorhebung, Debug-Taste (`items::input::Plugin`).
-- `src/ui/hud.rs`: Inventarfenster. `src/ui/mod.rs`: Taste I, Zustand und `Action::DropItem`.
+- `src/items/hotbar.rs`: `Hotbar`, `AssignSlot`, `UseSlot` (in `items::Plugin`). Tasten 1–5 in
+  `items::input`.
+- `src/ui/hud.rs`: Inventarfenster, Leiste und das Ziehen. `src/ui/mod.rs`: Tab, Zustand
+  und die Actions.
 - `tests/items.rs`: Aufheben mit und ohne Stapeln, Ablegen eines ganzen Stapels, Abspalten beim
   Ablegen, keine Stapelung nicht stapelbarer Items, Benutzen (Stapel, letztes Item, ohne Wirkung,
-  am Boden) und ob sich `assets/items.ron` lesen lässt.
+  am Boden) und ob sich `assets/items.ron` lesen lässt, Leiste (Belegen, Verschieben, Leeren,
+  nur benutzbare Typen, Benutzen über den Slot).
 - `tests/combat.rs`: Heilen durch `ItemUsed` bis zum Maximum.
+- `tests/hud.rs`: das echte HUD mit Pointer-Events, wie das Spiel sie an Blitz gibt: Klick wählt
+  eine Kachel aus, Rechtsklick benutzt sie, Klick auf einen Slot, Ziehen einer Kachel auf einen
+  Slot (nicht bei unbenutzbaren Items), Herausziehen eines Slots.
 
 ## Danach
 

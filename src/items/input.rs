@@ -1,6 +1,7 @@
 //! The player's interaction with items in the world: clicking an item on the ground picks it up
 //! if it is within reach, hovering highlights it. Clicks on the HUD never get here, since the HUD
-//! blocks picking below it (see `docs/ui-events.md`).
+//! blocks picking below it (see `docs/ui-events.md`). The hotbar's keys are handled by the HUD,
+//! since they depend on the inventory window.
 
 use super::{HeldBy, Item, ItemDefinitions, PickUp, spawn_on_ground};
 use crate::objects::player::Player;

@@ -5,9 +5,11 @@
 //! [`HeldBy`], which Bevy mirrors in the owner's [`Inventory`]. Picking up a stackable item merges
 //! it into a stack of the same type the owner already holds, dropping part of a stack splits it.
 //! Using a held item uses it up and sends [`ItemUsed`] with its type's [`Effect`], which other
-//! modules apply (e.g. combat heals).
+//! modules apply (e.g. combat heals). Owners with a [`hotbar::Hotbar`] use items through its
+//! slots.
 
 pub mod definitions;
+pub mod hotbar;
 pub mod input;
 
 use bevy::prelude::*;
@@ -300,7 +302,19 @@ impl bevy::app::Plugin for Plugin {
             .add_message::<DropItem>()
             .add_message::<UseItem>()
             .add_message::<ItemUsed>()
+            .add_message::<hotbar::AssignSlot>()
+            .add_message::<hotbar::UseSlot>()
             .init_resource::<ItemDefinitions>()
-            .add_systems(Update, (pick_up, drop_items, use_items).chain());
+            .add_systems(
+                Update,
+                (
+                    pick_up,
+                    drop_items,
+                    hotbar::assign_slots,
+                    hotbar::use_slots,
+                    use_items,
+                )
+                    .chain(),
+            );
     }
 }

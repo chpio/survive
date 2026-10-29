@@ -82,5 +82,7 @@ Klasse macht das Blockieren zu einer bewussten Entscheidung. Elemente mit `point
   Zoom per Rad dazu, gilt dieselbe Entscheidung.
 - Tastatur: Sobald das HUD Textfelder hat, muss das Spiel Tasten ignorieren, solange ein
   HUD-Element den Fokus hat. Das geht analog über eine Abfrage an Blitz.
-- Drag & Drop zwischen HUD und Welt (Item aus dem Inventar fallen lassen) ist damit noch nicht
-  abgedeckt. Es braucht eine eigene Regel, wer den Zeiger während des Ziehens besitzt.
+- Ziehen innerhalb des HUD (Kachel auf die Leiste) baut das HUD selbst aus Pointer-Events, siehe
+  „Leiste“ in [items.md](items.md). Drag & Drop zwischen HUD und Welt (Item aus dem Inventar
+  fallen lassen) ist damit noch nicht abgedeckt. Es braucht eine eigene Regel, wer den Zeiger
+  während des Ziehens besitzt.

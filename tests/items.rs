@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use survival::items::{
     self, DROP_DISTANCE, DropItem, Effect, HeldBy, Inventory, Item, ItemDefinition,
     ItemDefinitions, ItemId, ItemUsed, PickUp, Stack, UseItem,
+    hotbar::{AssignSlot, Hotbar, UseSlot},
 };
 
 fn app() -> App {
@@ -17,6 +18,7 @@ fn app() -> App {
     };
     app.insert_resource(ItemDefinitions(BTreeMap::from([
         ("apple".into(), definition(true, None)),
+        ("bread".into(), definition(true, Some(Effect::Heal(5.)))),
         ("potion".into(), definition(true, Some(Effect::Heal(30.)))),
         ("sword".into(), definition(false, None)),
     ])));
@@ -268,4 +270,102 @@ fn definitions_file_parses() {
         Some(Effect::Heal(30.))
     );
     assert_eq!(definitions[&ItemId::from("sword")].effect, None);
+}
+
+fn spawn_owner_with_hotbar(app: &mut App) -> Entity {
+    common::spawn(app, Hotbar::default(), Vec2::ZERO)
+}
+
+fn assign(app: &mut App, owner: Entity, slot: usize, id: Option<&str>) {
+    app.world_mut().write_message(AssignSlot {
+        owner,
+        slot,
+        id: id.map(ItemId::from),
+    });
+    app.update();
+}
+
+fn hotbar(app: &App, owner: Entity) -> Vec<Option<String>> {
+    app.world()
+        .get::<Hotbar>(owner)
+        .unwrap()
+        .0
+        .iter()
+        .map(|id| id.as_ref().map(|id| id.0.clone()))
+        .collect()
+}
+
+fn slots(ids: [Option<&str>; 5]) -> Vec<Option<String>> {
+    ids.map(|id| id.map(String::from)).to_vec()
+}
+
+#[test]
+fn assigned_type_moves_between_slots_and_can_be_removed() {
+    let mut app = app();
+    let owner = spawn_owner_with_hotbar(&mut app);
+
+    assign(&mut app, owner, 0, Some("potion"));
+    assign(&mut app, owner, 2, Some("bread"));
+    assert_eq!(
+        hotbar(&app, owner),
+        slots([Some("potion"), None, Some("bread"), None, None])
+    );
+
+    // only in one slot at a time
+    assign(&mut app, owner, 4, Some("potion"));
+    assert_eq!(
+        hotbar(&app, owner),
+        slots([None, None, Some("bread"), None, Some("potion")])
+    );
+
+    assign(&mut app, owner, 2, None);
+    assert_eq!(
+        hotbar(&app, owner),
+        slots([None, None, None, None, Some("potion")])
+    );
+}
+
+#[test]
+fn moving_a_type_onto_a_filled_slot_swaps_them() {
+    let mut app = app();
+    let owner = spawn_owner_with_hotbar(&mut app);
+    assign(&mut app, owner, 0, Some("potion"));
+    assign(&mut app, owner, 3, Some("bread"));
+
+    assign(&mut app, owner, 3, Some("potion"));
+
+    assert_eq!(
+        hotbar(&app, owner),
+        slots([Some("bread"), None, None, Some("potion"), None])
+    );
+}
+
+#[test]
+fn slot_uses_a_held_item_of_its_type_and_keeps_the_type() {
+    let mut app = app();
+    let owner = spawn_owner_with_hotbar(&mut app);
+    let potion = spawn_held(&mut app, "potion", Some(1), owner);
+    assign(&mut app, owner, 1, Some("potion"));
+
+    app.world_mut().write_message(UseSlot { owner, slot: 1 });
+    app.update();
+
+    assert!(app.world().get_entity(potion).is_err());
+    assert_eq!(hotbar(&app, owner)[1].as_deref(), Some("potion"));
+
+    // none left
+    app.world_mut().write_message(UseSlot { owner, slot: 1 });
+    app.update();
+    assert_eq!(used(&app), []);
+}
+
+#[test]
+fn only_usable_types_go_into_the_hotbar() {
+    let mut app = app();
+    let owner = spawn_owner_with_hotbar(&mut app);
+
+    assign(&mut app, owner, 0, Some("sword"));
+    assign(&mut app, owner, 1, Some("apple"));
+
+    assert_eq!(hotbar(&app, owner), slots([None; 5]));
 }

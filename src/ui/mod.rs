@@ -9,13 +9,16 @@
 //! reports a picking hit on its image above the sprites, so the game world only gets the pointer
 //! elsewhere (see `docs/ui-events.md`).
 
-mod hud;
-mod stylesheet;
+pub mod hud;
+pub mod stylesheet;
 
 use crate::{
     combat::Health,
     flowfield::{FlowField, debug::FlowFieldDebug},
-    items::{DropItem, Inventory, Item, ItemDefinitions, Stack, UseItem},
+    items::{
+        DropItem, Inventory, Item, ItemDefinitions, ItemId, Stack, UseItem,
+        hotbar::{AssignSlot, Hotbar, SLOTS, UseSlot},
+    },
     objects::{enemy, player::Player},
     perf,
     settings::{Menu, Settings},
@@ -86,6 +89,10 @@ struct UiDocument {
     needs_paint: bool,
     show_timings: bool,
     show_inventory: bool,
+    /// Inventory tile or hotbar slot the user selected
+    selected: Option<hud::Target>,
+    /// Inventory tile or hotbar slot under the pointer, for the hotbar's keys
+    hovered: Option<hud::Target>,
     redraw_request: Arc<RedrawRequest>,
 }
 
@@ -165,6 +172,8 @@ fn setup(world: &mut World) {
         needs_paint: true,
         show_timings: true,
         show_inventory: false,
+        selected: None,
+        hovered: None,
         redraw_request,
     });
 
@@ -359,14 +368,48 @@ fn pointer_event(
     }
 }
 
+/// What putting the tile or slot `from` down on `to` (`None`: outside the tiles and slots) does to
+/// the hotbar, the same for a drag and for clicking `from` and then `to`: the slot to change and its
+/// new type. A usable type put down on a slot goes there (swapping with the slot it was in, see
+/// [`AssignSlot`]), a slot put down anywhere but on a slot is emptied, everything else does
+/// nothing. `usable_type` gives the type of a tile or slot if it can go into the hotbar.
+pub fn put_down(
+    from: hud::Target,
+    to: Option<hud::Target>,
+    usable_type: impl Fn(hud::Target) -> Option<ItemId>,
+) -> Option<(usize, Option<ItemId>)> {
+    match to {
+        _ if to == Some(from) => None,
+        Some(hud::Target::Slot(slot)) => Some((slot, Some(usable_type(from)?))),
+        _ => match from {
+            hud::Target::Slot(slot) => Some((slot, None)),
+            hud::Target::Tile(_) => None,
+        },
+    }
+}
+
+/// Keys of the hotbar's slots.
+const SLOT_KEYS: [KeyCode; SLOTS] = [
+    KeyCode::Digit1,
+    KeyCode::Digit2,
+    KeyCode::Digit3,
+    KeyCode::Digit4,
+    KeyCode::Digit5,
+];
+
 fn sync_state(
     mut ui: NonSendMut<UiDocument>,
-    player: Query<(&Health, Option<&Inventory>), With<Player>>,
+    player: Query<(Entity, &Health, Option<&Inventory>, Option<&Hotbar>), With<Player>>,
     items: Query<(&Item, Option<&Stack>)>,
     definitions: Res<ItemDefinitions>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut drop_item: MessageWriter<DropItem>,
-    mut use_item: MessageWriter<UseItem>,
+    // one parameter, since a system has at most 16
+    (mut drop_item, mut use_item, mut assign_slot, mut use_slot): (
+        MessageWriter<DropItem>,
+        MessageWriter<UseItem>,
+        MessageWriter<AssignSlot>,
+        MessageWriter<UseSlot>,
+    ),
     enemies: Query<(), With<enemy::Enemy>>,
     flow_field: Res<FlowField>,
     mut flow_field_debug: ResMut<FlowFieldDebug>,
@@ -378,9 +421,11 @@ fn sync_state(
     menu: Res<State<Menu>>,
 ) {
     let ui = &mut *ui;
-    if keyboard_input.just_pressed(KeyCode::KeyI) {
+    let player = player.single().ok();
+    if keyboard_input.just_pressed(KeyCode::Tab) {
         ui.show_inventory = !ui.show_inventory;
     }
+    let (mut clicks, mut drops) = (Vec::new(), Vec::new());
     for action in ui.actions.try_iter() {
         match action {
             hud::Action::SpawnEnemy => {
@@ -411,30 +456,134 @@ fn sync_state(
             hud::Action::UseItem(item) => {
                 use_item.write(UseItem { item });
             }
+            hud::Action::Click(target) => {
+                clicks.push(target);
+            }
+            hud::Action::Drop { from, to } => {
+                drops.push((from, to));
+            }
+            hud::Action::Hover { target, over } => {
+                if over {
+                    ui.hovered = Some(target);
+                } else if ui.hovered == Some(target) {
+                    ui.hovered = None;
+                }
+            }
+        }
+    }
+    // the tiles are gone, without telling that the pointer left them
+    if !ui.show_inventory {
+        ui.selected = None;
+        ui.hovered = None;
+    }
+
+    let held = player
+        .and_then(|(_, _, inventory, _)| inventory)
+        .map(Inventory::items)
+        .unwrap_or_default();
+    // usable items first, then by name, so the tiles keep their places
+    let mut rows: Vec<_> = held
+        .iter()
+        .filter_map(|&item| {
+            let (Item(id), stack) = items.get(item).ok()?;
+            let definition = definitions.get(id);
+            let count = stack.map_or(1, |stack| stack.0);
+            Some(hud::InventoryRow {
+                item,
+                id: id.clone(),
+                name: definition.map_or_else(|| id.0.clone(), |d| d.name.clone()),
+                color: definition.map_or((1., 0., 1.), |d| d.color),
+                count,
+                weight: definition.map_or(0., |d| d.weight) * count as f32,
+                usable: definition.is_some_and(|d| d.effect.is_some()),
+            })
+        })
+        .collect();
+    rows.sort_by(|a, b| (!a.usable, &a.name, a.item).cmp(&(!b.usable, &b.name, b.item)));
+    let slots = player
+        .and_then(|(.., hotbar)| hotbar)
+        .map(|hotbar| hotbar.0.clone())
+        .unwrap_or_default();
+
+    if let Some((owner, ..)) = player {
+        // the item type of a tile or slot, if it can go into the hotbar
+        let usable_type = |target| match target {
+            hud::Target::Tile(item) => rows
+                .iter()
+                .find(|row| row.item == item && row.usable)
+                .map(|row| row.id.clone()),
+            hud::Target::Slot(slot) => slots.get(slot).cloned().flatten(),
+        };
+        let has_content = |target| match target {
+            hud::Target::Tile(item) => rows.iter().any(|row| row.item == item),
+            hud::Target::Slot(slot) => slots.get(slot).is_some_and(Option::is_some),
+        };
+        let mut put = |from, to| {
+            if let Some((slot, id)) = put_down(from, to, usable_type) {
+                assign_slot.write(AssignSlot { owner, slot, id });
+            }
+        };
+
+        // In the game, a click on a slot uses it. With the inventory open, clicks work like a
+        // drag: the first one picks up a tile or slot (selecting it), the next one puts it down
+        // where it clicks.
+        for click in clicks {
+            if !ui.show_inventory {
+                if let Some(hud::Target::Slot(slot)) = click {
+                    use_slot.write(UseSlot { owner, slot });
+                }
+                continue;
+            }
+            match ui.selected.take() {
+                Some(from) => put(from, click),
+                None => ui.selected = click.filter(|&target| has_content(target)),
+            }
+        }
+        for (from, to) in drops {
+            put(from, to);
+        }
+
+        // In the game, a slot's key uses it. With the inventory open, it puts the tile or slot
+        // under the pointer down on it (like in Minecraft), or else the selected one. Items are
+        // only used there with a right click.
+        for (slot, key) in SLOT_KEYS.into_iter().enumerate() {
+            if !keyboard_input.just_pressed(key) {
+                continue;
+            }
+            if !ui.show_inventory {
+                use_slot.write(UseSlot { owner, slot });
+                continue;
+            }
+            let to = Some(hud::Target::Slot(slot));
+            match ui.hovered.filter(|&hovered| usable_type(hovered).is_some()) {
+                Some(from) => put(from, to),
+                None => {
+                    if let Some(from) = ui.selected.take() {
+                        put(from, to);
+                    }
+                }
+            }
         }
     }
 
-    let player = player.single().ok();
-    let inventory = player.filter(|_| ui.show_inventory).map(|(_, inventory)| {
-        let held = inventory.map(Inventory::items).unwrap_or_default();
-        held.iter()
-            .filter_map(|&item| Some((item, items.get(item).ok()?)))
-            .map(|(item, (Item(id), stack))| {
-                let definition = definitions.get(id);
-                let count = stack.map_or(1, |stack| stack.0);
-                hud::InventoryRow {
-                    item,
-                    name: definition.map_or_else(|| id.0.clone(), |d| d.name.clone()),
-                    count,
-                    weight: definition.map_or(0., |d| d.weight) * count as f32,
-                    usable: definition.is_some_and(|d| d.effect.is_some()),
-                }
-            })
-            .collect()
+    let hotbar = slots.map(|id| {
+        id.map(|id| {
+            let mut held = rows.iter().filter(|row| row.id == id);
+            let first = held.next().cloned();
+            let definition = definitions.get(&id);
+            hud::HotbarSlot {
+                name: definition.map_or_else(|| id.0.clone(), |d| d.name.clone()),
+                color: definition.map_or((1., 0., 1.), |d| d.color),
+                count: first.iter().chain(held).map(|row| row.count).sum(),
+                held: first,
+                id,
+            }
+        })
     });
+    let inventory = ui.show_inventory.then_some(rows);
 
     let new_state = hud::State {
-        player_health: player.map(|(health, _)| *health),
+        player_health: player.map(|(_, health, ..)| *health),
         enemy_count: enemies.iter().count(),
         flow_field_grid: flow_field_debug
             .grid
@@ -450,6 +599,8 @@ fn sync_state(
         menu_open: *menu.get() == Menu::Open,
         settings: *settings,
         inventory,
+        selected: ui.selected,
+        hotbar,
     };
     let mut state = ui.state;
     // only on changes, since setting the signal re-renders the HUD
