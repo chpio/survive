@@ -351,3 +351,16 @@ fn putting_down_works_alike_for_tiles_and_slots() {
     assert_eq!(put(Target::Tile(potion), None), None);
     assert_eq!(put(Target::Tile(potion), Some(Target::Tile(sword))), None);
 }
+
+#[test]
+fn selected_item_type_is_marked_in_the_inventory_and_the_hotbar() {
+    let (mut state, potion, _) = state();
+    state.selected = Some(Target::Tile(potion));
+    let hud = hud(state);
+
+    let doc = hud.doc.inner();
+    assert_eq!(doc.query_selector_all(".tile.selected").unwrap().len(), 1);
+    assert_eq!(doc.query_selector_all(".slot.selected").unwrap().len(), 1);
+    // the popup only at the tile that was clicked
+    assert_eq!(doc.query_selector_all(".details").unwrap().len(), 1);
+}

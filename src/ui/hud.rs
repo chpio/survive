@@ -208,21 +208,28 @@ pub fn app() -> Element {
         Some(clearance) => format!("{clearance} px"),
         None => "aus".to_string(),
     };
-    // the tile or slot being moved, by clicking it (selected) or dragging it, which both work alike
+    // the item type being moved, by clicking it (selected) or dragging it, which both work alike,
+    // and whether it is usable, so putting it down on a slot puts it there
     let dragged = press().filter(|pressed| pressed.dragged.is_some() && pressed.position.is_some());
-    let marks = Marks {
-        moving: dragged.map(|pressed| pressed.on).or(state.selected),
-        popup: state.selected,
-    };
-    // putting it down on a slot puts its type there
-    let assignable = match marks.moving {
+    let moving = match dragged.map(|pressed| pressed.on).or(state.selected) {
         Some(Target::Tile(item)) => state
             .inventory
             .iter()
             .flatten()
-            .any(|row| row.item == item && row.usable),
-        Some(Target::Slot(_)) => true,
-        None => false,
+            .find(|row| row.item == item)
+            .map(|row| (row.id.clone(), row.usable)),
+        Some(Target::Slot(slot)) => state
+            .hotbar
+            .get(slot)
+            .cloned()
+            .flatten()
+            .map(|slot| (slot.id, true)),
+        None => None,
+    };
+    let assignable = moving.as_ref().is_some_and(|&(_, usable)| usable);
+    let marks = Marks {
+        moving: moving.map(|(id, _)| id),
+        popup: state.selected,
     };
 
     rsx! {
@@ -303,9 +310,9 @@ pub fn app() -> Element {
             // the inventory right above the hotbar
             div { class: "bottom",
                 if let Some(rows) = state.inventory {
-                    {inventory(rows, marks, pointer, send)}
+                    {inventory(rows, &marks, pointer, send)}
                 }
-                {hotbar(state.hotbar, assignable, marks, pointer, send)}
+                {hotbar(state.hotbar, assignable, &marks, pointer, send)}
             }
             if state.menu_open {
                 {menu(state.settings, send)}
@@ -326,7 +333,7 @@ pub fn app() -> Element {
 fn hotbar(
     slots: [Option<HotbarSlot>; SLOTS],
     assignable: bool,
-    marks: Marks,
+    marks: &Marks,
     pointer: Pointer,
     send: Callback<Action>,
 ) -> Element {
@@ -343,7 +350,7 @@ fn hotbar(
 /// onto the hotbar, or put there with the hotbar's keys while the pointer is over them.
 fn inventory(
     rows: Vec<InventoryRow>,
-    marks: Marks,
+    marks: &Marks,
     pointer: Pointer,
     send: Callback<Action>,
 ) -> Element {
@@ -369,11 +376,10 @@ fn inventory(
     }
 }
 
-/// Which tile or slot is marked as being moved, and which shows its popup: a selected one both, a
-/// dragged one only the first, since the popup would be in the way.
-#[derive(Clone, Copy, PartialEq)]
+/// What the tiles and slots mark: the item type being moved, wherever it is, and the selected tile
+/// or slot showing its popup (not a dragged one, where it would be in the way).
 struct Marks {
-    moving: Option<Target>,
+    moving: Option<ItemId>,
     popup: Option<Target>,
 }
 
@@ -423,7 +429,7 @@ impl From<HotbarSlot> for Cell {
 fn cell(
     target: Target,
     content: Option<Cell>,
-    marks: Marks,
+    marks: &Marks,
     pointer: Pointer,
     send: Callback<Action>,
 ) -> Element {
@@ -433,12 +439,12 @@ fn cell(
         Target::Tile(item) => (String::from("tile"), format!("tile-{item}")),
         Target::Slot(slot) => (String::from("slot"), format!("slot-{slot}")),
     };
-    if marks.moving == Some(target) {
-        class += " selected";
-    }
     if let Some(content) = &content {
         if content.count == 0 {
             class += " unavailable";
+        }
+        if marks.moving.as_ref() == Some(&content.id) {
+            class += " selected";
         }
         if pointer.highlights(&content.id) {
             class += " highlighted";

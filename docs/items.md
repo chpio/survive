@@ -125,7 +125,8 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
   - auf einer Kachel oder außerhalb von Kacheln und Slots: Ein Slot wird geleert, eine Kachel
     bleibt, wie sie ist.
   - auf sich selbst: nichts. Die Auswahl endet trotzdem.
-- Solange eine benutzbare Kachel oder ein Slot ausgewählt ist, sind die Slots hervorgehoben.
+- Der Typ, der gerade bewegt wird (ausgewählt oder gezogen), ist überall markiert, im Inventar und
+  in der Leiste, wie beim Hover. Ist er benutzbar, sind dazu die Slots hervorgehoben.
 - Die Tasten 1–5 legen bei offenem Inventar die Kachel oder den Slot unter dem Zeiger auf ihren
   Slot (wie bei Minecraft), sonst die Auswahl.
 - Das HUD schickt nur `hud::Action::Click`, `hud::Action::Drop` und `hud::Action::Hover`. Was
