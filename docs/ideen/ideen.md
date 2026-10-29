@@ -106,8 +106,18 @@ Die erste Version ist umgesetzt ([items.md](../items.md)): Items als Entities mi
   beschleunigt langsamer, erreicht aber dieselbe Höchstgeschwindigkeit. Deshalb wird zusätzlich
   die `DesiredVelocity` des Spielers mit dem Gewicht herunterskaliert.
 - Benutzen ist umgesetzt: Die Wirkung steht in der Definition, `ItemUsed` meldet sie.
+- Jedes Item hat einen Wert, sodass Verkaufen oder Verarbeiten immer etwas bringt. Unnützes wirft
+  man daher nicht weg, sondern macht es zu Geld oder Material.
+- Zerlegen direkt im Inventar statt eines Mülleimers: Ein Button macht aus dem Item Material, ohne
+  Händler oder Werkbank. So wird man Items überall los, und die Karte füllt sich nicht mit
+  liegengelassenen Items. Verkaufen kommt mit den Händlern dazu.
+- Aufheben per Taste (E) für das nächste Item in Reichweite, dazu der Mausklick. Automatisch beim
+  Drüberlaufen nur für Typen, die das in der Definition erlauben (leichte, stapelbare wie Tränke).
+  Selbst abgelegte Items hebt das automatische Aufheben erst wieder auf, wenn der Spieler sich
+  einmal außer Reichweite entfernt hat, sonst ließe sich nichts ablegen.
 - Noch offen: Gewicht als Masse, Icons statt der Platzhalterfarbe, Ausrüstung wirkt auf
-  Kampfwerte.
+  Kampfwerte, Wert und Zerlegen in Material, Verkaufen (braucht Händler), Aufheben per Taste und
+  automatisch.
 
 ## Speichern
 
