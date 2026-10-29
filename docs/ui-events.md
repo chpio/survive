@@ -52,7 +52,8 @@ Die Prüfung selbst ist eine reine Funktion `ui::blocks_pointer(doc, position)` 
   Layout-Container blockieren nicht.
 - `.hud` und `.menu` bekommen die Klasse. Das Menü überdeckt den ganzen Bildschirm. Solange es
   offen ist, erreicht also kein Klick die Welt, passend dazu, dass das Spiel pausiert ist.
-- Später bekommen ganze Fenster die Klasse (Inventar, Truhe), samt ihrer Ränder und Lücken.
+- Ganze Fenster bekommen die Klasse, samt ihrer Ränder und Lücken: bisher das Inventar, später
+  auch Truhen.
 
 Verworfen wurde die Variante „jedes Element außer Wurzel und `body` blockiert“. Ein
 bildschirmfüllender Container zum Positionieren würde sonst unbemerkt die ganze Welt sperren. Die

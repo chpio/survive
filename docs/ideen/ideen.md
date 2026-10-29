@@ -54,10 +54,12 @@ Umgesetzt, siehe „Schlafen und Aufwachen“ in [spawnen.md](../spawnen.md).
 
 ## Flowfield-Optimierung
 
-- Ein Gitter nur berechnen, wenn es aktive Gegner dieser Größe gibt. Ohne Gegner wird gar nichts
-  berechnet.
-- Die Dijkstra-Suche auf den Flowfield-Radius begrenzen.
-- (Neuberechnung nur beim Zellwechsel des Spielers ist bereits umgesetzt.)
+Umgesetzt, siehe `src/flowfield/`:
+
+- Ein Gitter wird nur berechnet, wenn wache Gegner dieser Größe oder ein Spawner (per
+  `flowfield::Request`) es brauchen. Sonst wird gar nichts berechnet.
+- Die Dijkstra-Suche ist auf ein Fenster im Flowfield-Radius um den Spieler begrenzt.
+- Neu berechnet wird nur beim Zellwechsel des Spielers oder wenn sich die geladenen Karten ändern.
 
 ## Items
 
@@ -67,8 +69,8 @@ Umgesetzt, siehe „Schlafen und Aufwachen“ in [spawnen.md](../spawnen.md).
 - Besser über Tiled Custom Types: Rust-Komponente `Chest` mit `Reflect` registrieren, über das
   Feature `user_properties` von `bevy_ecs_tiled` als JSON exportieren und in Tiled unter View →
   Custom Types Editor → Import einlesen.
-- Item-Werte zentral festlegen (z. B. in RON). Die Truhe verweist nur auf den Grundtyp. Eigene Werte
-  in Tiled nur für Einzelstücke (Story-Waffen).
+- Item-Werte zentral festlegen, umgesetzt in `assets/items.ron` ([items.md](../items.md)). Die
+  Truhe verweist nur auf den Grundtyp. Eigene Werte in Tiled nur für Einzelstücke (Story-Waffen).
 - Grundtyp und Stufe trennen: eine Stufentabelle multipliziert die Grundwerte.
 
 ## Gebiets-Level und Loot
@@ -89,6 +91,9 @@ Umgesetzt, siehe „Schlafen und Aufwachen“ in [spawnen.md](../spawnen.md).
 
 ## Inventar
 
+Die erste Version ist umgesetzt ([items.md](../items.md)): Items als Entities mit `HeldBy` und
+`Inventory`, Stapeln, Definitionen in RON und das Inventarfenster im HUD.
+
 - Items sind eigene Entities, die per Relationship am Besitzer hängen (Spieler, Gegner, Truhe).
   Grund: Haltbarkeit und Verzauberungen machen jedes Exemplar einzigartig.
 - Aufheben bzw. Fallenlassen = Sprite und Position entfernen bzw. wieder setzen und das Item
@@ -97,8 +102,11 @@ Umgesetzt, siehe „Schlafen und Aufwachen“ in [spawnen.md](../spawnen.md).
   Entity despawnen, beim Teilen eine neue spawnen. Nur Items ohne eigenen Zustand werden gestapelt.
 - Kein festes Limit: Das Inventargewicht zählt zur Masse des Spielers. Er wird träger und schwerer
   wegzuschubsen. Die natürliche Grenze entsteht über die Stärke.
-- Noch offen: Item-Definitionen (Name, Icon, Grundwerte, stapelbar), Ausrüstung wirkt auf
-  Kampfwerte, Benutzen über Events, Oberfläche in Dioxus.
+- Überladung macht auch langsamer. `Strength` begrenzt nur die Kraft: Ein schwererer Spieler
+  beschleunigt langsamer, erreicht aber dieselbe Höchstgeschwindigkeit. Deshalb wird zusätzlich
+  die `DesiredVelocity` des Spielers mit dem Gewicht herunterskaliert.
+- Noch offen: Benutzen über Events, Gewicht als Masse, Icons statt der Platzhalterfarbe,
+  Ausrüstung wirkt auf Kampfwerte.
 
 ## Speichern
 
@@ -117,6 +125,8 @@ Ausgearbeitet in [speichern.md](../speichern.md). Die Grundsätze:
 
 ## Items mit der Maus aufheben
 
+Umgesetzt ([items.md](../items.md), [ui-events.md](../ui-events.md)), bis auf den Tooltip.
+
 - Bevy Picking an Sprites: Observer für `Pointer<Click>` mit Distanzprüfung zum Spieler,
   `Pointer<Over>` für Hervorhebung und Tooltip.
 - Eigenes Picking-Backend für das Dioxus-HUD (ca. 50–100 Zeilen): Blitz-Hit-Test an der
@@ -126,8 +136,6 @@ Ausgearbeitet in [speichern.md](../speichern.md). Die Grundsätze:
 - Trifft das HUD, geht der Klick ans UI, sonst an die Welt. Dafür meldet das HUD-Backend seine
   Treffer mit höherer Priorität als die Sprites.
 - Auf passende Koordinaten bei Skalierung und Vollbild achten.
-- Passt zum TODO, das HUD nur bei geändertem Hover-Zustand neu zu zeichnen: beides nutzt denselben
-  Hit-Test.
 
 ## Offene Punkte
 
@@ -136,9 +144,6 @@ Ausgearbeitet in [speichern.md](../speichern.md). Die Grundsätze:
   Brunnen-ID als Spielerposition müssen Brunnen (und Truhen) Tile-Objekte werden.
 - **Tiled-Skript früh einführen:** Objekte ohne Objekt-ID lassen sich nicht speichern. Das Skript
   sollte daher vor dem ersten Speicherstand kommen, den jemand behalten will.
-- **Gewicht als Masse:** `Strength` begrenzt nur die Kraft. Ein schwererer Spieler beschleunigt
-  langsamer und wird schwerer weggeschubst, erreicht aber dieselbe Höchstgeschwindigkeit. Soll
-  Überladung auch langsamer machen, muss zusätzlich `DesiredVelocity` skaliert werden.
 - **Tod:** Bisher heilt `combat` den Spieler und entfernt alle Gegner. Das Laden des letzten
   Brunnen-Stands ersetzt das. Vorher den TODO-Punkt umsetzen, dass `combat` ein `Died`-Event
   auslöst.
@@ -150,11 +155,11 @@ Ausgearbeitet in [speichern.md](../speichern.md). Die Grundsätze:
 
 Jeder Schritt baut auf dem vorherigen auf:
 
-1. Große Welt aus mehreren Karten ([welt.md](../welt.md))
+1. Große Welt aus mehreren Karten ([welt.md](../welt.md), umgesetzt)
 2. Hinterhalte und Aktivierungsradien, Spawnen außer Sicht ([spawnen.md](../spawnen.md),
    umgesetzt)
-3. Flowfield-Optimierung (zusammen mit dem Performance-Punkt in `TODO.md`)
-4. Items und Inventar
+3. Flowfield-Optimierung (umgesetzt)
+4. Items und Inventar (erste Version umgesetzt, offen: Benutzen, Gewicht als Masse)
 5. Truhen und Gebiets-Level
 6. Brunnen
 7. Speichern

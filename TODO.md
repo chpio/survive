@@ -17,6 +17,12 @@
 - Balance the combat values in `player::combat()` and `Enemy::combat`: five enemies touching the
   player kill it within a few seconds.
 
+## HUD
+
+- Hotbar for the inventory: a bar of slots along the bottom edge of the screen, always visible,
+  with items the player assigns to it and keys (e.g. 1–9) to use them. The inventory window stays
+  for the full list.
+
 ## Input
 
 - Pens under Wayland: the compositor only sends them through the tablet protocol, which winit

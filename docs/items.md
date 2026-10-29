@@ -99,6 +99,6 @@ Drei Plugins, damit die Tests ohne Asset-System und Eingabe auskommen:
 ## Danach
 
 - Benutzen (Heiltrank heilt) über ein Event pro Item-Typ.
-- Gewicht als Masse des Spielers.
+- Gewicht als Masse des Spielers. Überladung macht auch langsamer (siehe [ideen.md](ideen/ideen.md)).
 - Gegner-Drops mit Loot-Tabellen.
 - Tooltip mit Namen beim Hover.
