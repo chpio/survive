@@ -1,0 +1,3 @@
+[alias]
+# runs the game with Bevy's spans sent to the Tracy profiler, see CLAUDE.md
+tracy = "run --release --features bevy/trace_tracy"

@@ -13,7 +13,10 @@ cargo run          # run the game (assets are loaded from ./assets, hot-reloaded
 cargo check        # fast type check
 cargo clippy       # lint
 cargo fmt          # format
+cargo tracy        # release build with Bevy's spans sent to the Tracy profiler (alias in .cargo/config.toml)
 ```
+
+`cargo tracy` enables `bevy/trace_tracy`: every system and schedule becomes a span, which the Tracy profiler (version 0.14, matching the bundled client) shows per thread once it connects to the running game. Unlike the HUD's "Performance" tree, which measures the wall time between marker systems including waiting for other systems, it shows each system's own run time. The spans slow down the frame a bit.
 
 Tests live in `tests/` (never inline) and run with `cargo test`; filter with `cargo test --test it enemy`. They form a single test binary `it` (`autotests = false`; `tests/main.rs` only declares the modules), so the game and its dependencies are linked once; the lib and binary have no test targets of their own (`test = false` in `Cargo.toml`). All tests run as threads of one process, so they must not share process-wide state (statics, environment variables, the current directory). Game code is in the `survival` lib crate (`src/lib.rs`) so tests can use it; `src/main.rs` only builds the `App`. `tests/common.rs` builds a headless physics app; `common::app_with` takes extra plugins, which can't be added once the app is finished.
 
