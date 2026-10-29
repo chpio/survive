@@ -163,7 +163,7 @@ fn setup(world: &mut World) {
         stylesheet_handle: world.resource::<AssetServer>().load("ui/style.css"),
         actions: action_rx,
         needs_paint: true,
-        show_timings: false,
+        show_timings: true,
         show_inventory: false,
         redraw_request,
     });
@@ -481,19 +481,11 @@ fn paint_ui(
     window: Single<&Window, With<PrimaryWindow>>,
     mut ui_scene: ResMut<UiScene>,
     mut images: ResMut<Assets<Image>>,
-    mut timings: Option<ResMut<perf::Timings>>,
 ) {
     let ui = &mut *ui;
-    let mut measure = |step, started: Instant| {
-        if let Some(timings) = &mut timings {
-            timings.add(step, started.elapsed());
-        }
-    };
 
     // true after a re-render, e.g. when `sync_state` changed the state
-    let started = Instant::now();
     ui.needs_paint |= ui.doc.poll(None);
-    measure(perf::Step::HudUpdate, started);
     ui.needs_paint |= ui.redraw_request.0.swap(false, Ordering::Relaxed);
 
     let (width, height) = (window.physical_width(), window.physical_height());
@@ -521,11 +513,8 @@ fn paint_ui(
     }
     ui.needs_paint = false;
 
-    let started = Instant::now();
     doc.resolve(ui.started.elapsed().as_secs_f64());
-    measure(perf::Step::HudLayout, started);
 
-    let started = Instant::now();
     ui_scene.scene.reset();
     paint_scene(
         &mut VelloScenePainter::new(&mut ui_scene.scene),
@@ -536,7 +525,6 @@ fn paint_ui(
         0,
         0,
     );
-    measure(perf::Step::HudScene, started);
 }
 
 /// Sets the document's viewport after the window changed its size or scale, so that the next
@@ -628,11 +616,6 @@ impl bevy::app::Plugin for Plugin {
 
         app.sub_app_mut(RenderApp)
             .add_systems(RenderStartup, init_vello_renderer)
-            .add_systems(
-                Render,
-                render_ui
-                    .in_set(RenderSystems::Prepare)
-                    .in_set(perf::Step::HudRender),
-            );
+            .add_systems(Render, render_ui.in_set(RenderSystems::Prepare));
     }
 }

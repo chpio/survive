@@ -1,9 +1,5 @@
 use super::stylesheet::Stylesheet;
-use crate::{
-    combat::Health,
-    perf::{Averages, MAIN_THREAD, Node, RENDER_THREAD},
-    settings::Settings,
-};
+use crate::{combat::Health, perf::Averages, settings::Settings};
 use bevy::ecs::entity::Entity;
 use dioxus::prelude::*;
 use std::{sync::mpsc, time::Duration};
@@ -116,16 +112,7 @@ pub fn app() -> Element {
                         span { {format!("{:.0} FPS / {}", 1. / timings.frame.as_secs_f64(), ms(timings.frame))} }
                     }
                     div { class: "children",
-                        for node in MAIN_THREAD {
-                            {node_rows(&timings, node)}
-                        }
-                        {row("Sonstiges", timings.rest())}
-                    }
-                    {row("Render-Thread (parallel)", RENDER_THREAD.iter().map(|&step| timings.step(step)).sum())}
-                    div { class: "children",
-                        for & step in RENDER_THREAD {
-                            {row(step.label(), timings.step(step))}
-                        }
+                        {row("Physik", timings.physics)}
                     }
                 }
             }
@@ -201,21 +188,6 @@ fn menu(settings: Settings, send: Callback<Action>) -> Element {
                 }
             }
         }
-    }
-}
-
-/// A step, or a group with its steps below it.
-fn node_rows(timings: &Averages, node: &Node) -> Element {
-    match node {
-        Node::Step(step) => row(step.label(), timings.step(*step)),
-        Node::Group(label, steps) => rsx! {
-            {row(label, timings.node(node))}
-            div { class: "children",
-                for & step in *steps {
-                    {row(step.label(), timings.step(step))}
-                }
-            }
-        },
     }
 }
 

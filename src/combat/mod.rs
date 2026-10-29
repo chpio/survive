@@ -6,12 +6,9 @@
 //! fly further. Enemies without health are despawned. When the player dies, the round starts
 //! over: all enemies are removed and the player is healed.
 
-use crate::{
-    objects::{
-        enemy::{self, Asleep, Enemy},
-        player::Player,
-    },
-    perf,
+use crate::objects::{
+    enemy::{self, Asleep, Enemy},
+    player::Player,
 };
 use avian2d::prelude::*;
 use bevy::{ecs::query::QueryFilter, prelude::*};
@@ -137,8 +134,7 @@ impl bevy::app::Plugin for Plugin {
                 despawn_dead_enemies,
                 restart_on_player_death,
             )
-                .chain()
-                .in_set(perf::Step::Combat),
+                .chain(),
         );
     }
 }

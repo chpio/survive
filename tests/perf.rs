@@ -1,18 +1,19 @@
 use crate::common;
+use avian2d::prelude::*;
 use bevy::prelude::*;
 use std::time::Duration;
-use survival::perf::{self, Averages, Node, Step, Timings};
+use survival::perf::{self, Timings};
 
 #[test]
-fn measures_time_per_frame_of_each_step() {
+fn measures_time_per_frame_of_the_physics() {
     let mut app = common::app_with(perf::Plugin);
     app.add_systems(
-        Update,
-        (|| std::thread::sleep(Duration::from_millis(2))).in_set(Step::Combat),
+        FixedPostUpdate,
+        (|| std::thread::sleep(Duration::from_millis(2))).in_set(PhysicsSystems::StepSimulation),
     );
 
-    // the averages are published after half a second, which the test app advances by 1/64 s per
-    // update
+    // the averages are published after half a second, which the test app advances by one fixed
+    // step of 1/64 s per update
     let mut updates = 0;
     while app.world().resource::<Timings>().averages.is_none() {
         app.update();
@@ -21,67 +22,10 @@ fn measures_time_per_frame_of_each_step() {
     }
 
     let averages = app.world().resource::<Timings>().averages.clone().unwrap();
-    let combat = averages.steps[Step::Combat as usize];
-    let enemies = averages.steps[Step::Enemies as usize];
+    let physics = averages.physics;
     assert!(
-        combat >= Duration::from_millis(2) && combat < Duration::from_millis(10),
-        "combat {combat:?}"
+        physics >= Duration::from_millis(2) && physics < Duration::from_millis(10),
+        "physics {physics:?}"
     );
-    // nothing runs in it
-    assert!(enemies < Duration::from_micros(200), "enemies {enemies:?}");
-    assert!(averages.frame >= combat, "frame {:?}", averages.frame);
-}
-
-/// Steps in the HUD's tree, in order.
-fn steps_in_tree() -> Vec<Step> {
-    perf::MAIN_THREAD
-        .iter()
-        .flat_map(|node| match node {
-            Node::Step(step) => vec![*step],
-            Node::Group(_, steps) => steps.to_vec(),
-        })
-        .chain(perf::RENDER_THREAD.iter().copied())
-        .collect()
-}
-
-#[test]
-fn every_step_is_in_the_tree_once() {
-    let mut in_tree = steps_in_tree();
-    in_tree.sort_by_key(|&step| step as usize);
-    assert_eq!(in_tree, Step::ALL);
-}
-
-#[test]
-fn groups_sum_up_their_steps_and_the_rest_fills_the_frame() {
-    let ms = Duration::from_millis;
-    let mut averages = Averages {
-        frame: ms(20),
-        steps: [Duration::ZERO; Step::ALL.len()],
-    };
-    for step in Step::ALL {
-        averages.steps[step as usize] = ms(1);
-    }
-
-    let logic = &perf::MAIN_THREAD[0];
-    assert!(matches!(logic, Node::Group(_, steps) if steps.len() == 5));
-    assert_eq!(averages.node(logic), ms(5));
-    // minus all steps on the main thread
-    let main_thread = (Step::ALL.len() - perf::RENDER_THREAD.len()) as u64;
-    assert_eq!(averages.rest(), ms(20 - main_thread));
-}
-
-#[test]
-fn measures_the_time_between_frames_as_waiting() {
-    let mut app = common::app_with(perf::Plugin);
-    while app.world().resource::<Timings>().averages.is_none() {
-        app.update();
-        std::thread::sleep(Duration::from_millis(2));
-    }
-
-    let averages = app.world().resource::<Timings>().averages.clone().unwrap();
-    let wait = averages.step(Step::Wait);
-    assert!(
-        wait >= Duration::from_millis(2) && wait < Duration::from_millis(10),
-        "wait {wait:?}"
-    );
+    assert!(averages.frame >= physics, "frame {:?}", averages.frame);
 }

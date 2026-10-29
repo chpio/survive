@@ -13,7 +13,6 @@ pub mod render;
 use crate::{
     cells::{self, CellRect, Raster},
     objects::player::Player,
-    perf,
     world::{self, MapRaster},
 };
 use avian2d::prelude::*;
@@ -283,8 +282,7 @@ impl bevy::app::Plugin for Plugin {
                 world::rasterize::<OpaqueCells, With<BlocksSight>>,
                 update_sight,
             )
-                .chain()
-                .in_set(perf::Step::Sight),
+                .chain(),
         );
     }
 }

@@ -3,7 +3,6 @@ use crate::{
     flowfield::FlowField,
     movement::{self, DesiredVelocity},
     objects::player,
-    perf,
     sight::{
         Sight,
         render::{SightMask, SightMaterial},
@@ -404,8 +403,7 @@ impl bevy::app::Plugin for Plugin {
                             .run_if(active),
                         stop.run_if(not(active)),
                     )
-                        .chain()
-                        .in_set(perf::Step::Enemies),
+                        .chain(),
                     despawn_outside_maps.run_if(on_timer(Duration::from_secs(1))),
                 ),
             );

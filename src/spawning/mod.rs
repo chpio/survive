@@ -1,7 +1,7 @@
 //! Sources of enemies besides the debug keys (see `docs/spawnen.md`). They decide what spawns
 //! where and send [`SpawnEnemy`] messages, which [`crate::objects::enemy`] turns into entities.
 
-use crate::{objects::enemy::SpawnEnemy, perf};
+use crate::objects::enemy::SpawnEnemy;
 use bevy::prelude::*;
 
 pub mod ambush;
@@ -20,8 +20,7 @@ impl bevy::app::Plugin for Plugin {
                     ambush::spawn,
                     out_of_sight::request,
                     out_of_sight::spawn,
-                )
-                    .in_set(perf::Step::Spawning),
+                ),
             );
     }
 }

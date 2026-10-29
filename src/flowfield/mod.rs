@@ -26,7 +26,6 @@ use crate::{
         enemy::{Asleep, Enemy},
         player,
     },
-    perf,
     world::{self, MapRaster},
 };
 use avian2d::prelude::*;
@@ -548,8 +547,7 @@ impl bevy::app::Plugin for Plugin {
                 world::rasterize::<Obstacles, Without<Sensor>>,
                 update_flow_field,
             )
-                .chain()
-                .in_set(perf::Step::FlowField),
+                .chain(),
         );
     }
 }

@@ -13,7 +13,6 @@
 //! Following a position rather than only a velocity lets a body hold its ground against weaker
 //! pushers. A pure velocity controller reacts one step late to contact impulses and slowly drifts.
 
-use crate::perf;
 use avian2d::prelude::*;
 use bevy::prelude::*;
 
@@ -110,9 +109,6 @@ pub struct Plugin;
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         // once per physics step, since applied forces are cleared after each step
-        app.add_systems(
-            FixedUpdate,
-            apply_movement_forces.in_set(perf::Step::Movement),
-        );
+        app.add_systems(FixedUpdate, apply_movement_forces);
     }
 }
