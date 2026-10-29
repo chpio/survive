@@ -14,8 +14,19 @@
 
 ## Gameplay
 
-- Balance the combat values in `player::combat()` and `Enemy::combat`: five enemies touching the
-  player kill it within a few seconds.
+- Balance the game's values together, once enemies have real sprites (their size on screen
+  affects how distances and speeds feel):
+  - Combat: `player::combat()` and `Enemy::combat` (damage, reach, knockback, cooldown, health).
+    Five enemies touching the player kill it within a few seconds.
+  - Speeds: the player's and the enemies' `MOVE_SPEED`, `enemy::TURN_SPEED`, and the masses and
+    strengths (`player::MASS`, `player::STRENGTH`, `Enemy::physics`), which decide who pushes whom.
+  - Distances around the player: `sight::SIGHT_RADIUS` (200 px), `flowfield::FLOW_FIELD_RADIUS`
+    (320 px), `enemy::DEACTIVATION_RADIUS` (400 px), `world::MIN_LOADED_DISTANCE` (340 px), the
+    spawn distances (`ambush::MIN_DISTANCE`, `out_of_sight::MIN_DISTANCE` / `MAX_DISTANCE`),
+    `items::input::PICKUP_REACH` and `enemy::Separation`. Awake enemies between the loaded distance
+    and the deactivation radius can stand on an unloaded map and are despawned instead of falling
+    asleep, which is fine for now.
+  - Item effects in `assets/items.ron` (healing of the potion and the apple).
 
 ## HUD
 
