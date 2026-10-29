@@ -2,10 +2,6 @@
 
 ## Performance
 
-- Compute the flow field less often or with less work: larger cells (8 instead of 4 px would close
-  corridors one tile wide), or only after the player moved a few cells. Measure first with the HUD's
-  "Performance" tree.
-
 - Low priority, only if the flow field's search turns out to be costly: replace the `BinaryHeap`
   in `Grid::compute_distances` with a bucket queue (Dial's algorithm). Steps cost only 10 or 14, so
   the waiting distances always lie within 15 consecutive values; a ring of 15 `Vec`s indexed by
@@ -17,9 +13,6 @@
   next frame is due.
 
 ## Gameplay
-
-- Ignore game input (spawn keys E / R / T, the HUD's spawn button) while the settings menu pauses
-  the game; enemies spawned then only appear frozen until it is closed.
 
 - Balance the combat values in `player::combat()` and `Enemy::combat`: five enemies touching the
   player kill it within a few seconds.
@@ -57,7 +50,3 @@
 - Bodies sliding along an edge of the map's triangulated colliders are still pushed off its end
   by up to 0.8 px, depending on where they pass the corner within a physics step
   (`body_slides_past_corner_of_triangulated_collider` passes only for some starting points).
-
-- Optionally check the line of sight with a margin of a cell: the straight way to the player may
-  pass up to about 2.5 px closer to a corner than the clearance. Since bodies have no friction,
-  enemies slide off instead of getting stuck, though.
