@@ -273,8 +273,8 @@ input[type="checkbox"] {
     background: #3a6ea5;
 }
 
-.tile .icon,
-.slot .icon {
+/* An item, the same everywhere (`hud::item_icon`) */
+.icon {
     width: 20px;
     height: 20px;
     border-radius: 3px;
@@ -328,8 +328,5 @@ input[type="checkbox"] {
 /* The item type being dragged, next to the pointer */
 .drag {
     position: absolute;
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
     opacity: 0.8;
 }

@@ -178,8 +178,13 @@ fn is_right_click(event: &Event<PointerData>) -> bool {
     event.trigger_button() == Some(MouseButton::Secondary)
 }
 
-fn css_color((r, g, b): (f32, f32, f32)) -> String {
-    format!("rgb({:.0}, {:.0}, {:.0})", r * 255., g * 255., b * 255.)
+/// How an item looks in the HUD, the same in the inventory, the hotbar and while dragged: so far a
+/// square in the placeholder color of its type.
+fn item_icon((r, g, b): (f32, f32, f32)) -> Element {
+    let color = format!("rgb({:.0}, {:.0}, {:.0})", r * 255., g * 255., b * 255.);
+    rsx! {
+        div { class: "icon", style: "background: {color}" }
+    }
 }
 
 pub fn app() -> Element {
@@ -319,9 +324,8 @@ pub fn app() -> Element {
             }
             // next to the pointer instead of below it, so it doesn't hide the slot it is released on
             if let Some(Press { dragged: Some((_, color)), position: Some((x, y)), .. }) = press() {
-                div {
-                    class: "drag",
-                    style: "left: {x + 8.}px; top: {y + 8.}px; background: {css_color(color)}",
+                div { class: "drag", style: "left: {x + 8.}px; top: {y + 8.}px",
+                    {item_icon(color)}
                 }
             }
         }
@@ -504,7 +508,7 @@ fn cell(
                 span { class: "key", "{slot + 1}" }
             }
             if let Some(content) = &content {
-                div { class: "icon", style: "background: {css_color(content.color)}" }
+                {item_icon(content.color)}
             }
             if let Some(count) = count {
                 span { class: "count", "{count}" }
