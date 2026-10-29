@@ -11,6 +11,9 @@ use std::path::{Path, PathBuf};
 /// Zoom levels the menu steps through, as a factor on the camera's default view.
 pub const ZOOM_LEVELS: [f32; 7] = [0.5, 0.75, 1., 1.25, 1.5, 1.75, 2.];
 
+/// Sizes of the HUD the menu steps through, as a factor on the window's scale.
+pub const UI_SCALES: [f32; 8] = [0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2.];
+
 #[derive(Resource, Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 // missing fields (e.g. settings added later) keep their defaults
 #[serde(default)]
@@ -20,6 +23,8 @@ pub struct Settings {
     pub fullscreen: bool,
     /// Above 1 the camera shows less of the map, below 1 more
     pub zoom: f32,
+    /// Size of the HUD, as a factor on the window's scale
+    pub ui_scale: f32,
 }
 
 impl Default for Settings {
@@ -28,6 +33,7 @@ impl Default for Settings {
             vsync: true,
             fullscreen: false,
             zoom: 1.,
+            ui_scale: 1.,
         }
     }
 }
@@ -58,12 +64,13 @@ impl Settings {
     /// The next zoom level in [`ZOOM_LEVELS`] in the direction of `zoom_in`, or the current zoom at
     /// the end.
     pub fn next_zoom(&self, zoom_in: bool) -> f32 {
-        let next = if zoom_in {
-            ZOOM_LEVELS.iter().find(|&&level| level > self.zoom)
-        } else {
-            ZOOM_LEVELS.iter().rfind(|&&level| level < self.zoom)
-        };
-        next.copied().unwrap_or(self.zoom)
+        next_level(&ZOOM_LEVELS, self.zoom, zoom_in)
+    }
+
+    /// The next HUD size in [`UI_SCALES`] in the direction of `larger`, or the current size at the
+    /// end.
+    pub fn next_ui_scale(&self, larger: bool) -> f32 {
+        next_level(&UI_SCALES, self.ui_scale, larger)
     }
 
     fn present_mode(&self) -> PresentMode {
@@ -81,6 +88,17 @@ impl Settings {
             WindowMode::Windowed
         }
     }
+}
+
+/// The first of the sorted `levels` above `current` (`up`) or below it, or `current` at the end.
+/// A value between the levels (e.g. edited by hand) goes to the neighboring level.
+fn next_level(levels: &[f32], current: f32, up: bool) -> f32 {
+    let next = if up {
+        levels.iter().find(|&&level| level > current)
+    } else {
+        levels.iter().rfind(|&&level| level < current)
+    };
+    next.copied().unwrap_or(current)
 }
 
 /// `settings.ron` next to the executable.

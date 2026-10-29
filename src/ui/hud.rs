@@ -545,6 +545,7 @@ fn item_details(cell: Cell, send: Callback<Action>) -> Element {
 
 fn menu(settings: Settings, send: Callback<Action>) -> Element {
     let zoom = format!("{:.0} %", settings.zoom * 100.);
+    let ui_scale = format!("{:.0} %", settings.ui_scale * 100.);
     let change = move |settings| send(Action::ChangeSettings(settings));
 
     rsx! {
@@ -573,6 +574,14 @@ fn menu(settings: Settings, send: Callback<Action>) -> Element {
                         button { onclick: move |_| change(Settings { zoom: settings.next_zoom(false), ..settings }), "−" }
                         span { "{zoom}" }
                         button { onclick: move |_| change(Settings { zoom: settings.next_zoom(true), ..settings }), "+" }
+                    }
+                }
+                div { class: "setting",
+                    span { "UI-Skalierung" }
+                    div { class: "stepper",
+                        button { onclick: move |_| change(Settings { ui_scale: settings.next_ui_scale(false), ..settings }), "−" }
+                        span { "{ui_scale}" }
+                        button { onclick: move |_| change(Settings { ui_scale: settings.next_ui_scale(true), ..settings }), "+" }
                     }
                 }
             }

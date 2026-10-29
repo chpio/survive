@@ -4,7 +4,7 @@ use bevy::{
     window::{PresentMode, PrimaryWindow, WindowMode},
 };
 use std::path::PathBuf;
-use survival::settings::{self, Menu, Settings, SettingsFile, ZOOM_LEVELS};
+use survival::settings::{self, Menu, Settings, SettingsFile, UI_SCALES, ZOOM_LEVELS};
 
 /// A path in the temp directory that no file exists at yet.
 fn temp_file(name: &str) -> PathBuf {
@@ -32,6 +32,7 @@ fn saved_settings_load_again() {
         vsync: false,
         fullscreen: true,
         zoom: 1.5,
+        ui_scale: 1.25,
     };
     settings.save(&path).unwrap();
     assert_eq!(Settings::load(&path), settings);
@@ -62,6 +63,20 @@ fn zoom_steps_through_the_levels_and_stops_at_the_ends() {
     let (min, max) = (ZOOM_LEVELS[0], ZOOM_LEVELS[ZOOM_LEVELS.len() - 1]);
     assert_eq!(zoom(max).next_zoom(true), max);
     assert_eq!(zoom(min).next_zoom(false), min);
+}
+
+#[test]
+fn ui_scale_steps_through_its_levels() {
+    let ui_scale = |ui_scale| Settings {
+        ui_scale,
+        ..default()
+    };
+    assert_eq!(ui_scale(1.).next_ui_scale(true), 1.25);
+    assert_eq!(ui_scale(1.).next_ui_scale(false), 0.75);
+
+    let (min, max) = (UI_SCALES[0], UI_SCALES[UI_SCALES.len() - 1]);
+    assert_eq!(ui_scale(max).next_ui_scale(true), max);
+    assert_eq!(ui_scale(min).next_ui_scale(false), min);
 }
 
 /// App with a primary window and a 2D camera, whose settings are loaded from `path`.
@@ -119,6 +134,7 @@ fn loaded_settings_are_applied_to_window_and_camera() {
         vsync: false,
         fullscreen: true,
         zoom: 2.,
+        ..default()
     }
     .save(&path)
     .unwrap();

@@ -126,8 +126,8 @@ pub struct Hud;
 /// Class of the HUD elements that take the pointer from the game world, along with their children.
 pub const BLOCKS_POINTER: &str = "blocks-pointer";
 
-/// Whether the HUD takes the pointer at `position` (in logical pixels, like Bevy's pointer
-/// positions): whether the topmost element there or one of its ancestors has the class
+/// Whether the HUD takes the pointer at `position` (in the document's CSS pixels: Bevy's logical
+/// pixels divided by [`Settings::ui_scale`]): whether the topmost element there or one of its ancestors has the class
 /// [`BLOCKS_POINTER`]. Uses the last layout, so the document has to be resolved before.
 pub fn blocks_pointer(doc: &BaseDocument, position: Vec2) -> bool {
     doc.elements_from_point(position.x, position.y)
@@ -218,8 +218,11 @@ fn forward_input(
     mut cursor_left: MessageReader<CursorLeft>,
     mut mouse_buttons: MessageReader<MouseButtonInput>,
     mut touches: MessageReader<TouchInput>,
+    settings: Res<Settings>,
 ) {
     let ui = &mut *ui;
+    // Blitz's coordinates are CSS pixels, which the UI scale makes larger than logical ones
+    let css = |position: Vec2| position / settings.ui_scale;
 
     // no repaint of its own: Blitz requests a redraw when a move changes something (hover,
     // selection), so moving over the game world doesn't repaint the HUD
@@ -227,7 +230,7 @@ fn forward_input(
         ui.cursor = event.position;
         let event = pointer_event(
             BlitzPointerId::Mouse,
-            ui.cursor,
+            css(ui.cursor),
             MouseEventButton::Main,
             ui.buttons,
         );
@@ -238,7 +241,7 @@ fn forward_input(
     if cursor_left.read().count() > 0 {
         let event = pointer_event(
             BlitzPointerId::Mouse,
-            ui.cursor,
+            css(ui.cursor),
             MouseEventButton::Main,
             ui.buttons,
         );
@@ -260,7 +263,7 @@ fn forward_input(
                 ui.buttons |= flag;
                 UiEvent::PointerDown(pointer_event(
                     BlitzPointerId::Mouse,
-                    ui.cursor,
+                    css(ui.cursor),
                     button,
                     ui.buttons,
                 ))
@@ -269,7 +272,7 @@ fn forward_input(
                 ui.buttons -= flag;
                 UiEvent::PointerUp(pointer_event(
                     BlitzPointerId::Mouse,
-                    ui.cursor,
+                    css(ui.cursor),
                     button,
                     ui.buttons,
                 ))
@@ -285,25 +288,25 @@ fn forward_input(
         let event = match touch.phase {
             TouchPhase::Started => UiEvent::PointerDown(pointer_event(
                 id,
-                touch.position,
+                css(touch.position),
                 MouseEventButton::Main,
                 MouseEventButtons::Primary,
             )),
             TouchPhase::Moved => UiEvent::PointerMove(pointer_event(
                 id,
-                touch.position,
+                css(touch.position),
                 MouseEventButton::Main,
                 MouseEventButtons::Primary,
             )),
             TouchPhase::Ended => UiEvent::PointerUp(pointer_event(
                 id,
-                touch.position,
+                css(touch.position),
                 MouseEventButton::Main,
                 MouseEventButtons::None,
             )),
             TouchPhase::Canceled => UiEvent::PointerCancel(pointer_event(
                 id,
-                touch.position,
+                css(touch.position),
                 MouseEventButton::Main,
                 MouseEventButtons::None,
             )),
@@ -320,6 +323,7 @@ fn forward_input(
 /// Without `Pickable`, the image blocks all hits below it.
 fn pick_hud(
     ui: NonSend<UiDocument>,
+    settings: Res<Settings>,
     hud: Single<Entity, With<Hud>>,
     camera: Single<(Entity, &Camera), With<Camera2d>>,
     pointers: Query<(&PointerId, &PointerLocation)>,
@@ -331,7 +335,7 @@ fn pick_hud(
         let Some(location) = &location.location else {
             continue;
         };
-        if blocks_pointer(&doc, location.position) {
+        if blocks_pointer(&doc, location.position / settings.ui_scale) {
             let hit = HitData::new(camera_entity, 0., Some(location.position.extend(0.)), None);
             // above the sprites, which use the camera's order, since the HUD is drawn above them
             let order = camera.order as f32 + 1.;
@@ -650,6 +654,7 @@ fn paint_ui(
     window: Single<&Window, With<PrimaryWindow>>,
     mut ui_scene: ResMut<UiScene>,
     mut images: ResMut<Assets<Image>>,
+    settings: Res<Settings>,
 ) {
     let ui = &mut *ui;
 
@@ -658,7 +663,8 @@ fn paint_ui(
     ui.needs_paint |= ui.redraw_request.0.swap(false, Ordering::Relaxed);
 
     let (width, height) = (window.physical_width(), window.physical_height());
-    let scale = window.scale_factor();
+    // the HUD is drawn larger than the window's scale by the UI scale
+    let scale = window.scale_factor() * settings.ui_scale;
     let mut doc = ui.doc.inner_mut();
 
     let viewport = doc.viewport();
