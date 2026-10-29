@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.11" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="24" height="16" tilewidth="16" tileheight="16" infinite="0" nextlayerid="3" nextobjectid="1">
+<map version="1.11" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="24" height="16" tilewidth="16" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="6">
  <tileset firstgid="1" source="grass_biome.tsx"/>
  <layer id="1" name="Kachelebene 1" width="24" height="16">
   <data encoding="csv">
@@ -44,4 +44,39 @@
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 </data>
  </layer>
+ <group id="3" name="Hinterhalte">
+  <objectgroup id="4" name="Hinterhalt Brücke">
+   <properties>
+    <property name="spawn_points" type="int" value="2"/>
+   </properties>
+   <object id="1" name="Brückenende" type="ambush_trigger" x="0" y="112" width="32" height="48"/>
+   <object id="2" name="Hinter dem Baum" type="ambush_spawn" x="124" y="56">
+    <properties>
+     <property name="count" type="int" value="3"/>
+    </properties>
+    <point/>
+   </object>
+   <object id="3" name="Am Teich" type="ambush_spawn" x="60" y="190">
+    <properties>
+     <property name="count" type="int" value="2"/>
+    </properties>
+    <point/>
+   </object>
+   <object id="4" name="Hinter dem Baum im Osten" type="ambush_spawn" x="300" y="136">
+    <properties>
+     <property name="count" type="int" value="2"/>
+     <property name="delay" type="float" value="1.5"/>
+     <property name="radius" type="float" value="8"/>
+    </properties>
+    <point/>
+   </object>
+   <object id="5" name="Im Nordosten" type="ambush_spawn" x="310" y="70">
+    <properties>
+     <property name="delay" type="float" value="1.5"/>
+     <property name="radius" type="float" value="12"/>
+    </properties>
+    <point/>
+   </object>
+  </objectgroup>
+ </group>
 </map>

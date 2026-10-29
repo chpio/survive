@@ -1,7 +1,7 @@
 # Konzept: Spawnen
 
-Noch nicht umgesetzt. Bisher spawnen Gegner nur über die Debug-Tasten E / R / T und den HUD-Button,
-immer an derselben Stelle.
+Umgesetzt sind die gemeinsame Basis, Hinterhalte, Schlafen und Aufwachen sowie der Ort außer
+Sicht (`src/spawning/`). Director, feste Populationen und Wellen fehlen noch.
 
 ## Ziel
 
@@ -16,29 +16,55 @@ immer an derselben Stelle.
 
 ## Gemeinsame Basis
 
-- Bisher enthält `SpawnEnemy` nur den Gegner (seinen Radius), `spawn_enemy` setzt ihn immer auf
-  den Startpunkt des Spielers (`player::START`).
-- Künftig bringt `SpawnEnemy` auch die Position mit. Die Quellen entscheiden, was wo spawnt,
-  `spawn_enemy` baut nur die Entity. Die Debug-Tasten und der HUD-Button geben ihren Ort ebenfalls
-  mit, etwa die Mausposition.
+- `SpawnEnemy` bringt den Gegner (seinen Radius), die Position und ob er schlafend startet. Die
+  Quellen entscheiden, was wo spawnt, `spawn_enemy` baut nur die Entity.
+- Die Debug-Tasten E / R / T spawnen an der Mausposition, schlafend. Der HUD-Button spawnt einen
+  wachen Gegner außer Sicht (siehe unten).
+
+## Schlafen und Aufwachen
+
+Die Radien um den Spieler aus [ideen.md](ideen/ideen.md):
+
+- Ein schlafender Gegner (`enemy::Asleep`) steht still, greift nicht an und zählt nicht fürs
+  Flowfield. Getroffen und geschubst werden kann er.
+- Er wacht auf, sobald der Spieler einen Teil von ihm sieht (`Sight::sees` mit seinem Radius), also
+  über die Sichtlinie, nicht über den Abstand allein. Hinter einer Wand bleibt er liegen, so lassen
+  sich Gebiete umgehen.
+- Ein wacher Gegner schläft ein, wo er steht, sobald er weiter als `DEACTIVATION_RADIUS` (400 px)
+  vom Spieler entfernt ist. Zwischen Flowfield-Radius (320 px) und diesem Radius läuft er direkt auf
+  den Spieler zu, wie jeder Gegner ohne Feld.
+- Gegner aus Hinterhalten und vom Ort außer Sicht spawnen wach, sie sollen ja angreifen.
 
 ## Hinterhalte
 
 - Eine Objekt-Ebene pro Hinterhalt (z. B. „Hinterhalt Brücke“, gesammelt unter einer
-  Gruppen-Ebene „Hinterhalte“). Darin eine oder mehrere Trigger-Zonen und die Spawnpunkte. Beim
-  Auslösen gelten die Spawnpunkte derselben Ebene.
+  Gruppen-Ebene „Hinterhalte“). Darin eine oder mehrere Trigger-Zonen (`type="ambush_trigger"`) und
+  die Spawnpunkte (Punkte mit `type="ambush_spawn"`). Beim Auslösen gelten die Spawnpunkte
+  derselben Ebene.
 - Ebenen haben keine Objekt-ID (siehe [speichern.md](speichern.md)). Ausgelöst wird deshalb an
-  den Trigger-Zonen vermerkt (`Triggered`), bei mehreren Zonen an allen der Ebene.
-- Werden einmalig ausgelöst. Art und Anzahl der Gegner sind Properties am Spawnpunkt.
-- Optional gestaffelt: zuerst kleine Gegner, danach große (z. B. `delay` am Spawnpunkt).
-- Mehr Spawnpunkte als Gegner. Beim Auslösen werden nur passende genommen: nicht sichtbar, mit
-  einer Laufdistanz über einem Minimum, erreichbar. So läuft derselbe Hinterhalt je nach Richtung
-  des Spielers anders ab.
-- Die Laufdistanz gibt es nur innerhalb des Flowfield-Radius. Spawnpunkte deshalb in diesem Radius
-  um die Trigger-Zone legen, sonst bleibt nur die Sichtprüfung.
-- Trigger-Zonen werden wie der Brunnen zu `Sensor + CollisionEventsEnabled`. Spawnpunkte haben
-  keinen Kollider. Sie brauchen ein Observer auf das Erzeugen von Objekten, nicht auf
-  `ColliderCreated`.
+  den Trigger-Zonen vermerkt (`Triggered`), bei mehreren Zonen an allen der Ebene. Bis es
+  Speichern gibt, kommt eine neu geladene Karte ungelöst zurück, der Hinterhalt lässt sich dann
+  erneut auslösen.
+- Werden einmalig ausgelöst. Art und Anzahl der Gegner sind Properties am Spawnpunkt: `radius`
+  (px, Standard 5), `count` (1).
+- Optional gestaffelt: `delay` (s nach dem Auslösen, Standard 0) am Spawnpunkt, etwa zuerst kleine
+  Gegner, danach große.
+- Mehr Spawnpunkte als Gegner. Die Property `spawn_points` an der Ebene begrenzt, wie viele genutzt
+  werden (ohne sie alle passenden). Ist die Verzögerung eines Spawnpunkts um, wird er genommen,
+  wenn er passt: Der Spieler sieht nichts von seinen Gegnern, und die Laufdistanz ist mindestens
+  `ambush::MIN_DISTANCE` (80 px), also auch erreichbar. Von gleichzeitig fälligen gehen die mit der
+  kleinsten Laufdistanz vor. Ein unpassender Spawnpunkt wird übersprungen, nicht später erneut
+  geprüft. So läuft derselbe Hinterhalt je nach Richtung des Spielers anders ab.
+- Die Laufdistanz gibt es nur innerhalb des Flowfield-Radius. Spawnpunkte außerhalb werden
+  übersprungen, deshalb gehören sie in diesen Radius um die Trigger-Zone.
+- Trigger-Zonen werden zu Sensoren mit `AmbushTrigger`. Ausgelöst wird, sobald eine ungelöste Zone
+  den Spieler berührt, abgefragt im Kontaktgraphen von Avian. `CollisionStart` kommt für Tiled-Kollider
+  nicht an, da Avian `CollisionEventsEnabled` nur beim Hinzufügen des Kolliders liest und der
+  Observer es erst danach einfügt (das betrifft auch den Brunnen).
+- Spawnpunkte haben keinen Kollider. Sie bekommen `SpawnPoint` im Observer auf `ObjectCreated`,
+  nicht auf `ColliderCreated`.
+- Testkarte: „Hinterhalt Brücke“ auf `map_east.tmx` am Ende der Landbrücke, mit Spawnpunkten
+  hinter den beiden großen Bäumen und einem am Teich, den man von der Brücke aus sieht.
 
 ## Director (wie Left 4 Dead)
 
@@ -86,7 +112,9 @@ Parameter, wer sie setzt, ist ihm egal.
 
 ## Ort außer Sicht
 
-Für Director und Wellen, die anders als Hinterhalte keine festen Spawnpunkte haben.
+Für Director und Wellen, die anders als Hinterhalte keine festen Spawnpunkte haben. Umgesetzt in
+`spawning::out_of_sight` (`find_place`, Message `SpawnOutOfSight`), bisher nur vom HUD-Button
+genutzt.
 
 - **Ort:** In Zellen, die der Spieler gerade nicht sieht (`Sight`, siehe [sicht.md](sicht.md)),
   etwa hinter Gebäuden. Sie müssen innerhalb des Flowfield-Radius liegen und im Gitter für den
@@ -94,12 +122,16 @@ Für Director und Wellen, die anders als Hinterhalte keine festen Spawnpunkte ha
   hervorschaut.
 - **Mindestabstand:** Über die Flowfield-Distanz messen, nicht über die Luftlinie, sonst stehen
   Gegner direkt hinter einer dünnen Wand.
-- **Gewichtung:** Ein Band in der Laufdistanz (etwa 120–250 px). Darin werden Zellen bevorzugt,
-  deren Laufdistanz klein ist gegenüber der Luftlinie, also Zellen hinter etwas, statt Zellen im
-  offenen Feld knapp außerhalb der Sichtweite.
-- **Flowfield anfordern:** Die Distanzen gibt es nur für Gitter, die gerade ein Gegner (oder das
-  Debug-Overlay) nutzt, und nur innerhalb des Flowfield-Radius. Der Spawner muss das Gitter für die
-  Größe des neuen Gegners anfordern und gespawnt wird eine Suche später. Das gilt auch für
+- **Gewichtung:** Ein Band in der Laufdistanz (120–250 px). Darin gewinnt die Zelle mit der
+  kürzesten Luftlinie zum Spieler. Hinter etwas ist die Luftlinie klein gegenüber der Laufdistanz,
+  so gewinnen Zellen hinter Gebäuden gegen Zellen im offenen Feld knapp außerhalb der Sichtweite.
+  Gibt es nichts, wohinter man sich verstecken kann, spawnt der Gegner knapp außerhalb der
+  Sichtweite. Die Wahl ist fest, mehrere Gegner hintereinander landen in derselben Zelle und gehen
+  über die Trennung auseinander.
+- **Flowfield anfordern:** Die Distanzen gibt es nur für Gitter, die gerade ein wacher Gegner (oder
+  das Debug-Overlay) nutzt, und nur innerhalb des Flowfield-Radius. Der Spawner fordert das Gitter
+  für die Größe des neuen Gegners mit einer Entity mit `flowfield::Request` an und spawnt, sobald es
+  berechnet ist, also eine Suche später. Danach entfernt er die Anforderung. Das gilt auch für
   Hinterhalte.
 
 ## Zusammenspiel
@@ -121,18 +153,22 @@ Für Director und Wellen, die anders als Hinterhalte keine festen Spawnpunkte ha
 
 ## Code
 
-- `objects/enemy.rs`: `SpawnEnemy` mit Position, `spawn_enemy` baut nur die Entity. Die Debug-Tasten
-  bleiben dort.
-- `src/spawning/`: eigenes Modul für die Quellen, sobald es mehr als die Debug-Tasten gibt. Eine
-  Datei pro Quelle (Hinterhalte, Director, Wellen) und eine für die Suche außer Sicht.
+- `objects/enemy.rs`: `SpawnEnemy` mit Position, `spawn_enemy` baut nur die Entity. Dort liegen
+  auch die Debug-Tasten, `Asleep` und `wake_and_sleep`.
+- `src/spawning/`: eigenes Modul für die Quellen, eine Datei pro Quelle (bisher `ambush.rs`, später
+  Director und Wellen) und `out_of_sight.rs` für die Suche außer Sicht. Läuft im Perf-Schritt
+  „Spawnen“.
+- `flowfield`: `Request`, `FlowField::walking_distance`, `Grid::reachable`. `sight`: `Sight::sees`.
 
 ## Offen
 
 - **Mischung der Spawn-Ansätze:** Welche Ansätze wo gelten. Offen ist vor allem, welche Zonen den
   Director wie einstellen und ob es eine Grundeinstellung außerhalb aller Zonen gibt.
 - **Sicht zwischen den Radien:** Zwischen Sichtweite (200 px) und Flowfield-Radius (320 px) ist jede
-  Zelle unsichtbar. Ohne weitere Regel spawnen Gegner vor allem dort, nicht hinter Gebäuden in der
-  Nähe. Die Gewichtung oben ist ein Vorschlag, was gewollt ist, muss sich beim Ausprobieren zeigen.
+  Zelle unsichtbar. Die Gewichtung oben (kürzeste Luftlinie) holt Gegner hinter Gebäude in der
+  Nähe. Ob das so gewollt ist oder etwas Zufall dazu soll, muss sich beim Ausprobieren zeigen.
+- **Quelle merken:** Noch merkt sich kein Gegner seine Quelle. Alle schlafen beim Zurückfallen ein,
+  auch die aus Hinterhalten. Mit dem Director braucht es die Quelle fürs Recyceln.
 - **Nachts:** Wo nachts gespawnt werden darf, hängt davon ab, ob der Spieler beleuchtete Bereiche
   außerhalb seiner Sicht sieht und ob ein Gegner im Dunkeln als sichtbar zählt (siehe „Licht und
   Sicht“ in [ideen.md](ideen/ideen.md)).

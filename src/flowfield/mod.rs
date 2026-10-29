@@ -12,8 +12,9 @@
 //! the player's cell (see [`FLOW_FIELD_RADIUS`]), which moves along whenever they are computed
 //! again. Its blocked cells are put together from the obstacles of the loaded maps then, and
 //! cells outside all of them are blocked. So memory and cost don't grow with the size of the
-//! world. Only the grids used by enemies (or shown by the debug overlay) are computed at all.
-//! Enemies outside the window have no field and walk straight at the player.
+//! world. Only the grids used by awake enemies, requested by spawners ([`Request`]) or shown by
+//! the debug overlay are computed at all. Enemies outside the window have no field and walk
+//! straight at the player.
 //!
 //! The player can stand closer to an obstacle than a grid's clearance. So that the player stays
 //! reachable then, the cells around the player that are only blocked by the clearance can be
@@ -21,7 +22,10 @@
 
 use crate::{
     cells::{self, CellRect, Raster},
-    objects::{enemy::Enemy, player},
+    objects::{
+        enemy::{Asleep, Enemy},
+        player,
+    },
     perf,
     world::{self, MapRaster},
 };
@@ -208,6 +212,27 @@ impl Grid {
             distance: Some(self.distance(position)).filter(|&d| d != u32::MAX),
             direction: self.cell_direction(position),
         })
+    }
+
+    /// Whether the distances are computed, i.e. the grid has a target.
+    pub fn is_computed(&self) -> bool {
+        self.target.is_some()
+    }
+
+    /// Walking distance in px from `cell` to the target, `None` if it can't be reached.
+    fn walking_distance(&self, cell: IVec2) -> Option<f32> {
+        let distance = self.distance(cell);
+        (distance != u32::MAX).then(|| distance as f32 / STRAIGHT_COST as f32 * CELL_SIZE)
+    }
+
+    /// Centers of the free cells that can reach the target, with their walking distance in px:
+    /// the places a unit of the grid's clearance can stand on and walk to the target from.
+    pub fn reachable(&self) -> impl Iterator<Item = (Vec2, f32)> + '_ {
+        self.window
+            .rect()
+            .cells()
+            .filter(|&cell| self.is_free(cell))
+            .filter_map(|cell| Some((cells::center(cell), self.walking_distance(cell)?)))
     }
 
     /// Highest walking distance of a reachable cell, `None` if no cell is reachable.
@@ -415,6 +440,23 @@ impl FlowField {
             .or(self.grids.len().checked_sub(1))
     }
 
+    /// The grid for units with `radius`, see [`Self::direction`].
+    pub fn grid(&self, radius: f32) -> Option<&Grid> {
+        self.grids.get(self.grid_index(radius)?)
+    }
+
+    /// Walking distance in px for a unit with `radius` from `position` to the target. `None` if
+    /// the grid isn't computed, the position is outside its window or blocked for the unit, or the
+    /// target can't be reached from there.
+    pub fn walking_distance(&self, position: Vec2, radius: f32) -> Option<f32> {
+        let grid = self.grid(radius)?;
+        let cell = cells::cell(position);
+        if !grid.is_free(cell) {
+            return None;
+        }
+        grid.walking_distance(cell)
+    }
+
     /// Computes the walking distances towards `position` on the loaded `maps`, if it isn't the
     /// current target already, only for the grids used by units with the given `radii`. All other
     /// grids forget their target, so they compute it again once a unit needs them.
@@ -456,14 +498,20 @@ impl FlowField {
     }
 }
 
+/// Requests the grids for units with these radii while it exists, e.g. by a spawner that needs the
+/// walking distances before the units exist. They are computed in the next search.
+#[derive(Component, Clone, Debug)]
+pub struct Request(pub Vec<f32>);
+
 /// Updates the distances whenever the loaded maps, their obstacles or the player's cell change,
-/// in the grids used by enemies or the debug overlay.
+/// in the grids used by awake enemies, requests or the debug overlay.
 fn update_flow_field(
     mut flow_field: ResMut<FlowField>,
     maps: Query<Ref<Obstacles>>,
     mut unloaded: RemovedComponents<Obstacles>,
     player: Single<&Transform, With<player::Player>>,
-    enemies: Query<&Enemy>,
+    enemies: Query<&Enemy, Without<Asleep>>,
+    requests: Query<&Request>,
     debug: Option<Res<FlowFieldDebug>>,
 ) {
     let unloaded = unloaded.read().count() > 0;
@@ -477,7 +525,14 @@ fn update_flow_field(
         .and_then(|debug| debug.grid)
         .and_then(|i| flow_field.grids().get(i))
         .map(Grid::clearance);
-    let radii = enemies.iter().map(|enemy| enemy.radius).chain(shown);
+    let requested = requests
+        .iter()
+        .flat_map(|request| request.0.iter().copied());
+    let radii = enemies
+        .iter()
+        .map(|enemy| enemy.radius)
+        .chain(requested)
+        .chain(shown);
     flow_field.set_target(player.translation.xy(), radii, &maps);
 }
 

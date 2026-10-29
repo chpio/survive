@@ -226,6 +226,22 @@ impl Sight {
             .map_or(0., |&mask| mask as f32 / 255.)
     }
 
+    /// Whether the player sees any part of the circle at `center` with `radius`: whether one of
+    /// the cells it overlaps is in sight. Everything outside the window is out of sight.
+    pub fn sees(&self, center: Vec2, radius: f32) -> bool {
+        if self.center.is_none() {
+            return false;
+        }
+        let area = Rect::from_center_half_size(center, Vec2::splat(radius));
+        let cells = CellRect::covering(area).intersect(self.mask.rect());
+        cells.cells().any(|cell| {
+            let cell_rect =
+                Rect::from_center_half_size(cells::center(cell), Vec2::splat(CELL_SIZE / 2.));
+            let closest = center.clamp(cell_rect.min, cell_rect.max);
+            closest.distance_squared(center) < radius * radius && self.mask[cell] > 0
+        })
+    }
+
     /// Visibility per cell of the window (0–255), row by row from the bottom.
     pub fn mask(&self) -> &[u8] {
         self.mask.values()

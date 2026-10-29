@@ -19,6 +19,7 @@ use crate::{
     objects::{enemy, player::Player},
     perf,
     settings::{Menu, Settings},
+    spawning::out_of_sight::SpawnOutOfSight,
 };
 use anyrender_vello::VelloScenePainter;
 use avian2d::prelude::PhysicsGizmos;
@@ -371,7 +372,7 @@ fn sync_state(
     mut gizmos: ResMut<GizmoConfigStore>,
     mut frozen: ResMut<enemy::Frozen>,
     timings: Option<Res<perf::Timings>>,
-    mut spawn_enemy: MessageWriter<enemy::SpawnEnemy>,
+    mut spawn_enemy: MessageWriter<SpawnOutOfSight>,
     mut settings: ResMut<Settings>,
     menu: Res<State<Menu>>,
 ) {
@@ -382,7 +383,7 @@ fn sync_state(
     for action in ui.actions.try_iter() {
         match action {
             hud::Action::SpawnEnemy => {
-                spawn_enemy.write(enemy::SpawnEnemy(default()));
+                spawn_enemy.write(SpawnOutOfSight(default()));
             }
             hud::Action::CycleFlowField => {
                 flow_field_debug.cycle(flow_field.grids().len());

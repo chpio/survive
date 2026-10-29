@@ -31,6 +31,7 @@ pub enum Step {
     FlowField,
     Sight,
     FlowFieldOverlay,
+    Spawning,
     Enemies,
     Combat,
     Movement,
@@ -51,10 +52,11 @@ pub enum Step {
 }
 
 impl Step {
-    pub const ALL: [Step; 12] = [
+    pub const ALL: [Step; 13] = [
         Step::FlowField,
         Step::Sight,
         Step::FlowFieldOverlay,
+        Step::Spawning,
         Step::Enemies,
         Step::Combat,
         Step::Movement,
@@ -71,6 +73,7 @@ impl Step {
             Step::FlowField => "Flowfield",
             Step::Sight => "Sicht",
             Step::FlowFieldOverlay => "Flowfield-Overlay",
+            Step::Spawning => "Spawnen",
             Step::Enemies => "Gegner",
             Step::Combat => "Kampf",
             Step::Movement => "Bewegung",
@@ -95,7 +98,13 @@ pub enum Node {
 pub const MAIN_THREAD: &[Node] = &[
     Node::Group(
         "Spiellogik",
-        &[Step::FlowField, Step::Sight, Step::Enemies, Step::Combat],
+        &[
+            Step::FlowField,
+            Step::Sight,
+            Step::Spawning,
+            Step::Enemies,
+            Step::Combat,
+        ],
     ),
     Node::Group("Fester Takt", &[Step::Movement, Step::Physics]),
     Node::Step(Step::FlowFieldOverlay),
@@ -249,7 +258,12 @@ impl bevy::app::Plugin for Plugin {
         measure(
             app,
             Update,
-            &[Step::FlowFieldOverlay, Step::Enemies, Step::Combat],
+            &[
+                Step::FlowFieldOverlay,
+                Step::Spawning,
+                Step::Enemies,
+                Step::Combat,
+            ],
         );
         measure(app, FixedUpdate, &[Step::Movement]);
         // around Avian's own sets

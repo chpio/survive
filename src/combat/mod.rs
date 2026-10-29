@@ -1,20 +1,20 @@
 //! Health and melee combat between the player and the enemies.
 //!
 //! A unit with an [`Attack`] hits every opponent whose collider is within its reach as soon as its
-//! cooldown is over: the player hits all enemies around it, an enemy hits the player. A hit deals
-//! damage and knocks the target away from the attacker with an impulse, so lighter units fly
-//! further. Enemies without health are despawned. When the player dies, the round starts over:
-//! all enemies are removed and the player is healed.
+//! cooldown is over: the player hits all enemies around it, an awake enemy hits the player. A hit
+//! deals damage and knocks the target away from the attacker with an impulse, so lighter units
+//! fly further. Enemies without health are despawned. When the player dies, the round starts
+//! over: all enemies are removed and the player is healed.
 
 use crate::{
     objects::{
-        enemy::{self, Enemy},
+        enemy::{self, Asleep, Enemy},
         player::Player,
     },
     perf,
 };
 use avian2d::prelude::*;
-use bevy::prelude::*;
+use bevy::{ecs::query::QueryFilter, prelude::*};
 use std::time::Duration;
 
 pub mod health_bar;
@@ -62,15 +62,12 @@ impl Attack {
     }
 }
 
-/// Units with `Attacker` hit units with `Target` that are in reach. There are few attackers or
-/// few targets (the player on one side), so checking every pair is cheap.
-fn attack<Attacker: Component, Target: Component>(
+/// Units matching `Attacker` hit units matching `Target` that are in reach. There are few
+/// attackers or few targets (the player on one side), so checking every pair is cheap.
+fn attack<Attacker: QueryFilter, Target: QueryFilter>(
     time: Res<Time>,
-    mut attackers: Query<(&Transform, &mut Attack), With<Attacker>>,
-    mut targets: Query<
-        (&Transform, &Collider, &mut Health, Forces),
-        (With<Target>, Without<Attacker>),
-    >,
+    mut attackers: Query<(&Transform, &mut Attack), Attacker>,
+    mut targets: Query<(&Transform, &Collider, &mut Health, Forces), Target>,
 ) {
     for (transform, mut attack) in &mut attackers {
         attack.cooldown.tick(time.delta());
@@ -134,8 +131,9 @@ impl bevy::app::Plugin for Plugin {
         app.add_systems(
             Update,
             (
-                attack::<Player, Enemy>,
-                attack::<Enemy, Player>.run_if(enemy::active),
+                attack::<With<Player>, With<Enemy>>,
+                // sleeping enemies can be hit, but don't attack
+                attack::<(With<Enemy>, Without<Asleep>), With<Player>>.run_if(enemy::active),
                 despawn_dead_enemies,
                 restart_on_player_death,
             )

@@ -437,3 +437,51 @@ fn unloaded_map_leaves_the_window() {
             .blocked
     );
 }
+
+#[test]
+fn walking_distance_follows_the_way_around_obstacles() {
+    let mut map = map();
+    wall_with_gap(&mut map, 120., 160.);
+    let mut flow_field = FlowField::new([SMALL, LARGE]);
+    flow_field.set_target(Vec2::new(150., 20.), [SMALL], &[&map]);
+
+    // straight on the target's side of the wall
+    let near = flow_field
+        .walking_distance(Vec2::new(110., 20.), SMALL)
+        .unwrap();
+    assert!((near - 40.).abs() < CELL_SIZE, "{near}");
+    // through the gap at the top from the other side
+    let behind = flow_field
+        .walking_distance(Vec2::new(40., 20.), SMALL)
+        .unwrap();
+    assert!(behind > 200., "{behind}");
+    // in the clearance around the wall
+    assert_eq!(
+        flow_field.walking_distance(Vec2::new(86., 20.), SMALL),
+        None
+    );
+    // the grid for large units isn't computed
+    assert!(!flow_field.grid(LARGE).unwrap().is_computed());
+    assert_eq!(
+        flow_field.walking_distance(Vec2::new(110., 20.), LARGE),
+        None
+    );
+}
+
+#[test]
+fn reachable_cells_are_free_and_have_their_walking_distance() {
+    let mut map = map();
+    wall_with_gap(&mut map, 120., 160.);
+    let flow_field = field(&[&map], SMALL, Vec2::new(150., 20.));
+    let grid = flow_field.grid(SMALL).unwrap();
+    assert!(grid.is_computed());
+
+    let reachable: Vec<_> = grid.reachable().collect();
+    for &(position, distance) in &reachable {
+        assert!(!cell_at(grid, position).unwrap().blocked, "{position}");
+        assert_eq!(flow_field.walking_distance(position, SMALL), Some(distance));
+    }
+    // on both sides of the wall
+    assert!(reachable.iter().any(|(position, _)| position.x < 70.));
+    assert!(reachable.iter().any(|(position, _)| position.x > 90.));
+}

@@ -56,6 +56,20 @@ fn frozen_enemies_do_not_attack() {
 }
 
 #[test]
+fn sleeping_enemies_do_not_attack() {
+    let mut app = app();
+    let player = spawn_player(&mut app, Vec2::ZERO);
+    let enemy = spawn_enemy(&mut app, SMALL, Vec2::new(11., 0.));
+    app.world_mut().entity_mut(enemy).insert(enemy::Asleep);
+
+    common::run(&mut app, 1.);
+
+    let player_health = health(&app, player);
+    assert_eq!(player_health.current, player_health.max);
+    assert!(health(&app, enemy).current < health(&app, enemy).max);
+}
+
+#[test]
 fn units_out_of_reach_are_not_hurt() {
     let mut app = app();
     let player = spawn_player(&mut app, Vec2::ZERO);

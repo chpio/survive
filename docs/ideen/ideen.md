@@ -42,12 +42,15 @@ Ausgearbeitet in [spawnen.md](../spawnen.md). Die Grundsätze:
 
 ## Radien um den Spieler (drei Kreise ineinander)
 
-1. **Sichtweite:** Gegner werden aktiv, sobald sie darin auftauchen.
-2. **Flowfield-Radius:** etwas größer als die Sichtweite, damit verfolgende Gegner und Gegner aus
-   Hinterhalten knapp im Nebel noch einen Weg haben.
-3. **Deaktivierungs-Radius:** noch größer. Gegner schlafen erst wieder ein, wenn sie deutlich weiter
-   weg sind als die Sichtweite. Dieser Abstand verhindert, dass sie an der Grenze ständig zwischen
-   aktiv und inaktiv wechseln.
+Umgesetzt, siehe „Schlafen und Aufwachen“ in [spawnen.md](../spawnen.md).
+
+1. **Sichtweite (200 px):** Gegner werden aktiv, sobald der Spieler sie sieht (Sichtlinie, nicht
+   nur Abstand).
+2. **Flowfield-Radius (320 px):** etwas größer als die Sichtweite, damit verfolgende Gegner und
+   Gegner aus Hinterhalten knapp im Nebel noch einen Weg haben.
+3. **Deaktivierungs-Radius (400 px):** noch größer. Gegner schlafen erst wieder ein, wenn sie
+   deutlich weiter weg sind als die Sichtweite. Dieser Abstand verhindert, dass sie an der Grenze
+   ständig zwischen aktiv und inaktiv wechseln. Dazwischen laufen sie direkt auf den Spieler zu.
 
 ## Flowfield-Optimierung
 
@@ -128,11 +131,6 @@ Ausgearbeitet in [speichern.md](../speichern.md). Die Grundsätze:
 
 ## Offene Punkte
 
-- **Radien:** Zwischen Flowfield- und Deaktivierungs-Radius sind Gegner aktiv, haben aber kein
-  Feld. Sie brauchen dort ein eigenes Verhalten (direkt auf den Spieler zu, stehen bleiben, zum
-  letzten bekannten Punkt), oder der Flowfield-Radius wird gleich dem Deaktivierungs-Radius.
-- **Sichtweite oder Sichtlinie:** Werden Gegner hinter einer Wand innerhalb der Sichtweite aktiv,
-  obwohl der Spieler sie nicht sieht? Für Hinterhalte vermutlich gewollt, aber festlegen.
 - **Brunnen und Truhen als Objekte:** Der Brunnen ist bisher ein Tile mit `type="well"` in einer
   Tile-Ebene und kann damit keine Objekt-ID tragen. Für den gespeicherten Zustand und die
   Brunnen-ID als Spielerposition müssen Brunnen (und Truhen) Tile-Objekte werden.
@@ -153,7 +151,8 @@ Ausgearbeitet in [speichern.md](../speichern.md). Die Grundsätze:
 Jeder Schritt baut auf dem vorherigen auf:
 
 1. Große Welt aus mehreren Karten ([welt.md](../welt.md))
-2. Hinterhalte und Aktivierungsradien, Spawnen außer Sicht ([spawnen.md](../spawnen.md))
+2. Hinterhalte und Aktivierungsradien, Spawnen außer Sicht ([spawnen.md](../spawnen.md),
+   umgesetzt)
 3. Flowfield-Optimierung (zusammen mit dem Performance-Punkt in `TODO.md`)
 4. Items und Inventar
 5. Truhen und Gebiets-Level

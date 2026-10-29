@@ -7,6 +7,7 @@ use survival::{
         enemy::{self, Enemy},
         player,
     },
+    sight::{self, BlocksSight},
     world::MapArea,
 };
 
@@ -267,4 +268,77 @@ fn enemy_walking_onto_a_neighbor_map_stays() {
     assert!(app.world().get_entity(enemy).is_ok());
     let x = common::position(&app, enemy).x;
     assert!(x > 180., "enemy at x = {x}");
+}
+
+/// App in which enemies wake up, fall asleep and walk towards the player, with a map of 600×600
+/// px around the origin.
+fn sleep_app() -> (App, Entity) {
+    let mut app = common::app_with(sight::Plugin);
+    app.init_resource::<FlowField>().add_systems(
+        Update,
+        (enemy::wake_and_sleep, enemy::move_towards_player).chain(),
+    );
+    let map = spawn_map(&mut app, Rect::new(-300., -300., 300., 300.));
+    (app, map)
+}
+
+#[test]
+fn sleeping_enemy_stands_still_until_the_player_sees_it() {
+    let (mut app, map) = sleep_app();
+    // between the player and the enemy
+    common::spawn(
+        &mut app,
+        (
+            RigidBody::Static,
+            Collider::rectangle(20., 80.),
+            BlocksSight,
+            ChildOf(map),
+        ),
+        Vec2::new(50., 0.),
+    );
+    let player = common::spawn(&mut app, player::Player, Vec2::ZERO);
+    let enemy = common::spawn(
+        &mut app,
+        (SMALL, SMALL.physics(), enemy::Asleep),
+        Vec2::new(100., 0.),
+    );
+
+    common::run(&mut app, 1.);
+    assert!(app.world().get::<enemy::Asleep>(enemy).is_some());
+    let position = common::position(&app, enemy);
+    assert!(
+        position.distance(Vec2::new(100., 0.)) < 0.5,
+        "enemy at {position}"
+    );
+
+    // above the enemy, with nothing in between
+    app.world_mut()
+        .get_mut::<Transform>(player)
+        .unwrap()
+        .translation = Vec3::new(100., 100., 0.);
+    common::run(&mut app, 0.5);
+
+    assert!(app.world().get::<enemy::Asleep>(enemy).is_none());
+    let y = common::position(&app, enemy).y;
+    assert!(y > 20., "enemy at y = {y}");
+}
+
+#[test]
+fn enemy_far_from_the_player_falls_asleep() {
+    let (mut app, _) = sleep_app();
+    common::spawn(&mut app, player::Player, Vec2::ZERO);
+    let near = common::spawn(&mut app, (SMALL, SMALL.physics()), Vec2::new(-150., 0.));
+    let far = common::spawn(
+        &mut app,
+        (SMALL, SMALL.physics()),
+        Vec2::new(enemy::DEACTIVATION_RADIUS + 20., 0.),
+    );
+
+    common::run(&mut app, 0.5);
+
+    assert!(app.world().get::<enemy::Asleep>(near).is_none());
+    assert!(app.world().get::<enemy::Asleep>(far).is_some());
+    // stopped where it fell asleep instead of walking on
+    let x = common::position(&app, far).x;
+    assert!(x > enemy::DEACTIVATION_RADIUS + 15., "enemy at x = {x}");
 }

@@ -3,7 +3,14 @@ use std::num::NonZero;
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::*;
-use survival::{combat, flowfield, items, movement, objects, perf, settings, sight, ui, world};
+use survival::{
+    combat, flowfield, items, movement, objects, perf, settings, sight,
+    spawning::{
+        self,
+        ambush::{AmbushTrigger, SpawnPoint},
+    },
+    ui, world,
+};
 
 fn main() {
     App::new()
@@ -60,7 +67,12 @@ fn main() {
             items::definitions::Plugin,
             items::input::Plugin,
         ))
-        .add_plugins((sight::Plugin, sight::render::Plugin, world::Plugin))
+        .add_plugins((
+            sight::Plugin,
+            sight::render::Plugin,
+            world::Plugin,
+            spawning::Plugin,
+        ))
         .add_plugins((settings::Plugin, ui::Plugin, perf::Plugin))
         .run();
 }
@@ -152,17 +164,49 @@ fn startup(
                                 .filter(|t| !t.is_empty())
                         });
 
-                    #[expect(
-                        clippy::single_match,
-                        reason = "new map-driven objects get an arm here"
-                    )]
                     match user_type.as_deref() {
                         Some("well") => {
                             collider.insert((objects::well::Well, Sensor, CollisionEventsEnabled));
                         }
+                        // the ambush is the object layer the zone is on
+                        Some("ambush_trigger") => {
+                            if let (Some(layer), Some(layer_data)) = (
+                                collider_created.event().layer_entity(),
+                                collider_created.event().layer(&assets),
+                            ) {
+                                collider.insert((
+                                    AmbushTrigger::from_layer(layer, &layer_data.properties),
+                                    Sensor,
+                                ));
+                            }
+                        }
                         _ => {}
                     }
                 };
+            },
+        )
+        // objects without a collider, like points
+        .observe(
+            |object_created: On<TiledEvent<ObjectCreated>>,
+             mut commands: Commands,
+             assets: Res<Assets<TiledMapAsset>>| {
+                let event = object_created.event();
+                let (Some(object), Some(layer)) = (event.object(&assets), event.layer_entity())
+                else {
+                    return;
+                };
+                #[expect(
+                    clippy::single_match,
+                    reason = "new map-driven objects get an arm here"
+                )]
+                match object.user_type.as_str() {
+                    "ambush_spawn" => {
+                        commands
+                            .entity(event.origin)
+                            .insert(SpawnPoint::from_object(layer, &object.properties));
+                    }
+                    _ => {}
+                }
             },
         );
 }

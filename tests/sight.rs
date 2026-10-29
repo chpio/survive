@@ -122,3 +122,19 @@ fn obstacle_on_a_neighbor_map_casts_a_shadow() {
     sight.set_center(Vec2::new(-60., 0.), &[&west]);
     assert_eq!(sight.visibility(Vec2::new(60., 0.)), 1.);
 }
+
+#[test]
+fn sees_a_circle_if_any_part_of_it_is_in_sight() {
+    let mut map = map();
+    block(&mut map, Rect::new(40., -20., 60., 20.));
+    let sight = sight_from(Vec2::ZERO, &[&map]);
+
+    // the shadow behind the obstacle ends about 50 px above and below its middle at x = 100
+    assert!(!sight.sees(Vec2::new(100., 0.), 12.));
+    assert!(!sight.sees(Vec2::new(100., 30.), 4.));
+    assert!(sight.sees(Vec2::new(100., 48.), 12.));
+    assert!(sight.sees(Vec2::new(-100., 0.), 4.));
+    // beyond the radius, unless it reaches into it
+    assert!(!sight.sees(Vec2::new(-SIGHT_RADIUS - 20., 0.), 4.));
+    assert!(sight.sees(Vec2::new(-SIGHT_RADIUS - 20., 0.), 40.));
+}

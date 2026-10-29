@@ -4,11 +4,14 @@ use crate::{
     movement::{self, DesiredVelocity},
     objects::player,
     perf,
-    sight::render::{SightMask, SightMaterial},
+    sight::{
+        Sight,
+        render::{SightMask, SightMaterial},
+    },
     world::MapArea,
 };
 use avian2d::prelude::*;
-use bevy::{prelude::*, time::common_conditions::on_timer};
+use bevy::{prelude::*, time::common_conditions::on_timer, window::PrimaryWindow};
 use std::{
     f32::consts::{GOLDEN_RATIO, TAU},
     time::Duration,
@@ -102,20 +105,40 @@ pub struct Heading(pub Vec2);
 #[derive(Component)]
 pub struct Body;
 
-#[derive(Message)]
-pub struct SpawnEnemy(pub Enemy);
+/// Spawns an enemy. The sources decide what spawns where, [`spawn_enemy`] only builds the entity.
+#[derive(Message, Clone, Copy, PartialEq, Debug)]
+pub struct SpawnEnemy {
+    pub enemy: Enemy,
+    pub position: Vec2,
+    /// Whether it starts [`Asleep`], so it waits until the player sees it
+    pub asleep: bool,
+}
 
+/// E / R / T spawn a sleeping small / medium / large enemy at the mouse cursor (next to the player
+/// while the cursor is outside the window). It wakes up once the player sees it.
 fn spawn_enemy_on_key(
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    window: Single<&Window, With<PrimaryWindow>>,
+    camera: Single<(&Camera, &GlobalTransform)>,
+    player: Single<&Transform, With<player::Player>>,
     mut spawn_enemy: MessageWriter<SpawnEnemy>,
 ) {
+    let (camera, camera_transform) = *camera;
     for (key, radius) in [
         (KeyCode::KeyE, 5.),
         (KeyCode::KeyR, 8.),
         (KeyCode::KeyT, 12.),
     ] {
         if keyboard_input.just_pressed(key) {
-            spawn_enemy.write(SpawnEnemy(Enemy { radius }));
+            let position = window
+                .cursor_position()
+                .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor).ok())
+                .unwrap_or(player.translation.xy() + Vec2::X * 30.);
+            spawn_enemy.write(SpawnEnemy {
+                enemy: Enemy { radius },
+                position,
+                asleep: true,
+            });
         }
     }
 }
@@ -147,15 +170,20 @@ fn spawn_enemy(
     mut cmds: Commands,
     assets: Res<EnemyAssets>,
 ) {
-    for &SpawnEnemy(enemy) in spawn_enemy.read() {
-        cmds.spawn((
+    for &SpawnEnemy {
+        enemy,
+        position,
+        asleep,
+    } in spawn_enemy.read()
+    {
+        let mut entity = cmds.spawn((
             enemy,
             Name::new("Enemy"),
             enemy.separation(),
             enemy.physics(),
             enemy.combat(),
             // above the map layers
-            Transform::from_translation(player::START.extend(10.)),
+            Transform::from_translation(position.extend(10.)),
             // shown through its children
             Visibility::default(),
             children![(
@@ -172,6 +200,47 @@ fn spawn_enemy(
                 )],
             )],
         ));
+        if asleep {
+            entity.insert(Asleep);
+        }
+    }
+}
+
+/// Distance in px from the player beyond which awake enemies fall asleep. Larger than the sight
+/// radius, so enemies at its edge don't keep waking up and falling asleep, and than the flow
+/// field's radius, so enemies following the player out of it keep walking straight at them.
+pub const DEACTIVATION_RADIUS: f32 = 400.;
+
+/// A sleeping enemy stands still and doesn't attack until the player sees it. It doesn't count for
+/// the flow field, so its grid isn't computed for it.
+#[derive(Component, Clone, Copy, PartialEq, Debug)]
+pub struct Asleep;
+
+/// Wakes up the enemies the player sees any part of, and lets those further away than
+/// [`DEACTIVATION_RADIUS`] fall asleep where they stand.
+pub fn wake_and_sleep(
+    sight: Res<Sight>,
+    player: Single<&Transform, With<player::Player>>,
+    mut enemies: Query<(
+        Entity,
+        &Enemy,
+        &Transform,
+        Has<Asleep>,
+        &mut DesiredVelocity,
+    )>,
+    mut commands: Commands,
+) {
+    let player = player.translation.xy();
+    for (entity, enemy, transform, asleep, mut desired) in &mut enemies {
+        let position = transform.translation.xy();
+        if asleep {
+            if sight.sees(position, enemy.radius) {
+                commands.entity(entity).remove::<Asleep>();
+            }
+        } else if position.distance_squared(player) > DEACTIVATION_RADIUS.powi(2) {
+            commands.entity(entity).insert(Asleep);
+            desired.set_if_neq(DesiredVelocity(Vec2::ZERO));
+        }
     }
 }
 
@@ -199,19 +268,23 @@ fn stop(mut enemies: Query<&mut DesiredVelocity, With<Enemy>>) {
     }
 }
 
+/// Lets the awake enemies walk towards the player, around obstacles and away from each other.
 pub fn move_towards_player(
     player: Single<&Transform, With<player::Player>>,
     flow_field: Res<FlowField>,
     spatial_query: SpatialQuery,
     others: Query<(&Transform, &Separation), With<Enemy>>,
-    mut enemies: Query<(
-        Entity,
-        &Enemy,
-        &Transform,
-        &Separation,
-        &mut Heading,
-        &mut DesiredVelocity,
-    )>,
+    mut enemies: Query<
+        (
+            Entity,
+            &Enemy,
+            &Transform,
+            &Separation,
+            &mut Heading,
+            &mut DesiredVelocity,
+        ),
+        Without<Asleep>,
+    >,
 ) {
     const MOVE_SPEED: f32 = 100.;
 
@@ -322,6 +395,7 @@ impl bevy::app::Plugin for Plugin {
                     toggle_frozen_on_key,
                     spawn_enemy,
                     (
+                        wake_and_sleep,
                         (
                             move_towards_player,
                             // after the heading is updated
@@ -330,6 +404,7 @@ impl bevy::app::Plugin for Plugin {
                             .run_if(active),
                         stop.run_if(not(active)),
                     )
+                        .chain()
                         .in_set(perf::Step::Enemies),
                     despawn_outside_maps.run_if(on_timer(Duration::from_secs(1))),
                 ),
