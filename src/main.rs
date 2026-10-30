@@ -92,9 +92,9 @@ fn startup(
         // the only camera mesh picking uses (see `items::render::Plugin`)
         bevy::picking::mesh_picking::MeshPickingCamera,
         Projection::Orthographic(OrthographicProjection {
-            scaling_mode: bevy::camera::ScalingMode::AutoMax {
-                max_width: 500.,
-                max_height: 500.,
+            scaling_mode: bevy::camera::ScalingMode::AutoMin {
+                min_width: world::VIEW_SIZE.x,
+                min_height: world::VIEW_SIZE.y,
             },
             ..OrthographicProjection::default_2d()
         }),

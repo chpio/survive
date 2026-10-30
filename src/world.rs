@@ -141,6 +141,11 @@ pub fn rasterize<R: MapRaster, F: QueryFilter>(
     }
 }
 
+/// Part of the world in px the camera shows at a zoom of 1 in a window of
+/// `ui::REFERENCE_SIZE`'s aspect ratio. Other windows show more in their wider direction, so the
+/// world scales with the window by the same rule as the HUD (`ui::hud_scale`).
+pub const VIEW_SIZE: Vec2 = Vec2::new(500., 500. * 9. / 16.);
+
 /// Distance in px from the camera in each direction up to which maps must be loaded, besides the
 /// view: the flow field and the sight need the obstacles around the player, whom the camera
 /// follows.

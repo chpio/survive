@@ -3,7 +3,10 @@ use blitz_dom::{Document as _, DocumentConfig};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus::prelude::*;
 use dioxus_native_dom::DioxusDocument;
-use survival::ui::{blocks_pointer, hud_scale};
+use survival::{
+    ui::{REFERENCE_SIZE, blocks_pointer, hud_scale},
+    world::VIEW_SIZE,
+};
 
 /// A panel that blocks the pointer and a layout container next to it that doesn't.
 fn app() -> Element {
@@ -94,4 +97,13 @@ fn hud_scales_with_the_window() {
     assert_eq!(hud_scale(UVec2::new(3840, 1080), 1.), 1.);
     assert_eq!(hud_scale(UVec2::new(3840, 2400), 1.), 2.);
     assert_eq!(hud_scale(UVec2::new(1920, 1080), 1.5), 1.5);
+}
+
+#[test]
+fn world_and_hud_scale_alike() {
+    // the same aspect ratio, so both scale by the same direction of the window
+    assert_eq!(
+        VIEW_SIZE.x / VIEW_SIZE.y,
+        REFERENCE_SIZE.x / REFERENCE_SIZE.y
+    );
 }

@@ -130,7 +130,7 @@ pub const BLOCKS_POINTER: &str = "blocks-pointer";
 
 /// Window size in physical pixels at which the HUD has one physical pixel per CSS pixel (at a UI
 /// scale of 1). Larger windows draw it larger, so it covers the same part of the screen at any
-/// resolution, only sharper.
+/// resolution, only sharper. The game world scales by the same rule (`world::VIEW_SIZE`).
 pub const REFERENCE_SIZE: Vec2 = Vec2::new(1920., 1080.);
 
 /// Physical pixels per CSS pixel of the HUD in a window `physical_size` large: the part of
