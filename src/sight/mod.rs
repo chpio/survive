@@ -225,6 +225,13 @@ impl Sight {
             .map_or(0., |&mask| mask as f32 / 255.)
     }
 
+    /// Whether a sprite at `position` is drawn: whether its cell is at least half visible. Only the
+    /// map is drawn outside the sight; sprites can't be masked like the enemies' bodies, so they are
+    /// shown or hidden as a whole (see [`render::HiddenOutsideSight`]).
+    pub fn shows(&self, position: Vec2) -> bool {
+        self.visibility(position) >= 0.5
+    }
+
     /// Whether the player sees any part of the circle at `center` with `radius`: whether one of
     /// the cells it overlaps is in sight. Everything outside the window is out of sight.
     pub fn sees(&self, center: Vec2, radius: f32) -> bool {

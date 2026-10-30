@@ -1,10 +1,13 @@
 //! Draws the sight: the mask is written into a texture, which [`SightMaterial`] samples at each
 //! pixel's world position. Enemies use it to only show where they are in sight, and a large dark
-//! rectangle uses it inverted to darken the map outside the sight.
+//! rectangle uses it inverted to darken the map outside the sight. Sprites (items, health bars)
+//! can't be masked, so [`HiddenOutsideSight`] hides them as a whole: outside the sight, only the
+//! map is drawn.
 
 use super::{Sight, WINDOW_SIZE};
 use bevy::{
     asset::RenderAssetUsages,
+    camera::visibility::VisibilitySystems,
     image::ImageSampler,
     prelude::*,
     render::render_resource::{AsBindGroup, Extent3d, TextureDimension, TextureFormat},
@@ -27,6 +30,24 @@ const DARKNESS_SIZE: f32 = 8192.;
 /// Radius in px over which the mask is blurred, so the edges of shadows and of enemies partly in
 /// sight are soft.
 pub const BLUR: f32 = 6.;
+
+/// Hidden while [`Sight::shows`] says the player doesn't see its position, for whatever isn't
+/// masked by [`SightMaterial`]. Its children are hidden along with it.
+#[derive(Component, Clone, Copy, Default, Debug)]
+pub struct HiddenOutsideSight;
+
+fn hide_outside_sight(
+    sight: Res<Sight>,
+    mut hidden: Query<(&GlobalTransform, &mut Visibility), With<HiddenOutsideSight>>,
+) {
+    for (transform, mut visibility) in &mut hidden {
+        visibility.set_if_neq(if sight.shows(transform.translation().xy()) {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        });
+    }
+}
 
 /// Texture of the mask, one pixel per cell, filtered linearly so edges are soft.
 #[derive(Resource)]
@@ -162,6 +183,13 @@ impl bevy::app::Plugin for Plugin {
         app.add_plugins(Material2dPlugin::<SightMaterial>::default())
             .init_resource::<SightMask>()
             .add_systems(Startup, spawn_darkness)
-            .add_systems(Update, write_mask);
+            .add_systems(Update, write_mask)
+            // where things are this frame, before their visibility is passed on to their children
+            .add_systems(
+                PostUpdate,
+                hide_outside_sight
+                    .after(TransformSystems::Propagate)
+                    .before(VisibilitySystems::VisibilityPropagate),
+            );
     }
 }

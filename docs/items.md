@@ -42,7 +42,8 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
 - Die Anzahl zeigt das HUD nur ab 2, ein einzelnes Item hat keine Zahl.
 - **Am Boden:** `Sprite` (ein Quadrat in der Farbe der Definition, 8 × 8 px) und `Transform`
   zwischen Karte (z = 0) und Spieler (z = 10), dazu `Pickable`. Ohne `Pickable` ignoriert Bevys
-  Sprite-Picking ein Sprite.
+  Sprite-Picking ein Sprite. Außerhalb der Sicht ist es versteckt (`HiddenOutsideSight`, siehe
+  [sicht.md](sicht.md)) und lässt sich dann auch nicht anklicken.
 - **Im Besitz:** Die Relationship `HeldBy(owner)` hängt am Item, Bevy pflegt dazu `Inventory` am
   Besitzer (Liste der Items). Ein Item im Besitz ist unsichtbar
   (`Visibility::Hidden`) und hat kein `Pickable`. Das `Sprite` bleibt dran: Bevy zeichnet Sprites

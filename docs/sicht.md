@@ -58,8 +58,12 @@ lohnen weder Speicher noch Spielstand dafür. Kommt eine Karte dazu, lässt er s
   - **Abdunklung**: ein großes Rechteck um den Spieler zwischen Items (z = 5) und Einheiten
     (z = 10), schwarz mit der Deckkraft `DARKNESS × (1 − Maske)`.
 - Der Spieler und die Karte verwenden es nicht. Die Karte wird nur durch die Abdunklung verdeckt.
-- Lebensbalken sind Sprites und lassen sich so nicht maskieren. Sie werden versteckt, solange die
-  Mitte des Gegners nicht sichtbar ist.
+- Außerhalb der Sicht wird nur die Karte gezeichnet. Sprites (Items am Boden, Lebensbalken) lassen
+  sich nicht maskieren wie die Gegnerkörper. Sie tragen deshalb `render::HiddenOutsideSight` und
+  werden als Ganzes versteckt, solange `Sight::shows` ihre Position nicht mindestens zur Hälfte
+  sichtbar sieht. Ein Lebensbalken hängt dafür an einem Halter in der Mitte seiner Einheit, der
+  ausgeblendet wird; die eigene Sichtbarkeit des Balkens hängt nur am Schaden. Versteckte Items
+  lassen sich auch nicht anklicken.
 
 ## Spiellogik
 
@@ -72,7 +76,7 @@ lohnen weder Speicher noch Spielstand dafür. Kommt eine Karte dazu, lässt er s
 - `src/sight/mod.rs`: `BlocksSight`, die Ressource `Sight` (Raster, Maske, Strahlen), Systeme zum
   Aktualisieren.
 - `src/sight/render.rs`: Textur, `SightMaterial`, Abdunklung.
-- `src/combat/health_bar.rs`: Lebensbalken von Gegnern nur in Sicht.
+- `src/combat/health_bar.rs`: Lebensbalken, über ihren Halter nur in Sicht.
 - `assets/shaders/sight.wesl`: Shader.
 - `tests/sight.rs`: freies Feld, Schatten hinter einem Blocker und ihr Winkel, sichtbare Kante,
   Radius und Auslauf.

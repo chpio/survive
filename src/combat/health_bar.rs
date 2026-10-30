@@ -1,8 +1,9 @@
 //! Health bars above units that have taken damage. Separate from the combat logic, since it needs
-//! rendering. Enemies only show theirs while they are in the player's sight.
+//! rendering. Like everything but the map, they are only shown while the middle of their unit is in
+//! the player's sight.
 
 use super::Health;
-use crate::{objects::enemy::Enemy, sight::Sight};
+use crate::sight::render::HiddenOutsideSight;
 use avian2d::prelude::*;
 use bevy::{prelude::*, sprite::Anchor};
 
@@ -10,7 +11,9 @@ use bevy::{prelude::*, sprite::Anchor};
 const HEIGHT: f32 = 2.;
 const GAP: f32 = 3.;
 
-/// Background of a bar, a child of the unit. The unit must not rotate, or the bar turns with it.
+/// Background of a bar, a child of a holder in the middle of the unit, which hides it while the
+/// unit is out of sight, so the bar's own visibility only depends on the damage. The unit must not
+/// rotate, or the bar turns with it.
 #[derive(Component)]
 struct HealthBar {
     /// Child of the bar, as wide as the remaining health
@@ -26,6 +29,15 @@ fn spawn_health_bar(add: On<Add<Health>>, colliders: Query<&Collider>, mut comma
     let size = aabb.max - aabb.min;
     let width = size.x.max(8.);
 
+    let holder = commands
+        .spawn((
+            Name::new("Health bar holder"),
+            HiddenOutsideSight,
+            Transform::default(),
+            Visibility::default(),
+            ChildOf(add.entity),
+        ))
+        .id();
     let fill = commands
         .spawn((
             Sprite::from_color(Color::srgb(0.9, 0.2, 0.2), Vec2::new(width, HEIGHT)),
@@ -42,19 +54,23 @@ fn spawn_health_bar(add: On<Add<Health>>, colliders: Query<&Collider>, mut comma
             // above the unit, and in front of the units at z = 10
             Transform::from_xyz(0., size.y / 2. + GAP + HEIGHT / 2., 1.),
             Visibility::Hidden,
-            ChildOf(add.entity),
+            ChildOf(holder),
         ))
         .add_child(fill);
 }
 
 /// Sets the fill of the bars whose unit's health changed.
 fn update_fills(
-    units: Query<(&Health, &Children), Changed<Health>>,
+    units: Query<(Entity, &Health), Changed<Health>>,
+    children: Query<&Children>,
     bars: Query<&HealthBar>,
     mut fills: Query<&mut Sprite, Without<HealthBar>>,
 ) {
-    for (health, children) in &units {
-        for bar in children.iter().filter_map(|child| bars.get(child).ok()) {
+    for (unit, health) in &units {
+        for bar in children
+            .iter_descendants(unit)
+            .filter_map(|child| bars.get(child).ok())
+        {
             if let Ok(mut fill) = fills.get_mut(bar.fill) {
                 let fraction = (health.current / health.max).clamp(0., 1.);
                 fill.custom_size = Some(Vec2::new(bar.width * fraction, HEIGHT));
@@ -63,20 +79,15 @@ fn update_fills(
     }
 }
 
-/// Shows the bars of damaged units, of enemies only while the middle of the enemy is in sight
-/// (the bars are sprites, which can't be masked like the enemies' bodies).
+/// Shows the bars of damaged units.
 fn show_bars(
-    units: Query<(&Health, &Transform, Has<Enemy>, &Children)>,
+    units: Query<(Entity, &Health), Changed<Health>>,
+    children: Query<&Children>,
     mut bars: Query<&mut Visibility, With<HealthBar>>,
-    sight: Option<Res<Sight>>,
 ) {
-    for (health, transform, enemy, children) in &units {
-        let in_sight = !enemy
-            || sight
-                .as_ref()
-                .is_none_or(|sight| sight.visibility(transform.translation.xy()) >= 0.5);
-        let shown = health.current < health.max && in_sight;
-        for &child in children {
+    for (unit, health) in &units {
+        let shown = health.current < health.max;
+        for child in children.iter_descendants(unit) {
             if let Ok(mut visibility) = bars.get_mut(child) {
                 visibility.set_if_neq(if shown {
                     Visibility::Inherited

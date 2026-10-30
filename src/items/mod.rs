@@ -13,6 +13,7 @@ pub mod definitions;
 pub mod hotbar;
 pub mod input;
 
+use crate::sight::render::HiddenOutsideSight;
 use bevy::prelude::*;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -118,13 +119,14 @@ const Z: f32 = 5.;
 /// Distance in px from the owner's center at which dropped items are put down (below it).
 pub const DROP_DISTANCE: f32 = 12.;
 
-/// Visible sprite and position of an item on the ground. Sprite picking only considers sprites
-/// with `Pickable`, so the player can click it.
+/// Visible sprite and position of an item on the ground, hidden while it is out of sight. Sprite
+/// picking only considers sprites with `Pickable`, so the player can click it.
 fn on_ground(definitions: &ItemDefinitions, id: &ItemId, position: Vec2) -> impl Bundle {
     (
         Sprite::from_color(definitions.color(id), Vec2::splat(SIZE)),
         Transform::from_translation(position.extend(Z)),
         Visibility::Inherited,
+        HiddenOutsideSight,
         Pickable::default(),
     )
 }
@@ -222,7 +224,7 @@ fn pick_up(
                 // along with them, which stay after removing the sprite
                 commands
                     .entity(item)
-                    .remove::<Pickable>()
+                    .remove::<(Pickable, HiddenOutsideSight)>()
                     .insert((Visibility::Hidden, HeldBy(by)));
             }
         }
