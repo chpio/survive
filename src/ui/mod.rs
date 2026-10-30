@@ -128,16 +128,21 @@ pub struct Hud;
 /// Class of the HUD elements that take the pointer from the game world, along with their children.
 pub const BLOCKS_POINTER: &str = "blocks-pointer";
 
-/// Window size in physical pixels at which the HUD has one physical pixel per CSS pixel (at a UI
-/// scale of 1). Larger windows draw it larger, so it covers the same part of the screen at any
-/// resolution, only sharper. The game world scales by the same rule (`world::VIEW_SIZE`).
+/// Window size in physical pixels at which the HUD has [`BASE_SCALE`] physical pixels per CSS pixel
+/// (at a UI scale of 100 %). Larger windows draw it larger, so it covers the same part of the
+/// screen at any resolution, only sharper. The game world scales by the same rule
+/// (`world::VIEW_SIZE`).
 pub const REFERENCE_SIZE: Vec2 = Vec2::new(1920., 1080.);
 
+/// Size of the HUD at a UI scale of 100 %, as a factor on one physical pixel per CSS pixel in a
+/// window of [`REFERENCE_SIZE`].
+pub const BASE_SCALE: f32 = 1.25;
+
 /// Physical pixels per CSS pixel of the HUD in a window `physical_size` large: the part of
-/// [`REFERENCE_SIZE`] the window has in its tighter direction, times `ui_scale`. Independent of
-/// the system's scale factor.
+/// [`REFERENCE_SIZE`] the window has in its tighter direction, times [`BASE_SCALE`] and
+/// `ui_scale`. Independent of the system's scale factor.
 pub fn hud_scale(physical_size: UVec2, ui_scale: f32) -> f32 {
-    (physical_size.as_vec2() / REFERENCE_SIZE).min_element() * ui_scale
+    (physical_size.as_vec2() / REFERENCE_SIZE).min_element() * BASE_SCALE * ui_scale
 }
 
 /// CSS pixels of the HUD per logical pixel of `window`, in which Bevy reports pointer positions.

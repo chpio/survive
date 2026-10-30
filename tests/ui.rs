@@ -4,7 +4,7 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus::prelude::*;
 use dioxus_native_dom::DioxusDocument;
 use survival::{
-    ui::{REFERENCE_SIZE, blocks_pointer, hud_scale},
+    ui::{BASE_SCALE, REFERENCE_SIZE, blocks_pointer, hud_scale},
     world::VIEW_SIZE,
 };
 
@@ -90,13 +90,13 @@ fn panel_is_hit_after_the_window_grew() {
 
 #[test]
 fn hud_scales_with_the_window() {
-    assert_eq!(hud_scale(UVec2::new(1920, 1080), 1.), 1.);
+    assert_eq!(hud_scale(UVec2::new(1920, 1080), 1.), BASE_SCALE);
     // 4K draws it twice as large, so it looks the same, only sharper
-    assert_eq!(hud_scale(UVec2::new(3840, 2160), 1.), 2.);
+    assert_eq!(hud_scale(UVec2::new(3840, 2160), 1.), 2. * BASE_SCALE);
     // by the tighter direction, so it fits a wider or taller window too
-    assert_eq!(hud_scale(UVec2::new(3840, 1080), 1.), 1.);
-    assert_eq!(hud_scale(UVec2::new(3840, 2400), 1.), 2.);
-    assert_eq!(hud_scale(UVec2::new(1920, 1080), 1.5), 1.5);
+    assert_eq!(hud_scale(UVec2::new(3840, 1080), 1.), BASE_SCALE);
+    assert_eq!(hud_scale(UVec2::new(3840, 2400), 1.), 2. * BASE_SCALE);
+    assert_eq!(hud_scale(UVec2::new(1920, 1080), 1.5), 1.5 * BASE_SCALE);
 }
 
 #[test]
