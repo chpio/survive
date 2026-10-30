@@ -1,11 +1,10 @@
 //! Draws the light: a dark layer above everything (the map, items, units and health bars, but not
 //! the HUD) with its own [`LightMaterial`] (shader `assets/shaders/light.wesl`). It darkens by
-//! [`DayNight::darkness`] and the sun's shadows, which the shader finds by walking from each pixel
-//! towards the sun over the [`ShadowHeights`], and is lifted where the [`Lightmap`] is lit. The
-//! darkening outside the sight lies below it.
+//! [`DayNight::darkness`] and the sun's shadows, from the [`SunShadow`] in a linearly filtered
+//! texture, and is lifted where the [`Lightmap`] is lit. The darkening outside the sight lies below
+//! it.
 
-use super::{DayNight, LightValues, shadow::ShadowHeights};
-use crate::cells::CELL_SIZE;
+use super::{DayNight, LightValues, shadow::SunShadow};
 use bevy::{
     asset::RenderAssetUsages,
     image::ImageSampler,
@@ -32,17 +31,16 @@ pub struct Lightmap {
 
 impl FromWorld for Lightmap {
     fn from_world(world: &mut World) -> Self {
-        let mut image = single_channel_image(UVec2::ONE, vec![0]);
-        image.sampler = ImageSampler::linear();
+        let image = linear_image(UVec2::ONE, vec![0]);
         Self {
             image: world.resource_mut::<Assets<Image>>().add(image),
         }
     }
 }
 
-/// An `R8Unorm` texture of `size` with `data` row by row from the top.
-fn single_channel_image(size: UVec2, data: Vec<u8>) -> Image {
-    Image::new(
+/// A linearly filtered `R8Unorm` texture of `size` with `data` row by row from the top.
+fn linear_image(size: UVec2, data: Vec<u8>) -> Image {
+    let mut image = Image::new(
         Extent3d {
             width: size.x,
             height: size.y,
@@ -52,7 +50,9 @@ fn single_channel_image(size: UVec2, data: Vec<u8>) -> Image {
         data,
         TextureFormat::R8Unorm,
         RenderAssetUsages::default(),
-    )
+    );
+    image.sampler = ImageSampler::linear();
+    image
 }
 
 /// The night and the sun's shadows, see the module and its shader.
@@ -64,25 +64,18 @@ pub struct LightMaterial {
     /// See [`DayNight::shadow`]
     #[uniform(0)]
     shadow: f32,
-    /// See [`super::Sun`]
+    /// Bottom-left corner (xy) and size (zw) of the shadow mask in world space
     #[uniform(0)]
-    sun_direction: Vec2,
-    #[uniform(0)]
-    sun_slope: f32,
-    /// See [`ShadowHeights::max`]
-    #[uniform(0)]
-    max_height: f32,
-    /// Bottom-left corner (xy) and size (zw) of the heights in world space
-    #[uniform(0)]
-    heights_area: Vec4,
+    shadow_area: Vec4,
     /// Bottom-left corner (xy) and size (zw) of the lightmap in world space
     #[uniform(0)]
     lightmap_area: Vec4,
-    /// Height in px per cell, read without filtering
+    /// See [`SunShadow`], one pixel per cell
     #[texture(1)]
-    heights: Handle<Image>,
-    #[texture(2)]
-    #[sampler(3)]
+    #[sampler(2)]
+    shadow_mask: Handle<Image>,
+    #[texture(3)]
+    #[sampler(4)]
     lightmap: Handle<Image>,
 }
 
@@ -117,12 +110,9 @@ fn spawn_layer(
         MeshMaterial2d(materials.add(LightMaterial {
             darkness: 0.,
             shadow: 0.,
-            sun_direction: Vec2::X,
-            sun_slope: 1.,
-            max_height: 0.,
-            // no shadow casters until the heights are written
-            heights_area: area(Rect::new(0., 0., CELL_SIZE, CELL_SIZE)),
-            heights: images.add(single_channel_image(UVec2::ONE, vec![0])),
+            // no shadows until the mask is written
+            shadow_area: area(Rect::new(0., 0., 1., 1.)),
+            shadow_mask: images.add(linear_image(UVec2::ONE, vec![0])),
             lightmap_area: area(Rect::new(0., 0., 1., 1.)),
             lightmap: lightmap.image.clone(),
         })),
@@ -144,53 +134,49 @@ fn update_light(
     }
     let (material, mut visibility) = layer.into_inner();
     let darkness = day_night.darkness(&values);
-    let sun = day_night.sun(&values);
     let shadow = day_night.shadow(&values);
     visibility.set_if_neq(if darkness > 0. || shadow > 0. {
         Visibility::Inherited
     } else {
         Visibility::Hidden
     });
-    if let Some(mut material) = materials.get_mut(material) {
+    if let Some(mut material) = materials.get_mut(material)
+        && (material.darkness, material.shadow) != (darkness, shadow)
+    {
         material.darkness = darkness;
         material.shadow = shadow;
-        if let Some(sun) = sun {
-            material.sun_direction = sun.direction;
-            material.sun_slope = sun.slope;
-        }
     }
 }
 
-/// Writes the heights into their texture whenever the loaded maps change.
-fn write_heights(
-    heights: Res<ShadowHeights>,
+/// Writes the shadow mask into its texture whenever it was computed again.
+fn write_shadow(
+    shadow: Res<SunShadow>,
     layer: Single<&MeshMaterial2d<LightMaterial>, With<LightLayer>>,
     mut materials: ResMut<Assets<LightMaterial>>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    if !heights.is_changed() {
+    if !shadow.is_changed() {
         return;
     }
+    let Some(mask) = shadow.mask().filter(|mask| !mask.rect().is_empty()) else {
+        return;
+    };
     let Some(mut material) = materials.get_mut(*layer) else {
         return;
     };
-    if heights.size().min_element() == 0 {
-        material.max_height = 0.;
-        return;
-    }
-    // the texture's rows go from the top down, the heights' from the bottom up
-    let data = heights
+    let size = mask.rect().size;
+    // the texture's rows go from the top down, the mask's from the bottom up
+    let data = mask
         .values()
-        .chunks(heights.size().x as usize)
+        .chunks(size.x as usize)
         .rev()
         .flatten()
         .copied()
         .collect();
-    if let Some(mut image) = images.get_mut(&material.heights) {
-        *image = single_channel_image(heights.size(), data);
+    if let Some(mut image) = images.get_mut(&material.shadow_mask) {
+        *image = linear_image(size.as_uvec2(), data);
     }
-    material.heights_area = area(heights.rect());
-    material.max_height = heights.max();
+    material.shadow_area = area(mask.rect().world_rect());
 }
 
 /// Keeps the layer around the camera, wherever the player walks.
@@ -215,7 +201,7 @@ impl bevy::app::Plugin for Plugin {
                     update_light
                         .run_if(resource_exists::<LightValues>)
                         .run_if(resource_exists::<DayNight>),
-                    write_heights,
+                    write_shadow,
                 ),
             )
             .add_systems(

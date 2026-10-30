@@ -109,16 +109,18 @@ fürs Ausbalancieren.
 - Höhenraster pro Karte auf den 4-px-Zellen (`light::shadow::Heights`, Höhe in px, höchstens 255),
   aus der Tiled-Property `height` an Objekt, Tile oder Ebene wie `blocks_sight`. Die Bäume haben
   24 px. `ShadowHeights` setzt die Raster der geladenen Karten im kleinsten Rechteck um sie
-  zusammen, das als Textur hochgeladen wird, neu nur, wenn Karten geladen, entladen oder neu
-  gerastert werden. Ein Fenster um die Kamera wäre kleiner, müsste aber beim Laufen nachgeführt
-  werden.
-- Der Schatten entsteht im Shader: Von jedem Pixel aus geht er in Schritten von 2 px Richtung
-  Sonne, höchstens 64 px weit (`MAX_SHADOW_LENGTH`). Ist eine Zelle höher als der Sonnenstrahl an
-  dieser Stelle (Abstand × Steigung der Sonne), liegt das Pixel im Schatten. So ergibt sich die
-  Schattenlänge pro Objekt von selbst. Die Suche endet, sobald der Strahl höher ist als der höchste
-  Schattenwerfer. Pro Frame ändern sich nur Richtung und Höhe der Sonne als Uniform, die Sonne
-  wandert also ohne Mehrkosten. Auf der CPU müsste der Schatten bei jeder Winkeländerung neu
-  berechnet werden.
+  zusammen, neu nur, wenn Karten geladen, entladen oder neu gerastert werden. Ein Fenster um die
+  Kamera wäre kleiner, müsste aber beim Laufen nachgeführt werden.
+- Der Schatten entsteht pro Zelle auf der CPU (`SunShadow`): Jede Zelle mit Höhe markiert in
+  Schritten von 2 px die Zellen von der Sonne weg, so weit wie ihre Höhe durch die Steigung der
+  Sonne (höchstens 64 px, `MAX_SHADOW_LENGTH`). So ergibt sich die Schattenlänge pro Objekt von
+  selbst, und die Kosten hängen nur an der Zahl der Schattenwerfer. Neu gerechnet wird erst, wenn
+  die Spitze des längsten Schattens um 1 px gewandert ist. Der Shader liest die Maske als linear
+  gefilterte Textur, an vier Punkten um jedes Pixel (±1,5 px) gemittelt, das macht die Kanten
+  weich.
+- Zuerst lief die Suche pro Pixel im Shader, Richtung Sonne über die Höhen. Das kostete bei 4K
+  8–14 ms pro Frame, da eine Zelle dort Hunderte Pixel groß ist und alle dasselbe rechneten; jetzt
+  kostet die Licht-Ebene etwa 0,5 ms.
 - Schatten können bis 64 px in die Ansicht fallen, daher lädt `world::update_chunking` die Karten
   so weit über die Ansicht hinaus.
 - Die Zellen der Schattenwerfer selbst bleiben hell, wie Hindernisse in der Sicht ihre Kante
@@ -132,8 +134,8 @@ fürs Ausbalancieren.
   undurchsichtigen Zellen. Kollider sind aber oft nur Stamm oder Grundfläche, ein Baum soll
   eigentlich den Schatten seiner Krone werfen. Später daher eigene Schattenformen: Objekte in Tiled
   oder eine Höhe pro Tile. Das ist mehr Arbeit beim Kartenbau als im Code.
-- Die 4-px-Zellen geben diagonalen Schatten Treppenkanten. Der Shader nimmt den Schatten an vier
-  Punkten um jedes Pixel (±1,5 px) und mittelt, das macht die Kanten etwas weicher.
+- Die 4-px-Zellen geben diagonalen Schatten Treppenkanten, die lineare Filterung und das Mitteln
+  machen sie weich.
 - Einheiten werfen keine Schatten über das Raster. Für sie besser kleine weiche Blob-Schatten als
   Sprite unter jeder Einheit.
 - Später: Der Look kommt vor allem über die Farbe, sonnige Bereiche etwas warm, Schatten etwas
@@ -176,3 +178,14 @@ fürs Ausbalancieren.
 - LUTs statt der Parameter von `ColorGrading`, für genauere Farbstimmungen pro Tageszeit. Bevy
   wendet keine eigenen LUTs an, das bräuchte einen eigenen Post-Processing-Pass, der zwischen zwei
   LUTs überblendet.
+- Niedrige Priorität, machbar: Sonnenschatten auf der GPU statt auf der CPU. Eine zweite Kamera
+  rendert vor der Hauptkamera ein Quad auf eigener Render-Ebene in eine kleine Textur, ein Texel
+  pro Zelle über die geladenen Karten (etwa 350 × 275). Dort läuft die Suche Richtung Sonne über
+  die Höhen pro Texel statt pro Bildschirmpixel, die Licht-Ebene liest das Ergebnis wie jetzt die
+  Maske. Vorteile: Die Sonne wandert jeden Frame weich statt in 1-px-Schritten, die CPU rechnet
+  nichts, die Kosten hängen nicht an der Zahl der Schattenwerfer, und Lichtquellen mit Schatten
+  könnten denselben Weg nehmen. Nachteile: Alles, was genau eine `Camera2d` erwartet
+  (`update_camera_position`, `world::update_chunking`, HUD, Einstellungen, `follow_camera`),
+  braucht eine Markierung der Hauptkamera; Textur und Kamera müssen nachgeführt werden, wenn sich
+  die geladenen Karten ändern; der Schatten ist dann nicht mehr per Test prüfbar. Lohnt sich bei
+  viel mehr Schattenwerfern oder Lichtquellen mit Schatten.

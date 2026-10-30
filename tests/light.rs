@@ -3,8 +3,8 @@ use avian2d::prelude::*;
 use bevy::prelude::*;
 use survival::{
     light::{
-        self, DayNight, LightValues, Phase,
-        shadow::{Heights, ShadowHeights},
+        self, DayNight, LightValues, Phase, Sun,
+        shadow::{Heights, ShadowHeights, SunShadow},
     },
     objects::player,
     sight::SightRadius,
@@ -126,6 +126,49 @@ fn heights_of_the_loaded_maps_are_put_together() {
     assert_eq!(heights.height(Vec2::new(150., 50.)), 0.);
     assert_eq!(heights.max(), 24.);
     assert_eq!(heights.rect(), Rect::new(-100., 0., 100., 100.));
+}
+
+/// A tree 24 px high on a map 200×200 px around the origin, filling the cell at the origin.
+fn tree() -> ShadowHeights {
+    let mut map = Heights::new(Rect::new(-100., -100., 100., 100.));
+    map.add(
+        &Collider::rectangle(4., 4.),
+        Vec2::splat(2.),
+        Rotation::IDENTITY,
+        24.,
+    );
+    ShadowHeights::new(&[&map])
+}
+
+#[test]
+fn shadow_falls_away_from_the_sun() {
+    // in the south, 45° high: the shadow is as long as the tree is high
+    let sun = Sun {
+        direction: Vec2::NEG_Y,
+        slope: 1.,
+    };
+    let shadow = SunShadow::compute(&tree(), sun);
+
+    assert!(!shadow.shades(Vec2::splat(2.)), "the tree's top is lit");
+    assert!(shadow.shades(Vec2::new(2., 10.)));
+    assert!(shadow.shades(Vec2::new(2., 24.)));
+    assert!(!shadow.shades(Vec2::new(2., 34.)));
+    assert!(!shadow.shades(Vec2::new(2., -10.)));
+    assert!(!shadow.shades(Vec2::new(14., 10.)));
+}
+
+#[test]
+fn shadow_is_computed_again_once_its_tip_moved() {
+    let heights = tree();
+    let sun = |angle: f32| Sun {
+        direction: Vec2::from_angle(angle),
+        slope: 1.,
+    };
+    let shadow = SunShadow::compute(&heights, sun(0.));
+
+    // the tip 24 px away moves by about 0.5 px
+    assert!(!shadow.is_outdated(&heights, sun(0.02)));
+    assert!(shadow.is_outdated(&heights, sun(0.1)));
 }
 
 fn app() -> (App, Entity) {

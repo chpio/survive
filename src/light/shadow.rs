@@ -1,8 +1,10 @@
-//! What casts the sun's shadows: colliders with [`CastsShadow`] are rasterized per map into its
-//! [`Heights`], and [`ShadowHeights`] puts those of the loaded maps together whenever they change.
-//! The shadows themselves are computed in the shader of the light layer (`render`), so the sun can
-//! move on every frame without computing anything here.
+//! The sun's shadows: colliders with [`CastsShadow`] are rasterized per map into its [`Heights`],
+//! and [`ShadowHeights`] puts those of the loaded maps together whenever they change. [`SunShadow`]
+//! computes from them which cells lie in the shadow, once per cell rather than per pixel in the
+//! shader (at 4K, a cell covers hundreds of pixels), and only again once the sun has moved the
+//! shadows' tips by a pixel. `render` draws it.
 
+use super::{DayNight, LightValues, Sun};
 use crate::{
     cells::{self, CellRect, Raster},
     world::{self, MapRaster},
@@ -10,9 +12,15 @@ use crate::{
 use avian2d::prelude::*;
 use bevy::prelude::*;
 
-/// How far shadows reach in px at most, however low the sun is. The shader searches up to this far
-/// (`STEP * STEPS` in `assets/shaders/light.wesl`).
+/// How far shadows reach in px at most, however low the sun is.
 pub const MAX_SHADOW_LENGTH: f32 = 64.;
+
+/// Distance in px between the points along a shadow that are marked, half a cell so no cell on its
+/// line is skipped.
+const SHADOW_STEP: f32 = cells::CELL_SIZE / 2.;
+
+/// How far in px the tip of the longest shadow moves before the shadows are computed again.
+const SHADOW_TOLERANCE: f32 = 1.;
 
 /// Makes a collider cast a shadow in the sun, as high as its value in px (Tiled's `height`). Its
 /// shape is the shadow's footprint, like that of the opaque cells for the sight.
@@ -110,16 +118,6 @@ impl ShadowHeights {
         self.max as f32
     }
 
-    /// Height per cell in px, row by row from the bottom.
-    pub fn values(&self) -> &[u8] {
-        self.heights.values()
-    }
-
-    /// Number of columns and rows.
-    pub fn size(&self) -> UVec2 {
-        self.heights.rect().size.as_uvec2()
-    }
-
     /// Area of the world the heights cover.
     pub fn rect(&self) -> Rect {
         self.heights.rect().world_rect()
@@ -140,17 +138,113 @@ fn update_heights(
     *heights = ShadowHeights::new(&maps);
 }
 
+/// Which cells of the [`ShadowHeights`] lie in the sun's shadow.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct SunShadow {
+    /// 255 in the shadow, 0 in the sun, over the heights' rectangle
+    mask: Option<Raster<u8>>,
+    /// Where the tip of the longest shadow was, relative to its caster, when the mask was computed
+    tip: Vec2,
+}
+
+impl SunShadow {
+    /// The tip of the shadow of the highest caster in `heights` under `sun`, relative to the
+    /// caster.
+    fn tip(heights: &ShadowHeights, sun: Sun) -> Vec2 {
+        -sun.direction * shadow_length(heights.max(), sun)
+    }
+
+    /// Whether the shadows under `sun` differ visibly from those of the mask.
+    pub fn is_outdated(&self, heights: &ShadowHeights, sun: Sun) -> bool {
+        self.mask.is_none() || self.tip.distance(Self::tip(heights, sun)) > SHADOW_TOLERANCE
+    }
+
+    /// Computes the mask: each caster marks the cells along its shadow, away from the sun and as
+    /// long as its height under the sun's slope (at most [`MAX_SHADOW_LENGTH`]). The casters' own
+    /// cells stay in the sun, like the tops of trees and roofs.
+    pub fn compute(heights: &ShadowHeights, sun: Sun) -> Self {
+        let rect = heights.heights.rect();
+        let mut mask = Raster::new(rect, 0);
+        let step = -sun.direction * SHADOW_STEP;
+        for (i, &height) in heights.heights.values().iter().enumerate() {
+            if height == 0 {
+                continue;
+            }
+            let caster = cells::center(rect.cell(i));
+            let steps = (shadow_length(height as f32, sun) / SHADOW_STEP) as u32;
+            for n in 1..=steps {
+                let cell = cells::cell(caster + step * n as f32);
+                if let Some(j) = rect.index(cell)
+                    && heights.heights[j] == 0
+                {
+                    mask[j] = 255;
+                }
+            }
+        }
+        Self {
+            mask: Some(mask),
+            tip: Self::tip(heights, sun),
+        }
+    }
+
+    /// Whether `position` lies in the shadow.
+    pub fn shades(&self, position: Vec2) -> bool {
+        self.mask
+            .as_ref()
+            .and_then(|mask| mask.get(cells::cell(position)))
+            .is_some_and(|&shadow| shadow > 0)
+    }
+
+    /// The mask, row by row from the bottom, `None` until it is computed.
+    pub fn mask(&self) -> Option<&Raster<u8>> {
+        self.mask.as_ref()
+    }
+}
+
+/// Length in px of the shadow of something `height` px high under `sun`.
+fn shadow_length(height: f32, sun: Sun) -> f32 {
+    if sun.slope <= 0. {
+        return MAX_SHADOW_LENGTH;
+    }
+    (height / sun.slope).min(MAX_SHADOW_LENGTH)
+}
+
+/// Computes the shadows again when the heights changed or the sun moved them visibly. Only marks
+/// the resource as changed then, so the texture is only written when the mask changed. Without
+/// sun, the mask stays as it was: the light layer doesn't draw it then.
+fn update_sun_shadow(
+    heights: Res<ShadowHeights>,
+    day_night: Res<DayNight>,
+    values: Res<LightValues>,
+    mut shadow: ResMut<SunShadow>,
+) {
+    let Some(sun) = day_night.sun(&values) else {
+        return;
+    };
+    if heights.is_changed() || shadow.is_outdated(&heights, sun) {
+        *shadow = SunShadow::compute(&heights, sun);
+    }
+}
+
 pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<ShadowHeights>().add_systems(
-            PreUpdate,
-            (
-                world::rasterize::<Heights, With<CastsShadow>>,
-                update_heights,
+        app.init_resource::<ShadowHeights>()
+            .init_resource::<SunShadow>()
+            .add_systems(
+                PreUpdate,
+                (
+                    world::rasterize::<Heights, With<CastsShadow>>,
+                    update_heights,
+                )
+                    .chain(),
             )
-                .chain(),
-        );
+            .add_systems(
+                Update,
+                update_sun_shadow
+                    .run_if(resource_exists::<LightValues>)
+                    .run_if(resource_exists::<DayNight>),
+            );
     }
 }
