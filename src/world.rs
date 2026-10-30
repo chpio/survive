@@ -5,9 +5,13 @@
 //! keeps large enough. Each loaded map gets its [`MapArea`], and the flow field and the sight keep
 //! a raster of the map's colliders on its entity ([`MapRaster`]), so they disappear with it.
 
-use crate::{flowfield, sight};
+use crate::{flowfield, light, sight};
 use avian2d::prelude::*;
-use bevy::{ecs::query::QueryFilter, platform::collections::HashMap, prelude::*};
+use bevy::{
+    ecs::query::{QueryFilter, QueryItem, ReadOnlyQueryData},
+    platform::collections::HashMap,
+    prelude::*,
+};
 use bevy_ecs_tiled::prelude::*;
 
 /// Area a loaded map covers in world space, on its entity.
@@ -42,11 +46,21 @@ fn insert_map_area(
 
 /// A raster built from colliders of one map, a component of the map's entity. See [`rasterize`].
 pub trait MapRaster: Component {
+    /// What the raster needs to know about a collider besides its shape, e.g. a component, `()`
+    /// for nothing.
+    type Data: ReadOnlyQueryData;
+
     /// Raster without colliders over the map covering `area`.
     fn new(area: Rect) -> Self;
 
     /// Adds the shape of `collider` at `position` and `rotation`.
-    fn add_collider(&mut self, collider: &Collider, position: Vec2, rotation: Rotation);
+    fn add_collider(
+        &mut self,
+        collider: &Collider,
+        position: Vec2,
+        rotation: Rotation,
+        data: QueryItem<'_, '_, Self::Data>,
+    );
 }
 
 /// Builds the raster `R` of each map that has none yet or whose area changed, and again whenever
@@ -54,7 +68,17 @@ pub trait MapRaster: Component {
 /// a [`MapArea`]; colliders of maps are static, so they rarely change.
 pub fn rasterize<R: MapRaster, F: QueryFilter>(
     maps: Query<(Entity, Ref<MapArea>, Has<R>)>,
-    colliders: Query<(Entity, &Collider, &Position, &Rotation, Ref<ColliderAabb>), F>,
+    colliders: Query<
+        (
+            Entity,
+            &Collider,
+            &Position,
+            &Rotation,
+            Ref<ColliderAabb>,
+            R::Data,
+        ),
+        F,
+    >,
     parents: Query<&ChildOf>,
     mut commands: Commands,
 ) {
@@ -69,7 +93,7 @@ pub fn rasterize<R: MapRaster, F: QueryFilter>(
         .filter(|(_, area, has_raster)| !has_raster || area.is_changed())
         .map(|(map, area, _)| (map, R::new(area.0)))
         .collect();
-    for (collider, .., aabb) in &colliders {
+    for (collider, _, _, _, aabb, _) in &colliders {
         if aabb.is_changed()
             && let Some(map) = map_of(collider)
             && let Ok((_, area, _)) = maps.get(map)
@@ -81,9 +105,9 @@ pub fn rasterize<R: MapRaster, F: QueryFilter>(
         return;
     }
 
-    for (collider_entity, collider, position, rotation, _) in &colliders {
+    for (collider_entity, collider, position, rotation, _, data) in &colliders {
         if let Some(raster) = map_of(collider_entity).and_then(|map| outdated.get_mut(&map)) {
-            raster.add_collider(collider, position.0, *rotation);
+            raster.add_collider(collider, position.0, *rotation, data);
         }
     }
     for (map, raster) in outdated {
@@ -101,8 +125,8 @@ pub const MIN_LOADED_DISTANCE: f32 = if flowfield::REACH > sight::REACH {
     sight::REACH
 };
 
-/// Loads the maps that the view or [`MIN_LOADED_DISTANCE`] around the camera touch, whichever is
-/// larger, so it follows the window size and the zoom.
+/// Loads the maps that the view (with the shadows falling into it) or [`MIN_LOADED_DISTANCE`]
+/// around the camera touch, whichever is larger, so it follows the window size and the zoom.
 pub fn update_chunking(
     projection: Single<&Projection, With<Camera2d>>,
     mut worlds: Query<&mut TiledWorldChunking>,
@@ -110,9 +134,7 @@ pub fn update_chunking(
     let Projection::Orthographic(projection) = *projection else {
         return;
     };
-    let half_size = projection
-        .area
-        .half_size()
+    let half_size = (projection.area.half_size() + light::shadow::MAX_SHADOW_LENGTH)
         .max(Vec2::splat(MIN_LOADED_DISTANCE));
     for mut chunking in &mut worlds {
         if chunking.0 != Some(half_size) {

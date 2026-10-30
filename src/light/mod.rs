@@ -1,8 +1,10 @@
 //! Day and night (see `docs/licht.md`). [`DayNight`] keeps the time of day and derives from it how
-//! dark the night is, which [`render`] draws as a layer above everything and which shrinks the
-//! player's [`SightRadius`]. The values come from `assets/light.ron` ([`values`]).
+//! dark the night is, which shrinks the player's [`SightRadius`], and where the sun is. [`render`]
+//! draws both in a layer above everything, with the sun's shadows of what [`shadow`] rasterizes.
+//! The values come from `assets/light.ron` ([`values`]).
 
 pub mod render;
+pub mod shadow;
 pub mod values;
 
 use crate::{objects::player::Player, sight::SightRadius};
@@ -29,6 +31,10 @@ pub struct LightValues {
     pub day_sight_radius: f32,
     /// Sight radius in px at night
     pub night_sight_radius: f32,
+    /// Angle of the sun above the horizon at noon in degrees
+    pub sun_elevation: f32,
+    /// How much the sun's shadows darken by day, from 0 (not at all) to 1 (black)
+    pub shadow_strength: f32,
 }
 
 impl LightValues {
@@ -163,12 +169,49 @@ impl DayNight {
         self.night * (1. - values.night_brightness)
     }
 
+    /// The sun while it is up, from the start of the dawn to the end of the dusk, so its shadows
+    /// fade in and out with the twilight: in the east in the morning, in the south at noon, in the
+    /// west in the evening.
+    pub fn sun(&self, values: &LightValues) -> Option<Sun> {
+        let twilight = values.twilight as f64;
+        let sunrise = values.night_start as f64 + values.night_length() - twilight / 2.;
+        let since_sunrise = (self.hour() as f64 - sunrise).rem_euclid(24.);
+        let progress = (since_sunrise / (24. - values.night_length() + twilight)) as f32;
+        if progress >= 1. {
+            return None;
+        }
+        let angle = std::f32::consts::PI * progress;
+        let elevation = values.sun_elevation.to_radians() * angle.sin();
+        Some(Sun {
+            direction: Vec2::new(angle.cos(), -angle.sin()),
+            slope: elevation.tan(),
+        })
+    }
+
+    /// How much the sun's shadows darken, from 0 (not at all) to 1 (black), fading out with the
+    /// dusk and in with the dawn.
+    pub fn shadow(&self, values: &LightValues) -> f32 {
+        if self.sun(values).is_none() {
+            return 0.;
+        }
+        values.shadow_strength * (1. - self.night)
+    }
+
     /// The base of the player's [`SightRadius`].
     pub fn sight_radius(&self, values: &LightValues) -> f32 {
         values
             .day_sight_radius
             .lerp(values.night_sight_radius, self.night)
     }
+}
+
+/// Where the sun is, see [`DayNight::sun`].
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Sun {
+    /// Direction towards the sun in world space, of unit length
+    pub direction: Vec2,
+    /// How far the sun's rays rise per px towards it
+    pub slope: f32,
 }
 
 /// 0 up to `from`, 1 from `to` on, easing in and out between them.
@@ -215,12 +258,12 @@ fn set_sight_radius(
 }
 
 /// Runs the day-night cycle once [`LightValues`] and [`DayNight`] exist ([`values::Plugin`]
-/// inserts them). Drawing the night needs [`render::Plugin`].
+/// inserts them), and rasterizes the shadow casters. Drawing needs [`render::Plugin`].
 pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.add_plugins(shadow::Plugin).add_systems(
             Update,
             (run_clock, set_sight_radius)
                 .chain()

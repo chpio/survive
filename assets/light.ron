@@ -12,4 +12,8 @@
     // in px, at most `sight::MAX_SIGHT_RADIUS` (300)
     day_sight_radius: 200.,
     night_sight_radius: 120.,
+    // degrees above the horizon at noon; lower makes longer shadows
+    sun_elevation: 50.,
+    // how much the shadows darken, 0 not at all, 1 black
+    shadow_strength: 0.3,
 )

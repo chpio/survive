@@ -119,18 +119,6 @@ impl SightMaterial {
             ..Self::new(color, mask)
         }
     }
-
-    /// Shows `color` where another `mask` like the sight's (an `R8Unorm` texture covering `area`
-    /// in world space) isn't visible. [`write_mask`] leaves its area alone.
-    pub fn inverted_other(color: Color, mask: Handle<Image>, area: Rect) -> Self {
-        Self {
-            color: color.into(),
-            mask_area: Vec4::new(area.min.x, area.min.y, area.width(), area.height()),
-            invert: 1.,
-            blur: BLUR,
-            mask,
-        }
-    }
 }
 
 impl Material2d for SightMaterial {
@@ -190,16 +178,8 @@ fn write_mask(
 
     let area = sight.window_rect();
     mask.area = Vec4::new(area.min.x, area.min.y, area.width(), area.height());
-    // only those of the sight's mask, and without marking the others as changed
-    let ids: Vec<_> = materials
-        .iter()
-        .filter(|(_, material)| material.mask == mask.image)
-        .map(|(id, _)| id)
-        .collect();
-    for id in ids {
-        if let Some(mut material) = materials.get_mut(id) {
-            material.mask_area = mask.area;
-        }
+    for (_, material) in materials.iter_mut() {
+        material.mask_area = mask.area;
     }
     darkness.translation = area.center().extend(DARKNESS_Z);
 }

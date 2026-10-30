@@ -1,13 +1,17 @@
 use crate::common;
+use avian2d::prelude::*;
 use bevy::prelude::*;
 use survival::{
-    light::{self, DayNight, LightValues, Phase},
+    light::{
+        self, DayNight, LightValues, Phase,
+        shadow::{Heights, ShadowHeights},
+    },
     objects::player,
     sight::SightRadius,
 };
 
 /// The values of `assets/light.ron`: a day of 600 s, the night from 21:00 to 05:00, dusk and dawn
-/// of 1.5 h each.
+/// of 1.5 h each, the sun 50° high at noon.
 fn values() -> LightValues {
     LightValues {
         day_length: 600.,
@@ -18,6 +22,8 @@ fn values() -> LightValues {
         night_brightness: 0.5,
         day_sight_radius: 200.,
         night_sight_radius: 120.,
+        sun_elevation: 50.,
+        shadow_strength: 0.3,
     }
 }
 
@@ -71,6 +77,55 @@ fn skipping_goes_through_the_phases_into_the_next_day() {
         ]
     );
     assert_eq!(day_night.day(), 2);
+}
+
+#[test]
+fn sun_goes_from_east_to_west_over_the_south() {
+    let values = values();
+    let sun = |hour| DayNight::new(hour, &values).sun(&values);
+
+    let morning = sun(8.).unwrap();
+    assert!(morning.direction.x > 0.5 && morning.direction.y < 0.);
+    // halfway between 05:00 and 21:00
+    let noon = sun(13.).unwrap();
+    assert!(noon.direction.distance(Vec2::NEG_Y) < 1e-4);
+    assert!((noon.slope - 50f32.to_radians().tan()).abs() < 1e-4);
+    assert!(morning.slope < noon.slope);
+    let evening = sun(18.).unwrap();
+    assert!(evening.direction.x < -0.5 && evening.direction.y < 0.);
+    // set at the end of the dusk
+    assert!(sun(21.7).is_some());
+    assert_eq!(sun(21.8), None);
+    assert_eq!(sun(23.), None);
+}
+
+#[test]
+fn shadows_fade_out_with_the_dusk() {
+    let values = values();
+    let shadow = |hour| DayNight::new(hour, &values).shadow(&values);
+
+    assert_eq!(shadow(13.), 0.3);
+    assert!((shadow(21.) - 0.15).abs() < 1e-3, "{}", shadow(21.));
+    assert!(shadow(21.7) < 0.01);
+    assert_eq!(shadow(23.), 0.);
+}
+
+#[test]
+fn heights_of_the_loaded_maps_are_put_together() {
+    let mut west = Heights::new(Rect::new(-100., 0., 0., 100.));
+    let east = Heights::new(Rect::new(0., 0., 100., 100.));
+    let tree = Collider::rectangle(16., 16.);
+    west.add(&tree, Vec2::new(-50., 50.), Rotation::IDENTITY, 24.);
+    // a lower one in the same place doesn't lower it
+    west.add(&tree, Vec2::new(-50., 50.), Rotation::IDENTITY, 8.);
+
+    let heights = ShadowHeights::new(&[&west, &east]);
+
+    assert_eq!(heights.height(Vec2::new(-50., 50.)), 24.);
+    assert_eq!(heights.height(Vec2::new(-30., 50.)), 0.);
+    assert_eq!(heights.height(Vec2::new(150., 50.)), 0.);
+    assert_eq!(heights.max(), 24.);
+    assert_eq!(heights.rect(), Rect::new(-100., 0., 100., 100.));
 }
 
 fn app() -> (App, Entity) {

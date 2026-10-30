@@ -117,11 +117,13 @@ impl Obstacles {
 }
 
 impl MapRaster for Obstacles {
+    type Data = ();
+
     fn new(area: Rect) -> Self {
         Self::new(area)
     }
 
-    fn add_collider(&mut self, collider: &Collider, position: Vec2, rotation: Rotation) {
+    fn add_collider(&mut self, collider: &Collider, position: Vec2, rotation: Rotation, _: ()) {
         self.block_collider(collider, position, rotation);
     }
 }

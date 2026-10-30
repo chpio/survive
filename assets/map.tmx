@@ -50,6 +50,7 @@
  <layer id="4" name="Bäume" width="21" height="42">
   <properties>
    <property name="blocks_sight" type="bool" value="true"/>
+   <property name="height" type="float" value="24"/>
   </properties>
   <data encoding="csv">
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,

@@ -143,22 +143,40 @@ fn startup(
                 // Automatically insert a `RigidBody::Static` component on all the colliders entities from the map
                 collider.insert(RigidBody::Static);
 
-                // a tile layer's colliders are merged into one, so the property applies to the
-                // whole layer. Objects can have it themselves or on their tile.
+                // a tile layer's colliders are merged into one, so the properties apply to the
+                // whole layer. Objects can have them themselves or on their tile.
                 let object = collider_created.event().object(&assets);
-                let blocks_sight = collider_created
-                    .event()
-                    .layer(&assets)
-                    .is_some_and(|layer| blocks_sight(&layer.properties))
-                    || object.as_ref().is_some_and(|obj| {
-                        blocks_sight(&obj.properties)
-                            || obj
-                                .get_tile()
-                                .and_then(|obj_tile| obj_tile.get_tile())
-                                .is_some_and(|tile| blocks_sight(&tile.properties))
-                    });
-                if blocks_sight {
+                let layer = collider_created.event().layer(&assets);
+                let property = |name| {
+                    object
+                        .as_ref()
+                        .and_then(|obj| {
+                            obj.properties.get(name).cloned().or_else(|| {
+                                obj.get_tile()
+                                    .and_then(|obj_tile| obj_tile.get_tile())
+                                    .and_then(|tile| tile.properties.get(name).cloned())
+                            })
+                        })
+                        .or_else(|| {
+                            layer
+                                .as_ref()
+                                .and_then(|layer| layer.properties.get(name).cloned())
+                        })
+                };
+                if matches!(
+                    property("blocks_sight"),
+                    Some(tiled::PropertyValue::BoolValue(true))
+                ) {
                     collider.insert(sight::BlocksSight);
+                }
+                match property("height") {
+                    Some(tiled::PropertyValue::FloatValue(height)) => {
+                        collider.insert(light::shadow::CastsShadow(height));
+                    }
+                    Some(tiled::PropertyValue::IntValue(height)) => {
+                        collider.insert(light::shadow::CastsShadow(height as f32));
+                    }
+                    _ => {}
                 }
 
                 if let Some(obj) = object {
@@ -216,14 +234,6 @@ fn startup(
                 }
             },
         );
-}
-
-/// Whether the Tiled `properties` mark something as blocking the sight.
-fn blocks_sight(properties: &tiled::Properties) -> bool {
-    matches!(
-        properties.get("blocks_sight"),
-        Some(tiled::PropertyValue::BoolValue(true))
-    )
 }
 
 fn update_camera_position(

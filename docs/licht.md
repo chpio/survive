@@ -1,8 +1,9 @@
 # Konzept: Licht
 
 Umgesetzt sind Tag und Nacht mit Uhr und Dev-Werkzeugen im HUD, die Werte-Datei
-(`assets/light.ron`), die Nacht-Ebene mit leerer Lightmap und der `SightRadius` (`src/light/`).
-Lichtquellen, Sonne und Color Grading fehlen noch. Alle Zahlen sind Startwerte fürs Ausbalancieren.
+(`assets/light.ron`), der `SightRadius` und die Licht-Ebene mit Nacht, Sonnenschatten und leerer
+Lightmap (`src/light/`). Lichtquellen und Color Grading fehlen noch. Alle Zahlen sind Startwerte
+fürs Ausbalancieren.
 
 ## Ziel
 
@@ -60,17 +61,16 @@ Lichtquellen, Sonne und Color Grading fehlen noch. Alle Zahlen sind Startwerte f
   `out_of_sight::MIN_DISTANCE` (120 px) allerdings am Rand der Sicht, Gegner tauchen nachts also
   deutlich näher auf. Das beim Ausbalancieren prüfen.
 
-## Nacht-Ebene
+## Licht-Ebene
 
 - Eigene Ebene über allem, auch über Items, Gegnern, Spieler und Lebensbalken (z = 20; Einheiten
   liegen bei 10, ihre Balken bis 11,1). Die Materialien der einzelnen Entities ändern sich nicht.
   Das HUD ist eine UI-Node und wird nicht abgedunkelt.
-- Sie ist ein `SightMaterial` wie die Sichtabdunklung: invertiert, Schwarz mit der Deckkraft der
-  Nacht, aber mit der Lightmap statt der Sichtmaske als Textur. Anfangs ist die Lightmap leer, die
-  Ebene dunkelt dann überall gleich stark ab.
-- `sight::render::write_mask` setzt den Bereich der Maske nur in den Materialien der Sichtmaske,
-  die Nacht-Ebene hat ihren eigenen.
-- Deckkraft etwa Nacht × (1 − Licht).
+- Ein eigenes `LightMaterial` (Shader `assets/shaders/light.wesl`) mit einer Helligkeit pro Pixel:
+  (1 − Dunkelheit der Nacht) × (1 − Schatten der Sonne) + Licht aus der Lightmap. Die Ebene ist
+  schwarz mit der Deckkraft 1 − Helligkeit. Anfangs ist die Lightmap leer (ein dunkles Pixel).
+- Tagsüber zeigt sie die Schatten, nachts die Dunkelheit. Unsichtbar ist sie nur, wenn es weder
+  das eine noch das andere gibt (etwa mit `shadow_strength` 0 am Tag).
 - Die Sichtabdunklung bleibt unverändert, beide Ebenen liegen übereinander.
 - Mesh-Picking stört die Ebene nicht, es berücksichtigt nur `Pickable`-Entities.
 
@@ -79,7 +79,7 @@ Lichtquellen, Sonne und Color Grading fehlen noch. Alle Zahlen sind Startwerte f
 - Komponente an beliebigen Entities.
 - Die Lightmap entsteht auf der CPU, auf dem Zellraster wie die Sichtmaske, über den sichtbaren
   Ausschnitt. Jedes Licht wird als weicher Kreis (etwa per `smoothstep`) aufaddiert. Das Ergebnis
-  kommt in eine linear gefilterte Textur, die der Shader wie die Sichtmaske weichzeichnet.
+  kommt in eine linear gefilterte Textur, die der Shader der Licht-Ebene liest.
   Bei Zoom 2 sind das etwa 250 × 250 Zellen, notfalls mit gröberen Zellen.
 - Additiv auf der GPU zu zeichnen wäre aufwendiger: `AlphaMode2d` kennt kein additives Blending,
   es bräuchte eine eigene Pipeline und eine zweite Kamera, die in eine Textur rendert.
@@ -95,39 +95,46 @@ Lichtquellen, Sonne und Color Grading fehlen noch. Alle Zahlen sind Startwerte f
   Der Shader bleibt gleich.
 - Lichter können später den Sichtradius vergrößern.
 
-## Sonne und Schatten (später)
+## Sonne und Schatten
 
 - Die Sonne ist ein gerichtetes Licht: Alle Schatten zeigen in dieselbe Richtung, ihre Länge hängt
   vom Sonnenstand und von der Höhe des Objekts ab. Das Licht zwischen Gebäuden ist alles, was
   nicht im Schatten liegt; berechnet werden nur die Schatten.
-- Dafür wird die Nacht-Ebene zur Licht-Ebene mit einer Helligkeit pro Pixel: Umgebungslicht aus
-  `DayNight` (tagsüber 1, nachts 0,5), im Sonnenschatten gedrückt (etwa auf 70 %), plus die
-  Lichtquellen. Die Ebene ist dann auch tagsüber sichtbar. Da sie über allem liegt, werden Spieler
-  und Gegner im Schatten von selbst dunkler. Diese Umstellung kommt zuerst, danach lassen sich
-  Sonne und Lichtquellen unabhängig voneinander einbauen.
-- Höhenraster pro Karte auf den 4-px-Zellen (z. B. Baum 1, Haus 2), aus einer Tiled-Property
-  `height` an Ebene, Objekt oder Tile wie `blocks_sight`. Wie die Sichtmaske wird es zu einem
-  Fenster um die Kamera zusammengesetzt und als Textur hochgeladen, neu nur, wenn sich Karten
-  ändern.
-- Der Schatten entsteht im Shader: Von jedem Pixel aus geht er ein paar Schritte Richtung Sonne.
-  Ist eine Zelle höher als der Sonnenstrahl an dieser Stelle (Abstand × Steigung der Sonne), liegt
-  das Pixel im Schatten. So ergibt sich die Schattenlänge pro Objekt von selbst. Pro Frame ändern
-  sich nur Richtung und Höhe der Sonne als Uniform, die Sonne wandert also ohne Mehrkosten. Auf der
-  CPU müsste der Schatten bei jeder Winkeländerung neu berechnet werden.
+- Die Licht-Ebene drückt die Helligkeit im Sonnenschatten (`shadow_strength`, 30 %). Da sie über
+  allem liegt, werden Spieler und Gegner im Schatten von selbst dunkler.
+- Höhenraster pro Karte auf den 4-px-Zellen (`light::shadow::Heights`, Höhe in px, höchstens 255),
+  aus der Tiled-Property `height` an Objekt, Tile oder Ebene wie `blocks_sight`. Die Bäume haben
+  24 px. `ShadowHeights` setzt die Raster der geladenen Karten im kleinsten Rechteck um sie
+  zusammen, das als Textur hochgeladen wird, neu nur, wenn Karten geladen, entladen oder neu
+  gerastert werden. Ein Fenster um die Kamera wäre kleiner, müsste aber beim Laufen nachgeführt
+  werden.
+- Der Schatten entsteht im Shader: Von jedem Pixel aus geht er in Schritten von 2 px Richtung
+  Sonne, höchstens 64 px weit (`MAX_SHADOW_LENGTH`). Ist eine Zelle höher als der Sonnenstrahl an
+  dieser Stelle (Abstand × Steigung der Sonne), liegt das Pixel im Schatten. So ergibt sich die
+  Schattenlänge pro Objekt von selbst. Die Suche endet, sobald der Strahl höher ist als der höchste
+  Schattenwerfer. Pro Frame ändern sich nur Richtung und Höhe der Sonne als Uniform, die Sonne
+  wandert also ohne Mehrkosten. Auf der CPU müsste der Schatten bei jeder Winkeländerung neu
+  berechnet werden.
+- Schatten können bis 64 px in die Ansicht fallen, daher lädt `world::update_chunking` die Karten
+  so weit über die Ansicht hinaus.
 - Die Zellen der Schattenwerfer selbst bleiben hell, wie Hindernisse in der Sicht ihre Kante
   zeigen, sonst läge ein Dach im eigenen Schatten.
 - Sonnenrichtung und -höhe leitet `DayNight` aus der Uhrzeit ab: morgens lange Schatten nach
-  Westen, mittags kurze, abends lange nach Osten. Nachts keine oder schwache Schatten vom Mond.
+  Westen, mittags (13 Uhr, `sun_elevation` 50°) kurze nach Norden, abends lange nach Osten. Die
+  Sonne steht vom Beginn der Morgen- bis zum Ende der Abenddämmerung am Himmel, ihre Schatten
+  blenden mit der Nacht weich aus und ein. Nachts keine Schatten; schwache vom Mond vielleicht
+  später.
 - Erst einmal werfen die Kollider den Schatten, mit ihrer Form wie beim Rastern der
   undurchsichtigen Zellen. Kollider sind aber oft nur Stamm oder Grundfläche, ein Baum soll
   eigentlich den Schatten seiner Krone werfen. Später daher eigene Schattenformen: Objekte in Tiled
   oder eine Höhe pro Tile. Das ist mehr Arbeit beim Kartenbau als im Code.
-- Die 4-px-Zellen geben diagonalen Schatten Treppenkanten. Das Weichzeichnen wie bei der Sicht
-  glättet sie, harte Schatten gibt es damit nicht.
+- Die 4-px-Zellen geben diagonalen Schatten Treppenkanten. Der Shader nimmt den Schatten an vier
+  Punkten um jedes Pixel (±1,5 px) und mittelt, das macht die Kanten etwas weicher.
 - Einheiten werfen keine Schatten über das Raster. Für sie besser kleine weiche Blob-Schatten als
   Sprite unter jeder Einheit.
-- Der Look kommt vor allem über die Farbe: sonnige Bereiche etwas warm, Schatten etwas kühl. Das
-  kann der Shader der Licht-Ebene selbst, ohne Color Grading.
+- Später: Der Look kommt vor allem über die Farbe, sonnige Bereiche etwas warm, Schatten etwas
+  kühl. Das kann der Shader der Licht-Ebene selbst, ohne Color Grading. Bisher dunkelt er nur
+  schwarz ab.
 - Optional: Lichtflecken unter Bäumen (eine langsam wandernde Rauschtextur) statt sichtbarer
   Lichtstrahlen, die man von oben kaum sieht. Ein eigener kleiner Effekt, unabhängig von den
   Schatten.
@@ -155,8 +162,9 @@ Lichtquellen, Sonne und Color Grading fehlen noch. Alle Zahlen sind Startwerte f
 2. Nacht-Ebene mit leerer Lightmap.
 3. `SightRadius` am Spieler.
 4. Licht-Ebene mit Helligkeit pro Pixel statt Nacht-Ebene.
-5. Lichtquellen und Sonne, unabhängig voneinander.
-6. Color Grading mit HDR.
+5. Sonne mit Schatten der Kollider.
+6. Lichtquellen.
+7. Color Grading mit HDR.
 
 ## Später
 
