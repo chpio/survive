@@ -32,13 +32,15 @@ Ausgearbeitet in [spawnen.md](../spawnen.md). Die Grundsätze:
 
 ## Licht
 
-- **Tag und Nacht:** Ein Umgebungslicht-Faktor im Shader (`assets/shaders/sight.wesl`),
-  multipliziert mit der vorhandenen Sichtmaske.
-- **Color Grading:** LUTs pro Tageszeit, zwischen denen überblendet wird. Vorher testen, ob Bevys
-  `ColorGrading` an der 2D-Kamera funktioniert.
-- **Lichtquellen:** Eine Komponente an normalen Entities. Jedes Licht wird als Quad mit weichem
-  Abfall (etwa per `smoothstep`) additiv in eine Lightmap gezeichnet. Schatten gibt es nur für
+Ausgearbeitet in [licht.md](../licht.md). Die Grundsätze:
+
+- **Tag und Nacht:** Nachts dunkelt eine eigene Ebene über allem die Welt ab, und der Sichtradius
+  wird kleiner.
+- **Lichtquellen:** Eine Komponente an normalen Entities. Jedes Licht wird als weicher Kreis
+  additiv in eine Lightmap gezeichnet, die die Nacht-Ebene aufhellt. Schatten gibt es nur für
   wenige große Lichter.
+- **Color Grading:** Bevys `ColorGrading` pro Tageszeit, zwischen denen überblendet wird. Es
+  braucht HDR, damit auch die Karte gefärbt wird. Später vielleicht LUTs.
 
 ## Radien um den Spieler (drei Kreise ineinander)
 
