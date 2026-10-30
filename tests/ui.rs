@@ -1,9 +1,9 @@
-use bevy::math::Vec2;
+use bevy::math::{UVec2, Vec2};
 use blitz_dom::{Document as _, DocumentConfig};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus::prelude::*;
 use dioxus_native_dom::DioxusDocument;
-use survival::ui::blocks_pointer;
+use survival::ui::{blocks_pointer, hud_scale};
 
 /// A panel that blocks the pointer and a layout container next to it that doesn't.
 fn app() -> Element {
@@ -83,4 +83,15 @@ fn panel_is_hit_after_the_window_grew() {
 
     // beyond the old width of 400 px
     assert!(blocks_pointer(&doc.inner(), Vec2::new(1150., 50.)));
+}
+
+#[test]
+fn hud_scales_with_the_window() {
+    assert_eq!(hud_scale(UVec2::new(1920, 1080), 1.), 1.);
+    // 4K draws it twice as large, so it looks the same, only sharper
+    assert_eq!(hud_scale(UVec2::new(3840, 2160), 1.), 2.);
+    // by the tighter direction, so it fits a wider or taller window too
+    assert_eq!(hud_scale(UVec2::new(3840, 1080), 1.), 1.);
+    assert_eq!(hud_scale(UVec2::new(3840, 2400), 1.), 2.);
+    assert_eq!(hud_scale(UVec2::new(1920, 1080), 1.5), 1.5);
 }

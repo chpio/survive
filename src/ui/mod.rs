@@ -128,8 +128,25 @@ pub struct Hud;
 /// Class of the HUD elements that take the pointer from the game world, along with their children.
 pub const BLOCKS_POINTER: &str = "blocks-pointer";
 
-/// Whether the HUD takes the pointer at `position` (in the document's CSS pixels: Bevy's logical
-/// pixels divided by [`Settings::ui_scale`]): whether the topmost element there or one of its ancestors has the class
+/// Window size in physical pixels at which the HUD has one physical pixel per CSS pixel (at a UI
+/// scale of 1). Larger windows draw it larger, so it covers the same part of the screen at any
+/// resolution, only sharper.
+pub const REFERENCE_SIZE: Vec2 = Vec2::new(1920., 1080.);
+
+/// Physical pixels per CSS pixel of the HUD in a window `physical_size` large: the part of
+/// [`REFERENCE_SIZE`] the window has in its tighter direction, times `ui_scale`. Independent of
+/// the system's scale factor.
+pub fn hud_scale(physical_size: UVec2, ui_scale: f32) -> f32 {
+    (physical_size.as_vec2() / REFERENCE_SIZE).min_element() * ui_scale
+}
+
+/// CSS pixels of the HUD per logical pixel of `window`, in which Bevy reports pointer positions.
+fn css_per_logical(window: &Window, settings: &Settings) -> f32 {
+    window.scale_factor() / hud_scale(window.physical_size(), settings.ui_scale)
+}
+
+/// Whether the HUD takes the pointer at `position` (in the document's CSS pixels, see
+/// [`hud_scale`]): whether the topmost element there or one of its ancestors has the class
 /// [`BLOCKS_POINTER`]. Uses the last layout, so the document has to be resolved before.
 pub fn blocks_pointer(doc: &BaseDocument, position: Vec2) -> bool {
     doc.elements_from_point(position.x, position.y)
@@ -220,11 +237,13 @@ fn forward_input(
     mut cursor_left: MessageReader<CursorLeft>,
     mut mouse_buttons: MessageReader<MouseButtonInput>,
     mut touches: MessageReader<TouchInput>,
+    window: Single<&Window, With<PrimaryWindow>>,
     settings: Res<Settings>,
 ) {
     let ui = &mut *ui;
-    // Blitz's coordinates are CSS pixels, which the UI scale makes larger than logical ones
-    let css = |position: Vec2| position / settings.ui_scale;
+    // Blitz's coordinates are CSS pixels, see `hud_scale`
+    let css_per_logical = css_per_logical(&window, &settings);
+    let css = |position: Vec2| position * css_per_logical;
 
     // no repaint of its own: Blitz requests a redraw when a move changes something (hover,
     // selection), so moving over the game world doesn't repaint the HUD
@@ -325,6 +344,7 @@ fn forward_input(
 /// Without `Pickable`, the image blocks all hits below it.
 fn pick_hud(
     ui: NonSend<UiDocument>,
+    window: Single<&Window, With<PrimaryWindow>>,
     settings: Res<Settings>,
     hud: Single<Entity, With<Hud>>,
     camera: Single<(Entity, &Camera), With<Camera2d>>,
@@ -332,12 +352,13 @@ fn pick_hud(
     mut hits: MessageWriter<PointerHits>,
 ) {
     let (camera_entity, camera) = *camera;
+    let css_per_logical = css_per_logical(&window, &settings);
     let doc = ui.doc.inner();
     for (pointer, location) in &pointers {
         let Some(location) = &location.location else {
             continue;
         };
-        if blocks_pointer(&doc, location.position / settings.ui_scale) {
+        if blocks_pointer(&doc, location.position * css_per_logical) {
             let hit = HitData::new(camera_entity, 0., Some(location.position.extend(0.)), None);
             // above the sprites, which use the camera's order, since the HUD is drawn above them
             let order = camera.order as f32 + 1.;
@@ -695,8 +716,7 @@ fn paint_ui(
     ui.needs_paint |= ui.redraw_request.0.swap(false, Ordering::Relaxed);
 
     let (width, height) = (window.physical_width(), window.physical_height());
-    // the HUD is drawn larger than the window's scale by the UI scale
-    let scale = window.scale_factor() * settings.ui_scale;
+    let scale = hud_scale(window.physical_size(), settings.ui_scale);
     let mut doc = ui.doc.inner_mut();
 
     let viewport = doc.viewport();

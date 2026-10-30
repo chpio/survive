@@ -11,7 +11,8 @@ use std::path::{Path, PathBuf};
 /// Zoom levels the menu steps through, as a factor on the camera's default view.
 pub const ZOOM_LEVELS: [f32; 7] = [0.5, 0.75, 1., 1.25, 1.5, 1.75, 2.];
 
-/// Sizes of the HUD the menu steps through, as a factor on the window's scale.
+/// Sizes of the HUD the menu steps through, as a factor on its size for the window (see
+/// `ui::hud_scale`).
 pub const UI_SCALES: [f32; 12] = [
     0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3.,
 ];
@@ -25,7 +26,7 @@ pub struct Settings {
     pub fullscreen: bool,
     /// Above 1 the camera shows less of the map, below 1 more
     pub zoom: f32,
-    /// Size of the HUD, as a factor on the window's scale
+    /// Size of the HUD, as a factor on its size for the window (see `ui::hud_scale`)
     pub ui_scale: f32,
 }
 
