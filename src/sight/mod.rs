@@ -14,7 +14,7 @@ pub mod render;
 use crate::{
     cells::{self, CellRect, Raster},
     objects::player::Player,
-    world::{self, MapRaster},
+    world::{self, MapRaster, MapRasters},
 };
 use avian2d::prelude::*;
 use bevy::prelude::*;
@@ -133,13 +133,8 @@ impl OpaqueCells {
     /// Makes all cells whose center lies in the shape of `collider` at `position` and `rotation`
     /// opaque.
     pub fn block_collider(&mut self, collider: &Collider, position: Vec2, rotation: Rotation) {
-        let area = collider.aabb(position, rotation, 0.);
-        let cells =
-            CellRect::centers_in(Rect::from_corners(area.min, area.max)).intersect(self.0.rect());
-        for cell in cells.cells() {
-            if collider.distance_to_point(position, rotation, cells::center(cell), true) <= 0. {
-                self.0[cell] = true;
-            }
+        for cell in cells::inside(collider, position, rotation, self.0.rect()) {
+            self.0[cell] = true;
         }
     }
 }
@@ -344,17 +339,15 @@ impl Sight {
 /// the mask changed.
 fn update_sight(
     mut sight: ResMut<Sight>,
-    maps: Query<Ref<OpaqueCells>>,
-    mut unloaded: RemovedComponents<OpaqueCells>,
+    mut maps: MapRasters<OpaqueCells>,
     player: Single<(&Transform, &SightRadius), With<Player>>,
 ) {
     let (transform, radius) = *player;
     let inner = sight.bypass_change_detection();
-    let unloaded = unloaded.read().count() > 0;
-    if unloaded || maps.iter().any(|map| map.is_changed()) {
+    if maps.changed() {
         inner.forget_center();
     }
-    let maps: Vec<_> = maps.iter().map(Ref::into_inner).collect();
+    let maps = maps.all();
     // `|`, not `||`: both have to happen
     if inner.set_radius(radius.get()) | inner.set_center(transform.translation.xy(), &maps) {
         sight.set_changed();

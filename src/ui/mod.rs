@@ -15,6 +15,7 @@ pub mod stylesheet;
 use crate::{
     combat::Health,
     flowfield::{FlowField, debug::FlowFieldDebug},
+    hot_reload,
     items::{
         DropItem, Inventory, Item, ItemDefinitions, ItemId, Stack, UseItem,
         hotbar::{AssignSlot, Hotbar, SLOTS, UseSlot},
@@ -668,10 +669,7 @@ fn update_stylesheet(
 ) {
     let ui = &mut *ui;
     let handle = &ui.stylesheet_handle;
-    if !events
-        .read()
-        .any(|event| event.is_loaded_with_dependencies(handle) || event.is_modified(handle))
-    {
+    if !hot_reload::loaded_or_modified(&mut events, handle) {
         return;
     }
     if let Some(new_stylesheet) = stylesheets.get(handle) {

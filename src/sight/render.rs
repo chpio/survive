@@ -58,20 +58,41 @@ pub struct SightMask {
     area: Vec4,
 }
 
+/// A linearly filtered `R8Unorm` texture of a mask with `size` cells, one pixel per cell, from
+/// its `values` row by row from the bottom like a [`Raster`](crate::cells::Raster). Also used for
+/// the light's masks.
+pub fn mask_image(size: UVec2, values: &[u8]) -> Image {
+    // the texture's rows go from the top down, the mask's from the bottom up
+    let data = values
+        .chunks(size.x as usize)
+        .rev()
+        .flatten()
+        .copied()
+        .collect();
+    let mut image = Image::new(
+        Extent3d {
+            width: size.x,
+            height: size.y,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::R8Unorm,
+        RenderAssetUsages::default(),
+    );
+    image.sampler = ImageSampler::linear();
+    image
+}
+
+/// Bottom-left corner (xy) and size (zw) of `rect`, as the materials take the area of a mask.
+pub fn mask_area(rect: Rect) -> Vec4 {
+    Vec4::new(rect.min.x, rect.min.y, rect.width(), rect.height())
+}
+
 impl FromWorld for SightMask {
     fn from_world(world: &mut World) -> Self {
-        let mut image = Image::new_fill(
-            Extent3d {
-                width: WINDOW_SIZE as u32,
-                height: WINDOW_SIZE as u32,
-                depth_or_array_layers: 1,
-            },
-            TextureDimension::D2,
-            &[0],
-            TextureFormat::R8Unorm,
-            RenderAssetUsages::default(),
-        );
-        image.sampler = ImageSampler::linear();
+        let size = UVec2::splat(WINDOW_SIZE as u32);
+        let image = mask_image(size, &vec![0; size.element_product() as usize]);
         Self {
             image: world.resource_mut::<Assets<Image>>().add(image),
             // invisible until the mask is computed
@@ -165,19 +186,11 @@ fn write_mask(
         return;
     }
     if let Some(mut image) = images.get_mut(&mask.image) {
-        // the texture's rows go from the top down, the mask's from the bottom up
-        let data = sight
-            .mask()
-            .chunks(WINDOW_SIZE as usize)
-            .rev()
-            .flatten()
-            .copied()
-            .collect();
-        image.data = Some(data);
+        *image = mask_image(UVec2::splat(WINDOW_SIZE as u32), sight.mask());
     }
 
     let area = sight.window_rect();
-    mask.area = Vec4::new(area.min.x, area.min.y, area.width(), area.height());
+    mask.area = mask_area(area);
     for (_, material) in materials.iter_mut() {
         material.mask_area = mask.area;
     }

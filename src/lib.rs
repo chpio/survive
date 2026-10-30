@@ -3,6 +3,7 @@
 pub mod cells;
 pub mod combat;
 pub mod flowfield;
+pub mod hot_reload;
 pub mod items;
 pub mod light;
 pub mod movement;

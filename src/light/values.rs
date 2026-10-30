@@ -4,33 +4,11 @@
 //! later changes set the clock's day length again, which ends a time-lapse.
 
 use super::{DayNight, LightValues};
-use bevy::{
-    asset::{AssetLoader, LoadContext, io::Reader},
-    prelude::*,
-};
+use crate::hot_reload::{self, RonAsset, RonLoader};
+use bevy::prelude::*;
 
-#[derive(TypePath, Default)]
-struct ValuesLoader;
-
-impl AssetLoader for ValuesLoader {
-    type Asset = LightValues;
-    type Settings = ();
-    type Error = BevyError;
-
-    async fn load(
-        &self,
-        reader: &mut dyn Reader,
-        _settings: &(),
-        _load_context: &mut LoadContext<'_>,
-    ) -> Result<LightValues, BevyError> {
-        let mut bytes = Vec::new();
-        reader.read_to_end(&mut bytes).await?;
-        Ok(ron::de::from_bytes(&bytes)?)
-    }
-
-    fn extensions(&self) -> &[&str] {
-        &["light.ron"]
-    }
+impl RonAsset for LightValues {
+    const EXTENSION: &'static str = "light.ron";
 }
 
 #[derive(Resource)]
@@ -48,10 +26,7 @@ fn update_values(
     day_night: Option<ResMut<DayNight>>,
 ) {
     let handle = &handle.0;
-    if !events
-        .read()
-        .any(|event| event.is_loaded_with_dependencies(handle) || event.is_modified(handle))
-    {
+    if !hot_reload::loaded_or_modified(&mut events, handle) {
         return;
     }
     let Some(values) = files.get(handle) else {
@@ -72,7 +47,7 @@ pub struct Plugin;
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<LightValues>()
-            .init_asset_loader::<ValuesLoader>()
+            .init_asset_loader::<RonLoader<LightValues>>()
             .add_systems(Startup, load)
             .add_systems(Update, update_values);
     }

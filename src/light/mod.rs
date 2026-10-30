@@ -249,6 +249,12 @@ pub const SKIP_HOURS: f64 = 1.;
 /// How many times faster the time-lapse lets the clock run, see [`DayNight::cycle_time_lapse`].
 pub const TIME_LAPSES: [f32; 2] = [10., 60.];
 
+/// Run condition of the systems of the day-night cycle: whether [`values::Plugin`] inserted the
+/// values and the clock (or a test did).
+pub fn running(values: Option<Res<LightValues>>, day_night: Option<Res<DayNight>>) -> bool {
+    values.is_some() && day_night.is_some()
+}
+
 /// Runs the clock with the game time, so it stands still while the game is paused.
 fn run_clock(
     time: Res<Time>,
@@ -288,10 +294,7 @@ impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(shadow::Plugin).add_systems(
             Update,
-            (run_clock, set_sight_radius)
-                .chain()
-                .run_if(resource_exists::<LightValues>)
-                .run_if(resource_exists::<DayNight>),
+            (run_clock, set_sight_radius).chain().run_if(running),
         );
     }
 }

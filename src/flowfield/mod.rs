@@ -26,7 +26,7 @@ use crate::{
         enemy::{Asleep, Enemy},
         player,
     },
-    world::{self, MapRaster},
+    world::{self, MapRaster, MapRasters},
 };
 use avian2d::prelude::*;
 use bevy::prelude::*;
@@ -508,18 +508,16 @@ pub struct Request(pub Vec<f32>);
 /// in the grids used by awake enemies, requests or the debug overlay.
 fn update_flow_field(
     mut flow_field: ResMut<FlowField>,
-    maps: Query<Ref<Obstacles>>,
-    mut unloaded: RemovedComponents<Obstacles>,
+    mut maps: MapRasters<Obstacles>,
     player: Single<&Transform, With<player::Player>>,
     enemies: Query<&Enemy, Without<Asleep>>,
     requests: Query<&Request>,
     debug: Option<Res<FlowFieldDebug>>,
 ) {
-    let unloaded = unloaded.read().count() > 0;
-    if unloaded || maps.iter().any(|map| map.is_changed()) {
+    if maps.changed() {
         flow_field.forget_targets();
     }
-    let maps: Vec<_> = maps.iter().map(Ref::into_inner).collect();
+    let maps = maps.all();
 
     // the shown grid is updated by its own clearance, which selects it
     let shown = debug

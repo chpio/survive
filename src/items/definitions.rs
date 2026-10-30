@@ -3,10 +3,8 @@
 //! deal with the resource.
 
 use super::{ItemDefinition, ItemDefinitions, ItemId};
-use bevy::{
-    asset::{AssetLoader, LoadContext, io::Reader},
-    prelude::*,
-};
+use crate::hot_reload::{self, RonAsset, RonLoader};
+use bevy::prelude::*;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -14,28 +12,8 @@ use std::collections::BTreeMap;
 #[serde(transparent)]
 struct DefinitionsFile(BTreeMap<ItemId, ItemDefinition>);
 
-#[derive(TypePath, Default)]
-struct DefinitionsLoader;
-
-impl AssetLoader for DefinitionsLoader {
-    type Asset = DefinitionsFile;
-    type Settings = ();
-    type Error = BevyError;
-
-    async fn load(
-        &self,
-        reader: &mut dyn Reader,
-        _settings: &(),
-        _load_context: &mut LoadContext<'_>,
-    ) -> Result<DefinitionsFile, BevyError> {
-        let mut bytes = Vec::new();
-        reader.read_to_end(&mut bytes).await?;
-        Ok(ron::de::from_bytes(&bytes)?)
-    }
-
-    fn extensions(&self) -> &[&str] {
-        &["items.ron"]
-    }
+impl RonAsset for DefinitionsFile {
+    const EXTENSION: &'static str = "items.ron";
 }
 
 #[derive(Resource)]
@@ -52,10 +30,7 @@ fn update_definitions(
     mut definitions: ResMut<ItemDefinitions>,
 ) {
     let handle = &handle.0;
-    if !events
-        .read()
-        .any(|event| event.is_loaded_with_dependencies(handle) || event.is_modified(handle))
-    {
+    if !hot_reload::loaded_or_modified(&mut events, handle) {
         return;
     }
     if let Some(file) = files.get(handle) {
@@ -68,7 +43,7 @@ pub struct Plugin;
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<DefinitionsFile>()
-            .init_asset_loader::<DefinitionsLoader>()
+            .init_asset_loader::<RonLoader<DefinitionsFile>>()
             .init_resource::<ItemDefinitions>()
             .add_systems(Startup, load)
             .add_systems(Update, update_definitions);

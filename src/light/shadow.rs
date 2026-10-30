@@ -4,10 +4,10 @@
 //! shader (at 4K, a cell covers hundreds of pixels), and only again once the sun has moved the
 //! shadows' tips by a pixel. `render` draws it.
 
-use super::{DayNight, LightValues, Sun};
+use super::{DayNight, LightValues, Sun, running};
 use crate::{
     cells::{self, CellRect, Raster},
-    world::{self, MapRaster},
+    world::{self, MapRaster, MapRasters},
 };
 use avian2d::prelude::*;
 use bevy::prelude::*;
@@ -42,13 +42,8 @@ impl Heights {
     /// to `height` (at most 255 px).
     pub fn add(&mut self, collider: &Collider, position: Vec2, rotation: Rotation, height: f32) {
         let height = height.clamp(0., 255.).round() as u8;
-        let area = collider.aabb(position, rotation, 0.);
-        let cells =
-            CellRect::centers_in(Rect::from_corners(area.min, area.max)).intersect(self.0.rect());
-        for cell in cells.cells() {
-            if collider.distance_to_point(position, rotation, cells::center(cell), true) <= 0. {
-                self.0[cell] = self.0[cell].max(height);
-            }
+        for cell in cells::inside(collider, position, rotation, self.0.rect()) {
+            self.0[cell] = self.0[cell].max(height);
         }
     }
 }
@@ -125,17 +120,10 @@ impl ShadowHeights {
 }
 
 /// Puts the heights together again when a map is loaded, unloaded or rasterized again.
-fn update_heights(
-    maps: Query<Ref<Heights>>,
-    mut unloaded: RemovedComponents<Heights>,
-    mut heights: ResMut<ShadowHeights>,
-) {
-    let unloaded = unloaded.read().count() > 0;
-    if !unloaded && !maps.iter().any(|map| map.is_changed()) {
-        return;
+fn update_heights(mut maps: MapRasters<Heights>, mut heights: ResMut<ShadowHeights>) {
+    if maps.changed() {
+        *heights = ShadowHeights::new(&maps.all());
     }
-    let maps: Vec<_> = maps.iter().map(Ref::into_inner).collect();
-    *heights = ShadowHeights::new(&maps);
 }
 
 /// Which cells of the [`ShadowHeights`] lie in the sun's shadow.
@@ -240,11 +228,6 @@ impl bevy::app::Plugin for Plugin {
                 )
                     .chain(),
             )
-            .add_systems(
-                Update,
-                update_sun_shadow
-                    .run_if(resource_exists::<LightValues>)
-                    .run_if(resource_exists::<DayNight>),
-            );
+            .add_systems(Update, update_sun_shadow.run_if(running));
     }
 }

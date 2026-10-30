@@ -8,7 +8,10 @@
 use crate::{flowfield, light, sight};
 use avian2d::prelude::*;
 use bevy::{
-    ecs::query::{QueryFilter, QueryItem, ReadOnlyQueryData},
+    ecs::{
+        query::{QueryFilter, QueryItem, ReadOnlyQueryData},
+        system::SystemParam,
+    },
     platform::collections::HashMap,
     prelude::*,
 };
@@ -61,6 +64,28 @@ pub trait MapRaster: Component {
         rotation: Rotation,
         data: QueryItem<'_, '_, Self::Data>,
     );
+}
+
+/// The rasters `R` of the loaded maps, for systems that put them together and need to know when
+/// to do it again.
+#[derive(SystemParam)]
+pub struct MapRasters<'w, 's, R: MapRaster> {
+    rasters: Query<'w, 's, Ref<'static, R>>,
+    unloaded: RemovedComponents<'w, 's, R>,
+}
+
+impl<R: MapRaster> MapRasters<'_, '_, R> {
+    /// Whether a map was loaded, rasterized again or unloaded since the system last ran. Reads the
+    /// unloaded maps, so it is only true once for each change.
+    pub fn changed(&mut self) -> bool {
+        let unloaded = self.unloaded.read().count() > 0;
+        unloaded || self.rasters.iter().any(|raster| raster.is_changed())
+    }
+
+    /// The rasters of all loaded maps.
+    pub fn all(&self) -> Vec<&R> {
+        self.rasters.iter().map(Ref::into_inner).collect()
+    }
 }
 
 /// Builds the raster `R` of each map that has none yet or whose area changed, and again whenever

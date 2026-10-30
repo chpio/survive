@@ -4,12 +4,11 @@
 //! texture, and is lifted where the [`Lightmap`] is lit. The darkening outside the sight lies below
 //! it.
 
-use super::{DayNight, LightValues, shadow::SunShadow};
+use super::{DayNight, LightValues, running, shadow::SunShadow};
+use crate::sight::render::{mask_area, mask_image};
 use bevy::{
-    asset::RenderAssetUsages,
-    image::ImageSampler,
     prelude::*,
-    render::render_resource::{AsBindGroup, Extent3d, TextureDimension, TextureFormat},
+    render::render_resource::AsBindGroup,
     shader::ShaderRef,
     sprite_render::{AlphaMode2d, Material2d, Material2dPlugin},
 };
@@ -31,28 +30,11 @@ pub struct Lightmap {
 
 impl FromWorld for Lightmap {
     fn from_world(world: &mut World) -> Self {
-        let image = linear_image(UVec2::ONE, vec![0]);
+        let image = mask_image(UVec2::ONE, &[0]);
         Self {
             image: world.resource_mut::<Assets<Image>>().add(image),
         }
     }
-}
-
-/// A linearly filtered `R8Unorm` texture of `size` with `data` row by row from the top.
-fn linear_image(size: UVec2, data: Vec<u8>) -> Image {
-    let mut image = Image::new(
-        Extent3d {
-            width: size.x,
-            height: size.y,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        data,
-        TextureFormat::R8Unorm,
-        RenderAssetUsages::default(),
-    );
-    image.sampler = ImageSampler::linear();
-    image
 }
 
 /// The night and the sun's shadows, see the module and its shader.
@@ -89,10 +71,6 @@ impl Material2d for LightMaterial {
     }
 }
 
-fn area(rect: Rect) -> Vec4 {
-    Vec4::new(rect.min.x, rect.min.y, rect.width(), rect.height())
-}
-
 #[derive(Component)]
 struct LightLayer;
 
@@ -111,9 +89,9 @@ fn spawn_layer(
             darkness: 0.,
             shadow: 0.,
             // no shadows until the mask is written
-            shadow_area: area(Rect::new(0., 0., 1., 1.)),
-            shadow_mask: images.add(linear_image(UVec2::ONE, vec![0])),
-            lightmap_area: area(Rect::new(0., 0., 1., 1.)),
+            shadow_area: mask_area(Rect::new(0., 0., 1., 1.)),
+            shadow_mask: images.add(mask_image(UVec2::ONE, &[0])),
+            lightmap_area: mask_area(Rect::new(0., 0., 1., 1.)),
             lightmap: lightmap.image.clone(),
         })),
         Transform::from_xyz(0., 0., LIGHT_Z),
@@ -164,19 +142,10 @@ fn write_shadow(
     let Some(mut material) = materials.get_mut(*layer) else {
         return;
     };
-    let size = mask.rect().size;
-    // the texture's rows go from the top down, the mask's from the bottom up
-    let data = mask
-        .values()
-        .chunks(size.x as usize)
-        .rev()
-        .flatten()
-        .copied()
-        .collect();
     if let Some(mut image) = images.get_mut(&material.shadow_mask) {
-        *image = linear_image(size.as_uvec2(), data);
+        *image = mask_image(mask.rect().size.as_uvec2(), mask.values());
     }
-    material.shadow_area = area(mask.rect().world_rect());
+    material.shadow_area = mask_area(mask.rect().world_rect());
 }
 
 /// Keeps the layer around the camera, wherever the player walks.
@@ -195,15 +164,7 @@ impl bevy::app::Plugin for Plugin {
         app.add_plugins(Material2dPlugin::<LightMaterial>::default())
             .init_resource::<Lightmap>()
             .add_systems(Startup, spawn_layer)
-            .add_systems(
-                Update,
-                (
-                    update_light
-                        .run_if(resource_exists::<LightValues>)
-                        .run_if(resource_exists::<DayNight>),
-                    write_shadow,
-                ),
-            )
+            .add_systems(Update, (update_light.run_if(running), write_shadow))
             .add_systems(
                 PostUpdate,
                 follow_camera.before(TransformSystems::Propagate),

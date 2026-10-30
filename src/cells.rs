@@ -1,6 +1,7 @@
 //! The raster of square cells over the whole world that the flow field and the sight work on. Its
 //! origin is the world's origin, and maps are placed in whole tiles, so their edges lie on it.
 
+use avian2d::prelude::*;
 use bevy::prelude::*;
 use std::ops::{Index, IndexMut};
 
@@ -16,6 +17,22 @@ pub fn cell(position: Vec2) -> IVec2 {
 /// World position of the center of `cell`.
 pub fn center(cell: IVec2) -> Vec2 {
     (cell.as_vec2() + 0.5) * CELL_SIZE
+}
+
+/// Cells of `rect` whose center lies in the shape of `collider` at `position` and `rotation`.
+pub fn inside(
+    collider: &Collider,
+    position: Vec2,
+    rotation: Rotation,
+    rect: CellRect,
+) -> impl Iterator<Item = IVec2> {
+    let area = collider.aabb(position, rotation, 0.);
+    CellRect::centers_in(Rect::from_corners(area.min, area.max))
+        .intersect(rect)
+        .cells()
+        .filter(move |&cell| {
+            collider.distance_to_point(position, rotation, center(cell), true) <= 0.
+        })
 }
 
 /// Rectangle of cells.
