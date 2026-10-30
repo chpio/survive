@@ -27,9 +27,9 @@ fn app() -> App {
 
 /// An item on the ground, a stack of `count` if `count` is given.
 fn spawn_item(app: &mut App, id: &str, count: Option<u32>) -> Entity {
-    let mut item =
-        app.world_mut()
-            .spawn((Item(id.into()), Sprite::default(), Transform::default()));
+    let mut item = app
+        .world_mut()
+        .spawn((Item(id.into()), Transform::default()));
     if let Some(count) = count {
         item.insert(Stack(count));
     }
@@ -413,9 +413,8 @@ fn items_dropped_on_the_same_spot_stack() {
 fn spawned_items_stack_only_with_their_type_within_the_radius() {
     let mut app = app();
     let spawn = |app: &mut App, id: &str, position: Vec2| {
-        let definitions = app.world().resource::<ItemDefinitions>().clone();
         let mut commands = app.world_mut().commands();
-        spawn_on_ground(&mut commands, &definitions, &id.into(), 1, position);
+        spawn_on_ground(&mut commands, &id.into(), 1, position);
         app.world_mut().flush();
         app.update();
     };

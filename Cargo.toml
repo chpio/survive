@@ -65,7 +65,8 @@ features = [
     # "bevy_gltf",
     # "bevy_input_focus",
     "bevy_log",
-    # "bevy_mesh_picking_backend",
+    # items on the ground are meshes, picked by `items::render::Plugin`
+    "mesh_picking",
     # "bevy_pbr",
     # "bevy_picking",
     "bevy_render",
@@ -76,7 +77,7 @@ features = [
     # "bevy_light",
     # "bevy_shader",
     "bevy_sprite",
-    "sprite_picking",
+    # "sprite_picking",
     "bevy_sprite_render",
     "bevy_state",
     # "bevy_text",

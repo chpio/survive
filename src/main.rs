@@ -66,6 +66,7 @@ fn main() {
             items::Plugin,
             items::definitions::Plugin,
             items::input::Plugin,
+            items::render::Plugin,
         ))
         .add_plugins((
             sight::Plugin,
@@ -85,6 +86,8 @@ fn startup(
 ) {
     commands.spawn((
         Camera2d,
+        // the only camera mesh picking uses (see `items::render::Plugin`)
+        bevy::picking::mesh_picking::MeshPickingCamera,
         Projection::Orthographic(OrthographicProjection {
             scaling_mode: bevy::camera::ScalingMode::AutoMax {
                 max_width: 500.,
@@ -120,7 +123,7 @@ fn startup(
             // the maps' positions are those in the .world file, with y pointing up
             TilemapAnchor::TopLeft,
             // layers 2 apart: y-sorting moves the chunks by up to 1.5, and the upper layers stay
-            // below the items (z = 5) and the units (z = 10)
+            // below the darkening outside the sight (z = 8), the items and the units
             TiledMapLayerZOffset(2.),
             // filled colliders as in Tiled, the default polyline backend only keeps the outlines
             TiledPhysicsSettings::<TiledPhysicsAvianBackend> {

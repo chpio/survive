@@ -40,14 +40,16 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
   einzigartige Items. Einzigartig ist ein Exemplar mit eigenem Zustand (später Haltbarkeit,
   Verzauberung oder ein Story-Einzelstück), markiert mit `Unique`. Bisher setzt das noch nichts.
 - Die Anzahl zeigt das HUD nur ab 2, ein einzelnes Item hat keine Zahl.
-- **Am Boden:** `Sprite` (ein Quadrat in der Farbe der Definition, 8 × 8 px) und `Transform`
-  zwischen Karte (z = 0) und Spieler (z = 10), dazu `Pickable`. Ohne `Pickable` ignoriert Bevys
-  Sprite-Picking ein Sprite. Außerhalb der Sicht ist es versteckt (`HiddenOutsideSight`, siehe
-  [sicht.md](sicht.md)) und lässt sich dann auch nicht anklicken.
+- **Am Boden:** `Transform` (z = 9, über der Abdunklung und unter den Einheiten), dazu `Pickable`.
+  `items::render` gibt ihm ein Quadrat-Mesh (8 × 8 px) mit einem `SightMaterial` in der Farbe der
+  Definition, wie bei den Gegnern: Es ist nur zu sehen, soweit es in Sicht ist (siehe
+  [sicht.md](sicht.md)). Die Materialien entstehen pro Typ beim ersten Item am Boden und übernehmen
+  Farbänderungen aus `items.ron`.
+- Angeklickt wird per Mesh-Picking, das nur Entities mit `Pickable` (die Items am Boden) und die
+  Kamera mit `MeshPickingCamera` beachtet. Gegner und Spieler verdecken Items so nicht.
 - **Im Besitz:** Die Relationship `HeldBy(owner)` hängt am Item, Bevy pflegt dazu `Inventory` am
   Besitzer (Liste der Items). Ein Item im Besitz ist unsichtbar
-  (`Visibility::Hidden`) und hat kein `Pickable`. Das `Sprite` bleibt dran: Bevy zeichnet Sprites
-  als Meshes, die es beim Hinzufügen des Sprites mit anlegt und die beim Entfernen bleiben würden.
+  (`Visibility::Hidden`) und hat kein `Pickable`. Mesh und Material bleiben dran.
 - Ob ein Item am Boden liegt, ergibt sich also aus `Without<HeldBy>`.
 - Besitzer kann jede Entity sein, in dieser Version nur der Spieler. Später kommen Gegner und
   Truhen dazu.
@@ -56,13 +58,15 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
 
 - Ein globaler Observer für `PointerClick` (linke Taste) auf ein Item am Boden prüft die
   Reichweite. Liegt das Item höchstens `PICKUP_REACH` (24 px) vom Spieler entfernt, löst er
-  `PickUp { item, by }` aus. Sonst passiert nichts.
+  `PickUp { item, by }` aus, sofern ein Teil des Items in Sicht ist (`Sight::sees`): Das Picking
+  trifft auch den ausgeblendeten Teil. Sonst passiert nichts.
 - Dank des HUD-Pickings ([ui-events.md](ui-events.md)) kommt ein Klick durch ein HUD-Fenster nicht
   beim Item an.
 - `PickUp` versteckt das Item, entfernt `Pickable` und hängt es per `HeldBy` an den Besitzer.
   - Hat der Besitzer schon einen Stapel derselben ID und ist keins der beiden `Unique`, wird die
     Anzahl dort addiert und das aufgehobene Item despawnt.
-- Hervorhebung: Bei `PointerOver` wird das Item heller, bei `PointerOut` wieder normal.
+- Hervorhebung: Bei `PointerOver` bekommt das Item das hellere Material seines Typs, bei
+  `PointerOut` wieder das normale.
   Einen Tooltip mit Namen gibt es noch nicht.
 
 ## Fallenlassen
@@ -70,8 +74,8 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
 - `DropItem { item, count }` legt Items neben den Besitzer, z. B. 12 px unter ihn.
   - Ist `count` kleiner als der Stapel, wird ein neues Item mit `count` abgespalten und abgelegt.
     Der Rest bleibt im Inventar.
-  - Sonst wird das Item selbst abgelegt: `HeldBy` entfernen, `Sprite` (in der normalen Farbe),
-    `Transform`, Sichtbarkeit und `Pickable` setzen.
+  - Sonst wird das Item selbst abgelegt: `HeldBy` entfernen, `Transform`, Sichtbarkeit und
+    `Pickable` setzen.
 - Am Boden wird automatisch gestapelt: Kommt ein Item auf den Boden (abgelegt oder gespawnt, beides
   setzt `Pickable`), geht es im nächstgelegenen Stapel seines Typs innerhalb von `MERGE_RADIUS`
   (12 px, so weit wie das Ablegen) auf. Mehrmals Ablegen landet so auf einem Stapel unter dem
@@ -160,7 +164,9 @@ Drei Plugins, damit die Tests ohne Asset-System und Eingabe auskommen:
 - `src/combat/mod.rs`: Heilen bei `ItemUsed`.
 - `src/items/definitions.rs`: Asset-Loader für `items.ron` und Übernahme in die Ressource
   (`items::definitions::Plugin`).
-- `src/items/input.rs`: Aufheben per Klick, Hervorhebung, Debug-Taste (`items::input::Plugin`).
+- `src/items/input.rs`: Aufheben per Klick, Debug-Taste (`items::input::Plugin`).
+- `src/items/render.rs`: Mesh, Materialien und Hervorhebung der Items am Boden, Mesh-Picking
+  (`items::render::Plugin`).
 - `src/items/hotbar.rs`: `Hotbar`, `AssignSlot`, `UseSlot` (in `items::Plugin`). Tasten 1–5 in
   `items::input`.
 - `src/ui/hud.rs`: Inventarfenster, Leiste und das Ziehen. `src/ui/mod.rs`: Tab, Zustand

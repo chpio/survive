@@ -1,16 +1,12 @@
 //! The player's interaction with items in the world: clicking an item on the ground picks it up
-//! if it is within reach, hovering highlights it. Clicks on the HUD never get here, since the HUD
+//! if it is within reach and not completely out of sight. Clicks on the HUD never get here, since the HUD
 //! blocks picking below it (see `docs/ui-events.md`). The hotbar's keys are handled by the HUD,
 //! since they depend on the inventory window.
 
-use super::{HeldBy, Item, ItemDefinitions, PickUp, spawn_on_ground};
-use crate::objects::player::Player;
+use super::{HeldBy, Item, ItemDefinitions, PickUp, SIZE, spawn_on_ground};
+use crate::{objects::player::Player, sight::Sight};
 use bevy::{
-    color::Luminance,
-    picking::{
-        events::{PointerClick, PointerOut, PointerOver},
-        pointer::PointerButton,
-    },
+    picking::{events::PointerClick, pointer::PointerButton},
     prelude::*,
     window::PrimaryWindow,
 };
@@ -18,13 +14,11 @@ use bevy::{
 /// Distance in px from the player's center up to which it picks up items.
 pub const PICKUP_REACH: f32 = 24.;
 
-/// How much lighter a hovered item is drawn.
-const HIGHLIGHT: f32 = 0.2;
-
 fn pick_up_on_click(
     click: On<PointerClick>,
     items: Query<&Transform, (With<Item>, Without<HeldBy>)>,
     player: Single<(Entity, &Transform), With<Player>>,
+    sight: Option<Res<Sight>>,
     mut pick_up: MessageWriter<PickUp>,
 ) {
     if click.button != PointerButton::Primary {
@@ -34,35 +28,14 @@ fn pick_up_on_click(
         return;
     };
     let (player, player_transform) = *player;
-    let distance = item
-        .translation
-        .xy()
-        .distance(player_transform.translation.xy());
-    if distance <= PICKUP_REACH {
+    let position = item.translation.xy();
+    // the material hides an item out of sight, but picking would still hit it
+    let seen = sight.is_none_or(|sight| sight.sees(position, SIZE / 2.));
+    if seen && position.distance(player_transform.translation.xy()) <= PICKUP_REACH {
         pick_up.write(PickUp {
             item: click.entity,
             by: player,
         });
-    }
-}
-
-fn highlight(
-    over: On<PointerOver>,
-    mut items: Query<(&Item, &mut Sprite), Without<HeldBy>>,
-    definitions: Res<ItemDefinitions>,
-) {
-    if let Ok((Item(id), mut sprite)) = items.get_mut(over.entity) {
-        sprite.color = definitions.color(id).lighter(HIGHLIGHT);
-    }
-}
-
-fn unhighlight(
-    out: On<PointerOut>,
-    mut items: Query<(&Item, &mut Sprite), Without<HeldBy>>,
-    definitions: Res<ItemDefinitions>,
-) {
-    if let Ok((Item(id), mut sprite)) = items.get_mut(out.entity) {
-        sprite.color = definitions.color(id);
     }
 }
 
@@ -92,7 +65,7 @@ fn spawn_item_on_key(
         .cursor_position()
         .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor).ok())
         .unwrap_or(player.translation.xy() + Vec2::X * PICKUP_REACH);
-    spawn_on_ground(&mut commands, &definitions, id, 1, position);
+    spawn_on_ground(&mut commands, id, 1, position);
 }
 
 pub struct Plugin;
@@ -100,8 +73,6 @@ pub struct Plugin;
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_observer(pick_up_on_click)
-            .add_observer(highlight)
-            .add_observer(unhighlight)
             .add_systems(Update, spawn_item_on_key);
     }
 }

@@ -55,15 +55,19 @@ lohnen weder Speicher noch Spielstand dafür. Kommt eine Karte dazu, lässt er s
   Stelle in der Maske aus:
   - **Gegner**: Körper und Punkt verwenden es statt `ColorMaterial`. Die Deckkraft wird mit der
     Maske multipliziert. Außerhalb der Sicht ist der Gegner unsichtbar, an einer Ecke nur zum Teil.
-  - **Abdunklung**: ein großes Rechteck um den Spieler zwischen Items (z = 5) und Einheiten
-    (z = 10), schwarz mit der Deckkraft `DARKNESS × (1 − Maske)`.
+  - **Items am Boden**: ebenso, als Quadrat in der Platzhalterfarbe ihres Typs (`items::render`).
+    Ein Klick hebt ein Item nur auf, wenn ein Teil davon zu sehen ist (`Sight::sees`), da das
+    Picking auch den ausgeblendeten Teil trifft.
+  - **Abdunklung**: ein großes Rechteck um den Spieler über der Karte, unter Items (z = 9) und
+    Einheiten (z = 10), schwarz mit der Deckkraft `DARKNESS × (1 − Maske)`.
+- Neue Materialien bekommen den aktuellen Bereich der Maske aus `SightMask` mit, sonst wären sie
+  unsichtbar, bis sich die Sicht das nächste Mal ändert.
 - Der Spieler und die Karte verwenden es nicht. Die Karte wird nur durch die Abdunklung verdeckt.
-- Außerhalb der Sicht wird nur die Karte gezeichnet. Sprites (Items am Boden, Lebensbalken) lassen
-  sich nicht maskieren wie die Gegnerkörper. Sie tragen deshalb `render::HiddenOutsideSight` und
-  werden als Ganzes versteckt, solange `Sight::shows` ihre Position nicht mindestens zur Hälfte
-  sichtbar sieht. Ein Lebensbalken hängt dafür an einem Halter in der Mitte seiner Einheit, der
-  ausgeblendet wird; die eigene Sichtbarkeit des Balkens hängt nur am Schaden. Versteckte Items
-  lassen sich auch nicht anklicken.
+- Außerhalb der Sicht wird nur die Karte gezeichnet. Lebensbalken sind Sprites und lassen sich
+  nicht maskieren. Sie tragen deshalb `render::HiddenOutsideSight` und werden als Ganzes versteckt,
+  solange `Sight::shows` ihre Position nicht mindestens zur Hälfte sichtbar sieht. Ein Balken hängt
+  dafür an einem Halter in der Mitte seiner Einheit, der ausgeblendet wird; die eigene
+  Sichtbarkeit des Balkens hängt nur am Schaden.
 
 ## Spiellogik
 

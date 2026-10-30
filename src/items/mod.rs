@@ -1,7 +1,7 @@
 //! Items lying on the ground or held by an owner (see `docs/items.md`).
 //!
-//! Each item is an entity with [`Item`] and a [`Stack`] count. On the ground, an item shows a
-//! sprite at its position. Picked up, it is hidden and attached to its owner through [`HeldBy`],
+//! Each item is an entity with [`Item`] and a [`Stack`] count. On the ground, an item has a
+//! position and is shown there by [`render::Plugin`]. Picked up, it is hidden and attached to its owner through [`HeldBy`],
 //! which Bevy mirrors in the owner's [`Inventory`]. Items of the same type stack, unless one of
 //! them is [`Unique`]: picking one up merges it into the owner's stack of that type, one coming to
 //! the ground merges into a stack nearby, and dropping part of a stack splits it.
@@ -12,8 +12,8 @@
 pub mod definitions;
 pub mod hotbar;
 pub mod input;
+pub mod render;
 
-use crate::sight::render::HiddenOutsideSight;
 use bevy::prelude::*;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -64,8 +64,8 @@ impl ItemDefinitions {
         self.0.get(id)
     }
 
-    /// Color of the item's sprite, magenta for unknown types.
-    fn color(&self, id: &ItemId) -> Color {
+    /// Placeholder color of the type, magenta for unknown types.
+    pub fn color(&self, id: &ItemId) -> Color {
         self.get(id)
             .map_or(Color::srgb(1., 0., 1.), ItemDefinition::color)
     }
@@ -110,40 +110,33 @@ impl Inventory {
     }
 }
 
-/// Edge length of an item's placeholder sprite in px.
+/// Edge length of an item's placeholder square in px.
 pub const SIZE: f32 = 8.;
 
-/// Items on the ground lie between the map layer (z = 0) and the units (z = 10).
-const Z: f32 = 5.;
+/// Items on the ground lie above the map and the darkening outside the sight (z = 8), since they
+/// hide themselves like the units, and below the units (z = 10).
+const Z: f32 = 9.;
 
 /// Distance in px from the owner's center at which dropped items are put down (below it).
 pub const DROP_DISTANCE: f32 = 12.;
 
-/// Visible sprite and position of an item on the ground, hidden while it is out of sight. Sprite
-/// picking only considers sprites with `Pickable`, so the player can click it.
-fn on_ground(definitions: &ItemDefinitions, id: &ItemId, position: Vec2) -> impl Bundle {
+/// Position of an item on the ground, where it is shown. Mesh picking only considers entities
+/// with `Pickable` (see [`render::Plugin`]), so the player can click it.
+fn on_ground(position: Vec2) -> impl Bundle {
     (
-        Sprite::from_color(definitions.color(id), Vec2::splat(SIZE)),
         Transform::from_translation(position.extend(Z)),
         Visibility::Inherited,
-        HiddenOutsideSight,
         Pickable::default(),
     )
 }
 
 /// Spawns a stack of `count` items of type `id` on the ground.
-pub fn spawn_on_ground(
-    commands: &mut Commands,
-    definitions: &ItemDefinitions,
-    id: &ItemId,
-    count: u32,
-    position: Vec2,
-) {
+pub fn spawn_on_ground(commands: &mut Commands, id: &ItemId, count: u32, position: Vec2) {
     commands.spawn((
         Name::new("Item"),
         Item(id.clone()),
         Stack(count),
-        on_ground(definitions, id, position),
+        on_ground(position),
     ));
 }
 
@@ -220,11 +213,9 @@ fn pick_up(
                 commands.entity(item).despawn();
             }
             None => {
-                // hidden instead of removing the sprite: Bevy draws sprites as meshes it adds
-                // along with them, which stay after removing the sprite
                 commands
                     .entity(item)
-                    .remove::<(Pickable, HiddenOutsideSight)>()
+                    .remove::<Pickable>()
                     .insert((Visibility::Hidden, HeldBy(by)));
             }
         }
@@ -235,7 +226,6 @@ fn pick_up(
 fn drop_items(
     mut commands: Commands,
     mut drops: MessageReader<DropItem>,
-    definitions: Res<ItemDefinitions>,
     mut items: Query<(&Item, &mut Stack, &HeldBy)>,
     owners: Query<&Transform>,
 ) {
@@ -253,12 +243,12 @@ fn drop_items(
 
         if count < stack.0 {
             stack.0 -= count;
-            spawn_on_ground(&mut commands, &definitions, id, count, position);
+            spawn_on_ground(&mut commands, id, count, position);
         } else {
             commands
                 .entity(item)
                 .remove::<HeldBy>()
-                .insert(on_ground(&definitions, id, position));
+                .insert(on_ground(position));
         }
     }
 }
@@ -327,7 +317,7 @@ fn use_items(
 }
 
 /// Picking up, dropping, stacking and using items. The item types come from [`definitions::Plugin`],
-/// the player's input from [`input::Plugin`].
+/// the player's input from [`input::Plugin`], their look from [`render::Plugin`].
 pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
