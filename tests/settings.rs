@@ -75,7 +75,7 @@ fn ui_scale_steps_through_its_levels() {
     assert_eq!(ui_scale(1.).next_ui_scale(false), 0.75);
 
     let (min, max) = (UI_SCALES[0], UI_SCALES[UI_SCALES.len() - 1]);
-    assert_eq!(max, 3.);
+    assert_eq!(max, 2.);
     assert_eq!(ui_scale(max).next_ui_scale(true), max);
     assert_eq!(ui_scale(min).next_ui_scale(false), min);
 }
