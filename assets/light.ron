@@ -1,0 +1,15 @@
+// The day-night cycle (see `light::LightValues`). Times of day are in game hours (0–24).
+(
+    // real seconds per day
+    day_length: 600.,
+    start: 8.,
+    // the night begins and ends in the middle of the dusk and the dawn
+    night_start: 21.,
+    night_share: 0.3333,
+    twilight: 1.5,
+    // 0 is black, 1 as bright as by day
+    night_brightness: 0.5,
+    // in px, at most `sight::MAX_SIGHT_RADIUS` (300)
+    day_sight_radius: 200.,
+    night_sight_radius: 120.,
+)

@@ -31,9 +31,11 @@ lohnen weder Speicher noch Spielstand dafür. Kommt eine Karte dazu, lässt er s
   undurchsichtig, wenn ihr Mittelpunkt in der Form eines Kolliders mit `BlocksSight` liegt. Neu
   berechnet wird das nur, wenn sich diese Kollider ändern. Das Fenster der Maske setzt seine
   undurchsichtigen Zellen aus den geladenen Karten zusammen.
-- Die Maske deckt ein quadratisches Fenster um die Zelle des Spielers ab, so groß wie der
-  Sichtradius (`SIGHT_RADIUS`, 200 px), plus ein Rand mit 0. Neu berechnet wird sie nur, wenn der
-  Spieler die Zelle wechselt.
+- Die Maske deckt ein quadratisches Fenster um die Zelle des Spielers ab, so groß wie der größte
+  Sichtradius (`MAX_SIGHT_RADIUS`, 300 px), plus ein Rand mit 0. Der Radius selbst ist die
+  Komponente `SightRadius` am Spieler (200 px, nachts weniger, siehe [licht.md](licht.md)). Welche
+  Zellen sichtbar sind, wird nur neu berechnet, wenn der Spieler die Zelle wechselt. Ändert sich
+  nur der Radius, wird die Maske aus diesen Zellen neu zusammengesetzt.
 - Wert pro Zelle (0–255):
   - 0, wenn der Strahl vom Spieler zur Zelle eine undurchsichtige Zelle kreuzt. Die
     undurchsichtige Zelle selbst ist sichtbar, so werden die Kanten der Blocker hell.

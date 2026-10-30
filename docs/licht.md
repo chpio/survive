@@ -1,6 +1,8 @@
 # Konzept: Licht
 
-Noch nicht umgesetzt. Alle Zahlen sind Startwerte fürs Ausbalancieren.
+Umgesetzt sind Tag und Nacht mit Uhr und Dev-Werkzeugen im HUD, die Werte-Datei
+(`assets/light.ron`), die Nacht-Ebene mit leerer Lightmap und der `SightRadius` (`src/light/`).
+Lichtquellen und Color Grading fehlen noch. Alle Zahlen sind Startwerte fürs Ausbalancieren.
 
 ## Ziel
 
@@ -15,7 +17,9 @@ Noch nicht umgesetzt. Alle Zahlen sind Startwerte fürs Ausbalancieren.
 - Die Uhr läuft mit der virtuellen Zeit (`Res<Time>` in `Update`), steht also still, solange das
   Menü offen ist.
 - Ein Tag dauert 10 Minuten, davon ist ein Drittel Nacht.
-- Weiche Übergänge in der Dämmerung, Helligkeit und Radius wandern langsam.
+- Weiche Übergänge in der Dämmerung, Helligkeit und Radius wandern langsam. Die Nacht beginnt um
+  21 Uhr und endet um 5 Uhr, jeweils in der Mitte einer Dämmerung von 1,5 Stunden. Phasen: Tag,
+  Abenddämmerung, Nacht, Morgendämmerung.
 - Nachts halbe Helligkeit.
 - Die Uhr kommt in die globalen Daten des Spielstands, sobald es Speichern gibt
   ([speichern.md](speichern.md)).
@@ -28,7 +32,7 @@ Noch nicht umgesetzt. Alle Zahlen sind Startwerte fürs Ausbalancieren.
   zeigt es nur volle Viertelstunden.
 - Dev-Werkzeuge im Debug-Bereich des HUD, wie „Gegner spawnen“ und „Flowfield“:
   - Vorspulen um eine Spielstunde, auch per Taste N.
-  - Zum Beginn der nächsten Phase springen (Tag, Dämmerung, Nacht).
+  - Zum Beginn der nächsten Phase springen.
   - Checkbox „Uhr anhalten“, um eine Tageszeit in Ruhe anzusehen.
 - Die Werkzeuge schicken `hud::Action`s, die `DayNight` direkt ändern. Alles davon Abgeleitete
   (Helligkeit, Sichtradius) folgt im selben Frame. Beim Vorspulen springen Helligkeit und Radius

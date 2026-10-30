@@ -1,6 +1,9 @@
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use survival::sight::{CELL_SIZE, OpaqueCells, SIGHT_FADE, SIGHT_RADIUS, Sight};
+use survival::sight::{
+    CELL_SIZE, DEFAULT_SIGHT_RADIUS as SIGHT_RADIUS, MAX_SIGHT_RADIUS, OpaqueCells, SIGHT_FADE,
+    Sight,
+};
 
 /// Map of 600×600 px around the origin. A player at the origin is in the cell centered at (2, 2).
 fn map() -> OpaqueCells {
@@ -91,7 +94,7 @@ fn window_is_centered_on_the_player() {
 
     let window = sight.window_rect();
     assert!(window.center().distance(Vec2::new(100., -60.)) < CELL_SIZE);
-    assert!(window.width() > 2. * SIGHT_RADIUS);
+    assert!(window.width() > 2. * MAX_SIGHT_RADIUS);
 }
 
 #[test]
@@ -137,4 +140,35 @@ fn sees_a_circle_if_any_part_of_it_is_in_sight() {
     // beyond the radius, unless it reaches into it
     assert!(!sight.sees(Vec2::new(-SIGHT_RADIUS - 20., 0.), 4.));
     assert!(sight.sees(Vec2::new(-SIGHT_RADIUS - 20., 0.), 40.));
+}
+
+#[test]
+fn smaller_radius_keeps_the_shadows() {
+    let mut map = map();
+    block(&mut map, Rect::new(40., -20., 60., 20.));
+    let mut sight = sight_from(Vec2::ZERO, &[&map]);
+    assert_eq!(sight.visibility(Vec2::new(-150., 0.)), 1.);
+
+    assert!(sight.set_radius(120.));
+    assert!(!sight.set_radius(120.));
+    assert_eq!(sight.visibility(Vec2::new(-150., 0.)), 0.);
+    assert_eq!(sight.visibility(Vec2::new(-60., 0.)), 1.);
+    assert_eq!(sight.visibility(Vec2::new(100., 0.)), 0.);
+    // the cells in sight aren't computed again in the same cell
+    assert!(!sight.set_center(Vec2::ZERO, &[&map]));
+}
+
+#[test]
+fn larger_radius_is_capped() {
+    let mut sight = sight_from(Vec2::ZERO, &[&map()]);
+
+    assert!(sight.set_radius(MAX_SIGHT_RADIUS + 100.));
+    assert_eq!(
+        sight.visibility(Vec2::new(MAX_SIGHT_RADIUS - SIGHT_FADE - CELL_SIZE, 0.)),
+        1.
+    );
+    assert_eq!(
+        sight.visibility(Vec2::new(MAX_SIGHT_RADIUS + CELL_SIZE, 0.)),
+        0.
+    );
 }

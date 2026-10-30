@@ -20,7 +20,8 @@
     Five enemies touching the player kill it within a few seconds.
   - Speeds: the player's and the enemies' `MOVE_SPEED`, `enemy::TURN_SPEED`, and the masses and
     strengths (`player::MASS`, `player::STRENGTH`, `Enemy::physics`), which decide who pushes whom.
-  - Distances around the player: `sight::SIGHT_RADIUS` (200 px), `flowfield::FLOW_FIELD_RADIUS`
+  - Distances around the player: the sight radius (`assets/light.ron`, 200 px by day, 120 px at
+    night, at most `sight::MAX_SIGHT_RADIUS`), `flowfield::FLOW_FIELD_RADIUS`
     (320 px), `enemy::DEACTIVATION_RADIUS` (400 px), `world::MIN_LOADED_DISTANCE` (340 px), the
     spawn distances (`ambush::MIN_DISTANCE`, `out_of_sight::MIN_DISTANCE` / `MAX_DISTANCE`),
     `items::input::PICKUP_REACH` and `enemy::Separation`. Awake enemies between the loaded distance

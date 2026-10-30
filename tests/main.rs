@@ -6,6 +6,7 @@ mod enemy;
 mod flowfield;
 mod hud;
 mod items;
+mod light;
 mod movement;
 mod perf;
 mod settings;

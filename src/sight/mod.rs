@@ -2,11 +2,12 @@
 //!
 //! Colliders with [`BlocksSight`] are rasterized per map into its [`OpaqueCells`]. Around the
 //! player's cell, a mask stores how visible each cell is: invisible behind an opaque cell or
-//! outside [`SIGHT_RADIUS`], fully visible otherwise, fading out towards the radius. The mask
-//! covers a square window of a fixed size that moves along with the player, and is only computed
-//! again when the player enters another cell or the loaded maps change. The opaque cells of the
-//! window are put together from those of the loaded maps then; outside of them, nothing blocks the
-//! sight. [`render`] draws it.
+//! outside the player's [`SightRadius`], fully visible otherwise, fading out towards the radius.
+//! The mask covers a square window of a fixed size that moves along with the player. Which cells
+//! the player could see up to [`MAX_SIGHT_RADIUS`] is only computed again when the player enters
+//! another cell or the loaded maps change; the opaque cells of the window are put together from
+//! those of the loaded maps then, and outside of them, nothing blocks the sight. When only the
+//! radius changes, the mask is put together again from those cells. [`render`] draws it.
 
 pub mod render;
 
@@ -20,18 +21,24 @@ use bevy::prelude::*;
 
 pub use crate::cells::CELL_SIZE;
 
-/// Distance in px from the player up to which it sees.
-pub const SIGHT_RADIUS: f32 = 200.;
+/// Largest distance in px up to which the player sees, which the window is made for. The
+/// [`SightRadius`] is capped at it. Well below `enemy::DEACTIVATION_RADIUS`, so enemies the player
+/// sees don't fall asleep right away.
+pub const MAX_SIGHT_RADIUS: f32 = 300.;
+
+/// Distance in px up to which the player sees until something sets its [`SightRadius`], like the
+/// day-night cycle (`light`).
+pub const DEFAULT_SIGHT_RADIUS: f32 = 200.;
 
 /// Distance in px before the radius over which the sight fades out.
 pub const SIGHT_FADE: f32 = 48.;
 
-/// Cells from the player's cell to the sight radius.
-const SIGHT_CELLS: i32 = (SIGHT_RADIUS / CELL_SIZE) as i32;
+/// Cells from the player's cell to the largest sight radius.
+const MAX_SIGHT_CELLS: i32 = (MAX_SIGHT_RADIUS / CELL_SIZE) as i32;
 
-/// Cells from the player's cell to the edge of the window: the sight radius plus a border of
-/// invisible cells, so the mask's texture fades out to invisible at its edges.
-const WINDOW_RADIUS: i32 = SIGHT_CELLS + 1;
+/// Cells from the player's cell to the edge of the window: the largest sight radius plus a border
+/// of invisible cells, so the mask's texture fades out to invisible at its edges.
+const WINDOW_RADIUS: i32 = MAX_SIGHT_CELLS + 1;
 
 /// Edge length of the window in cells.
 pub const WINDOW_SIZE: i32 = 2 * WINDOW_RADIUS + 1;
@@ -57,14 +64,57 @@ const OCTANTS: [[i32; 4]; 8] = [
     [1, 0, 0, -1],
 ];
 
+/// How far the player sees in px. Like `Transform` and `GlobalTransform`, it has a base value,
+/// which the day-night cycle sets, and the final one, which [`Sight`] uses. Bonuses from
+/// equipment will go on top of the base; for now, the final value is the base capped at
+/// [`MAX_SIGHT_RADIUS`].
+#[derive(Component, Clone, Copy, PartialEq, Debug)]
+pub struct SightRadius {
+    pub base: f32,
+    computed: f32,
+}
+
+impl Default for SightRadius {
+    fn default() -> Self {
+        Self::new(DEFAULT_SIGHT_RADIUS)
+    }
+}
+
+impl SightRadius {
+    pub fn new(base: f32) -> Self {
+        Self {
+            base,
+            computed: Self::compute(base),
+        }
+    }
+
+    fn compute(base: f32) -> f32 {
+        base.clamp(0., MAX_SIGHT_RADIUS)
+    }
+
+    /// The final value.
+    pub fn get(&self) -> f32 {
+        self.computed
+    }
+}
+
+fn compute_sight_radius(mut radii: Query<&mut SightRadius, Changed<SightRadius>>) {
+    for mut radius in &mut radii {
+        let computed = SightRadius::compute(radius.base);
+        if radius.computed != computed {
+            radius.computed = computed;
+        }
+    }
+}
+
 /// Mask values of the window's cells while in sight, by their distance to the player's cell in
-/// the middle: fully visible, fading out towards the radius, 0 beyond it.
-fn fade() -> Vec<u8> {
+/// the middle: fully visible, fading out towards `radius`, 0 beyond it.
+fn fade(radius: f32) -> Vec<u8> {
     (0..WINDOW_SIZE * WINDOW_SIZE)
         .map(|i| {
             let offset = IVec2::new(i % WINDOW_SIZE, i / WINDOW_SIZE) - WINDOW_RADIUS;
             let distance = offset.as_vec2().length() * CELL_SIZE;
-            let fade = (SIGHT_RADIUS - distance) / SIGHT_FADE;
+            let fade = (radius - distance) / SIGHT_FADE;
             (fade.clamp(0., 1.) * 255.).round() as u8
         })
         .collect()
@@ -107,10 +157,14 @@ impl MapRaster for OpaqueCells {
 /// The mask of visible cells around the player.
 #[derive(Resource)]
 pub struct Sight {
-    /// See [`fade`]
+    /// See [`fade`], for `radius`
     fade: Vec<u8>,
+    /// Distance in px up to which the player sees, see [`SightRadius`]
+    radius: f32,
     /// Opaque cells of the window, put together from the loaded maps
     opaque: Raster<bool>,
+    /// Cells of the window the player could see up to [`MAX_SIGHT_RADIUS`]
+    lit: Raster<bool>,
     /// Visibility per cell of the window (0–255)
     mask: Raster<u8>,
     /// Player's cell the mask was computed for, `None` while it is outdated
@@ -121,8 +175,10 @@ impl Default for Sight {
     fn default() -> Self {
         let window = CellRect::around(IVec2::ZERO, WINDOW_RADIUS);
         Self {
-            fade: fade(),
+            fade: fade(DEFAULT_SIGHT_RADIUS),
+            radius: DEFAULT_SIGHT_RADIUS,
             opaque: Raster::new(window, false),
+            lit: Raster::new(window, false),
             mask: Raster::new(window, 0),
             center: None,
         }
@@ -149,12 +205,34 @@ impl Sight {
                 self.opaque[cell] |= map.0[cell];
             }
         }
+        self.lit.reset(min, false);
         self.mask.reset(min, 0);
         self.light(center);
         for octant in OCTANTS {
             self.cast(center, 1, 1., 0., octant);
         }
+        self.apply_radius();
         true
+    }
+
+    /// Puts the mask together again if `radius` (capped at [`MAX_SIGHT_RADIUS`]) changed, without
+    /// computing which cells are in sight again. Returns whether it changed.
+    pub fn set_radius(&mut self, radius: f32) -> bool {
+        let radius = radius.clamp(0., MAX_SIGHT_RADIUS);
+        if self.radius == radius {
+            return false;
+        }
+        self.radius = radius;
+        self.fade = fade(radius);
+        self.apply_radius();
+        true
+    }
+
+    /// Puts the mask together from the lit cells and the fade towards the radius.
+    fn apply_radius(&mut self) {
+        for i in 0..self.mask.rect().len() {
+            self.mask[i] = if self.lit[i] { self.fade[i] } else { 0 };
+        }
     }
 
     /// Forgets the center, so the mask is computed again on the next [`Self::set_center`], e.g.
@@ -165,8 +243,8 @@ impl Sight {
 
     /// Marks `cell` as in sight.
     fn light(&mut self, cell: IVec2) {
-        if let Some(i) = self.mask.rect().index(cell) {
-            self.mask[i] = self.fade[i];
+        if let Some(i) = self.lit.rect().index(cell) {
+            self.lit[i] = true;
         }
     }
 
@@ -180,7 +258,7 @@ impl Sight {
         }
         let [xx, xy, yx, yy] = octant;
         let mut new_start = start;
-        for j in row..=SIGHT_CELLS {
+        for j in row..=MAX_SIGHT_CELLS {
             let dy = -j;
             let mut blocked = false;
             for dx in -j..=0 {
@@ -203,7 +281,7 @@ impl Sight {
                         blocked = false;
                         start = new_start;
                     }
-                } else if opaque && j < SIGHT_CELLS {
+                } else if opaque && j < MAX_SIGHT_CELLS {
                     blocked = true;
                     self.cast(center, j + 1, start, left, octant);
                     new_start = right;
@@ -259,21 +337,24 @@ impl Sight {
     }
 }
 
-/// Computes the mask when the player enters another cell or the loaded maps change. Only marks
-/// the resource as changed then, so the texture is only written when the mask changed.
+/// Computes the mask when the player enters another cell, the loaded maps change or its sight
+/// radius changes. Only marks the resource as changed then, so the texture is only written when
+/// the mask changed.
 fn update_sight(
     mut sight: ResMut<Sight>,
     maps: Query<Ref<OpaqueCells>>,
     mut unloaded: RemovedComponents<OpaqueCells>,
-    player: Single<&Transform, With<Player>>,
+    player: Single<(&Transform, &SightRadius), With<Player>>,
 ) {
+    let (transform, radius) = *player;
     let inner = sight.bypass_change_detection();
     let unloaded = unloaded.read().count() > 0;
     if unloaded || maps.iter().any(|map| map.is_changed()) {
         inner.forget_center();
     }
     let maps: Vec<_> = maps.iter().map(Ref::into_inner).collect();
-    if inner.set_center(player.translation.xy(), &maps) {
+    // `|`, not `||`: both have to happen
+    if inner.set_radius(radius.get()) | inner.set_center(transform.translation.xy(), &maps) {
         sight.set_changed();
     }
 }
@@ -286,7 +367,10 @@ impl bevy::app::Plugin for Plugin {
         app.init_resource::<Sight>().add_systems(
             PreUpdate,
             (
-                world::rasterize::<OpaqueCells, With<BlocksSight>>,
+                (
+                    world::rasterize::<OpaqueCells, With<BlocksSight>>,
+                    compute_sight_radius,
+                ),
                 update_sight,
             )
                 .chain(),

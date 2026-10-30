@@ -2,6 +2,7 @@ use super::stylesheet::Stylesheet;
 use crate::{
     combat::Health,
     items::{ItemId, hotbar::SLOTS},
+    light::Phase,
     perf::Averages,
     settings::Settings,
 };
@@ -12,6 +13,8 @@ use std::{sync::mpsc, time::Duration};
 /// Game state shown in the HUD, written by the game whenever it changes.
 #[derive(Clone, PartialEq, Default)]
 pub struct State {
+    /// `None` until the day-night cycle's values are loaded
+    pub clock: Option<Clock>,
     /// `None` while there is no player
     pub player_health: Option<Health>,
     pub enemy_count: usize,
@@ -31,6 +34,17 @@ pub struct State {
     pub selected: Option<Target>,
     /// The player's hotbar, always shown
     pub hotbar: [Option<HotbarSlot>; SLOTS],
+}
+
+/// The time of day, to the minute.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Clock {
+    pub day: u32,
+    pub hour: u32,
+    pub minute: u32,
+    pub phase: Phase,
+    /// Whether the clock stands still
+    pub paused: bool,
 }
 
 /// An item or a stack in the inventory.
@@ -72,6 +86,11 @@ pub enum Target {
 
 /// Requests from the HUD to the game.
 pub enum Action {
+    /// Moves the clock on by an hour
+    SkipHour,
+    /// Moves the clock on to the start of the next phase
+    SkipPhase,
+    PauseClock(bool),
     SpawnEnemy,
     /// Shows the next flow field grid, or hides the overlay after the last one
     CycleFlowField,
@@ -272,6 +291,21 @@ pub fn app() -> Element {
                 }
             },
             div { class: "hud blocks-pointer",
+                if let Some(clock) = state.clock {
+                    span { {format!("Tag {}, {:02}:{:02} · {}", clock.day, clock.hour, clock.minute, clock.phase.name())} }
+                    div { class: "buttons",
+                        button { onclick: move |_| send(Action::SkipHour), "+1 h (N)" }
+                        button { onclick: move |_| send(Action::SkipPhase), "Nächste Phase" }
+                    }
+                    label {
+                        input {
+                            r#type: "checkbox",
+                            checked: clock.paused,
+                            oninput: move |event| send(Action::PauseClock(event.checked())),
+                        }
+                        "Uhr anhalten"
+                    }
+                }
                 span { "Leben: {health}" }
                 span { "Gegner: {state.enemy_count}" }
                 button { onclick: move |_| send(Action::SpawnEnemy), "Gegner spawnen" }

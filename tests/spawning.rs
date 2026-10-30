@@ -118,7 +118,7 @@ fn place_out_of_sight_keeps_the_walking_distance() {
         (out_of_sight::MIN_DISTANCE..=out_of_sight::MAX_DISTANCE).contains(&distance),
         "spawned {distance} px away"
     );
-    assert!(distance > sight::SIGHT_RADIUS);
+    assert!(distance > sight::DEFAULT_SIGHT_RADIUS);
 }
 
 /// Trigger zone of the ambush `layer` of 40×40 px around `center`, like those from Tiled: a

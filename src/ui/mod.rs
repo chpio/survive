@@ -19,6 +19,7 @@ use crate::{
         DropItem, Inventory, Item, ItemDefinitions, ItemId, Stack, UseItem,
         hotbar::{AssignSlot, Hotbar, SLOTS, UseSlot},
     },
+    light::{self, DayNight, LightValues},
     objects::{enemy, player::Player},
     perf,
     settings::{self, Menu, Settings},
@@ -423,6 +424,8 @@ fn sync_state(
     mut spawn_enemy: MessageWriter<SpawnOutOfSight>,
     mut settings: ResMut<Settings>,
     menu: Res<State<Menu>>,
+    // one parameter, since a system has at most 16
+    (mut day_night, light_values): (Option<ResMut<DayNight>>, Option<Res<LightValues>>),
 ) {
     let ui = &mut *ui;
     let player = player.single().ok();
@@ -445,6 +448,21 @@ fn sync_state(
     let (mut clicks, mut drops) = (Vec::new(), Vec::new());
     for action in ui.actions.try_iter() {
         match action {
+            hud::Action::SkipHour => {
+                if let (Some(day_night), Some(values)) = (&mut day_night, &light_values) {
+                    day_night.advance(light::SKIP_HOURS, values);
+                }
+            }
+            hud::Action::SkipPhase => {
+                if let (Some(day_night), Some(values)) = (&mut day_night, &light_values) {
+                    day_night.skip_to_next_phase(values);
+                }
+            }
+            hud::Action::PauseClock(paused) => {
+                if let Some(day_night) = &mut day_night {
+                    day_night.paused = paused;
+                }
+            }
             hud::Action::SpawnEnemy => {
                 spawn_enemy.write(SpawnOutOfSight(default()));
             }
@@ -600,6 +618,16 @@ fn sync_state(
     let inventory = ui.show_inventory.then_some(rows);
 
     let new_state = hud::State {
+        clock: day_night.map(|day_night| {
+            let minutes = (day_night.hour() * 60.) as u32;
+            hud::Clock {
+                day: day_night.day(),
+                hour: minutes / 60,
+                minute: minutes % 60,
+                phase: day_night.phase(),
+                paused: day_night.paused,
+            }
+        }),
         player_health: player.map(|(_, health, ..)| *health),
         enemy_count: enemies.iter().count(),
         flow_field_grid: flow_field_debug

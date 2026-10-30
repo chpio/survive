@@ -69,6 +69,11 @@ input[type="checkbox"] {
     background: #4a84c4;
 }
 
+.hud .buttons {
+    display: flex;
+    gap: 6px;
+}
+
 .hud label {
     display: flex;
     align-items: center;

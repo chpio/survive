@@ -1,12 +1,14 @@
 use crate::{
     combat::{Attack, Health},
     movement::{self, DesiredVelocity},
+    sight::SightRadius,
 };
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use std::time::Duration;
 
 #[derive(Default, Clone, Component)]
+#[require(SightRadius)]
 pub struct Player;
 
 /// Where the player starts, on the first map.
