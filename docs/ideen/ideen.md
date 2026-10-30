@@ -99,7 +99,8 @@ Die erste Version ist umgesetzt ([items.md](../items.md)): Items als Entities mi
 - Aufheben bzw. Fallenlassen = Sprite und Position entfernen bzw. wieder setzen und das Item
   umhängen.
 - Stapeln über eine Komponente `Stack` mit Anzahl: beim Aufheben zusammenführen und die zweite
-  Entity despawnen, beim Teilen eine neue spawnen. Nur Items ohne eigenen Zustand werden gestapelt.
+  Entity despawnen, beim Teilen eine neue spawnen. Nur Items ohne eigenen Zustand werden gestapelt
+  (`Unique`), auch am Boden (umgesetzt, siehe [items.md](../items.md)).
 - Kein festes Limit: Das Inventargewicht zählt zur Masse des Spielers. Er wird träger und schwerer
   wegzuschubsen. Die natürliche Grenze entsteht über die Stärke.
 - Überladung macht auch langsamer. `Strength` begrenzt nur die Kraft: Ein schwererer Spieler
@@ -112,7 +113,7 @@ Die erste Version ist umgesetzt ([items.md](../items.md)): Items als Entities mi
   Händler oder Werkbank. So wird man Items überall los, und die Karte füllt sich nicht mit
   liegengelassenen Items. Verkaufen kommt mit den Händlern dazu.
 - Aufheben per Taste (E) für das nächste Item in Reichweite, dazu der Mausklick. Automatisch beim
-  Drüberlaufen nur für Typen, die das in der Definition erlauben (leichte, stapelbare wie Tränke).
+  Drüberlaufen nur für Typen, die das in der Definition erlauben (leichte wie Tränke).
   Selbst abgelegte Items hebt das automatische Aufheben erst wieder auf, wenn der Spieler sich
   einmal außer Reichweite entfernt hat, sonst ließe sich nichts ablegen.
 - Noch offen: Gewicht als Masse, Icons statt der Platzhalterfarbe, Ausrüstung wirkt auf

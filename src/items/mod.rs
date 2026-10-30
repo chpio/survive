@@ -1,9 +1,10 @@
 //! Items lying on the ground or held by an owner (see `docs/items.md`).
 //!
-//! Each item is an entity with [`Item`], stackable ones also have a [`Stack`]. On the ground, an
-//! item shows a sprite at its position. Picked up, it is hidden and attached to its owner through
-//! [`HeldBy`], which Bevy mirrors in the owner's [`Inventory`]. Picking up a stackable item merges
-//! it into a stack of the same type the owner already holds, dropping part of a stack splits it.
+//! Each item is an entity with [`Item`] and a [`Stack`] count. On the ground, an item shows a
+//! sprite at its position. Picked up, it is hidden and attached to its owner through [`HeldBy`],
+//! which Bevy mirrors in the owner's [`Inventory`]. Items of the same type stack, unless one of
+//! them is [`Unique`]: picking one up merges it into the owner's stack of that type, one coming to
+//! the ground merges into a stack nearby, and dropping part of a stack splits it.
 //! Using a held item uses it up and sends [`ItemUsed`] with its type's [`Effect`], which other
 //! modules apply (e.g. combat heals). Owners with a [`hotbar::Hotbar`] use items through its
 //! slots.
@@ -33,8 +34,6 @@ pub struct ItemDefinition {
     pub name: String,
     /// Weight of one item in kg
     pub weight: f32,
-    /// Whether items of this type are held in a [`Stack`]
-    pub stackable: bool,
     /// sRGB color of the placeholder sprite
     pub color: (f32, f32, f32),
     /// What using one item does, `None` if items of this type can't be used
@@ -72,11 +71,27 @@ impl ItemDefinitions {
 }
 
 #[derive(Component, Clone, PartialEq, Debug)]
+#[require(Stack)]
 pub struct Item(pub ItemId);
 
-/// Number of items in a stack. Only stackable items have it, all others count as one.
+/// Number of items in a stack, 1 for a single one.
 #[derive(Component, Clone, Copy, PartialEq, Debug)]
 pub struct Stack(pub u32);
+
+impl Default for Stack {
+    fn default() -> Self {
+        Self(1)
+    }
+}
+
+/// An item with a state of its own (e.g. durability or enchantments later, or a story item),
+/// which makes it different from the others of its type, so it never stacks with them.
+#[derive(Component, Clone, Copy, PartialEq, Debug)]
+pub struct Unique;
+
+/// Distance in px up to which an item coming to the ground merges into a stack of its type, as far
+/// as items are dropped below their owner, so dropping several times puts them on one stack.
+pub const MERGE_RADIUS: f32 = DROP_DISTANCE;
 
 /// The owner holding the item.
 #[derive(Component, Clone, Copy, PartialEq, Debug)]
@@ -114,8 +129,7 @@ fn on_ground(definitions: &ItemDefinitions, id: &ItemId, position: Vec2) -> impl
     )
 }
 
-/// Spawns `count` items of type `id` on the ground: one stack if the type is stackable, otherwise
-/// one entity per item.
+/// Spawns a stack of `count` items of type `id` on the ground.
 pub fn spawn_on_ground(
     commands: &mut Commands,
     definitions: &ItemDefinitions,
@@ -123,20 +137,12 @@ pub fn spawn_on_ground(
     count: u32,
     position: Vec2,
 ) {
-    let stackable = definitions
-        .get(id)
-        .is_some_and(|definition| definition.stackable);
-    let entities = if stackable { 1 } else { count };
-    for _ in 0..entities {
-        let mut item = commands.spawn((
-            Name::new("Item"),
-            Item(id.clone()),
-            on_ground(definitions, id, position),
-        ));
-        if stackable {
-            item.insert(Stack(count));
-        }
-    }
+    commands.spawn((
+        Name::new("Item"),
+        Item(id.clone()),
+        Stack(count),
+        on_ground(definitions, id, position),
+    ));
 }
 
 /// Lets `by` pick up `item`, if it lies on the ground.
@@ -170,21 +176,20 @@ pub struct ItemUsed {
 fn pick_up(
     mut commands: Commands,
     mut pick_ups: MessageReader<PickUp>,
-    mut items: Query<(&Item, Option<&mut Stack>, Has<HeldBy>)>,
+    mut items: Query<(&Item, &mut Stack, Has<Unique>, Has<HeldBy>)>,
     inventories: Query<&Inventory>,
     // items picked up this frame, which are only in the inventory once the commands are applied
     mut picked_up: Local<Vec<(Entity, Entity)>>,
 ) {
     picked_up.clear();
     for &PickUp { item, by } in pick_ups.read() {
-        let Ok((Item(id), stack, held)) = items.get(item) else {
+        let Ok((Item(id), stack, unique, held)) = items.get(item) else {
             continue;
         };
         if held || picked_up.iter().any(|&(picked, _)| picked == item) {
             continue;
         }
-        let id = id.clone();
-        let count = stack.map(|stack| stack.0);
+        let (id, count) = (id.clone(), stack.0);
 
         let held_items = inventories
             .get(by)
@@ -194,20 +199,25 @@ fn pick_up(
             .iter()
             .filter(|&&(_, owner)| owner == by)
             .map(|&(picked, _)| picked);
-        let same_stack = count.and(held_items.iter().copied().chain(picked_by_owner).find(
-            |&held| {
-                items
-                    .get(held)
-                    .is_ok_and(|(Item(held_id), stack, _)| *held_id == id && stack.is_some())
-            },
-        ));
+        let same_stack = held_items
+            .iter()
+            .copied()
+            .chain(picked_by_owner)
+            .find(|&held| {
+                !unique
+                    && items
+                        .get(held)
+                        .is_ok_and(|(Item(held_id), _, held_unique, _)| {
+                            *held_id == id && !held_unique
+                        })
+            });
 
-        match (same_stack, count) {
-            (Some(stack), Some(count)) => {
-                items.get_mut(stack).unwrap().1.unwrap().0 += count;
+        match same_stack {
+            Some(stack) => {
+                items.get_mut(stack).unwrap().1.0 += count;
                 commands.entity(item).despawn();
             }
-            _ => {
+            None => {
                 // hidden instead of removing the sprite: Bevy draws sprites as meshes it adds
                 // along with them, which stay after removing the sprite
                 commands
@@ -224,39 +234,62 @@ fn drop_items(
     mut commands: Commands,
     mut drops: MessageReader<DropItem>,
     definitions: Res<ItemDefinitions>,
-    mut items: Query<(&Item, Option<&mut Stack>, &HeldBy)>,
+    mut items: Query<(&Item, &mut Stack, &HeldBy)>,
     owners: Query<&Transform>,
 ) {
     for &DropItem { item, count } in drops.read() {
-        let Ok((Item(id), stack, &HeldBy(owner))) = items.get_mut(item) else {
+        let Ok((Item(id), mut stack, &HeldBy(owner))) = items.get_mut(item) else {
             continue;
         };
+        if count == 0 {
+            continue;
+        }
         let position = owners
             .get(owner)
             .map_or(Vec2::ZERO, |transform| transform.translation.xy())
             - Vec2::Y * DROP_DISTANCE;
 
-        match stack {
-            Some(mut stack) if count < stack.0 => {
-                if count == 0 {
-                    continue;
-                }
-                stack.0 -= count;
-                let id = id.clone();
-                commands.spawn((
-                    Name::new("Item"),
-                    Item(id.clone()),
-                    Stack(count),
-                    on_ground(&definitions, &id, position),
-                ));
-            }
-            _ => {
-                commands.entity(item).remove::<HeldBy>().insert(on_ground(
-                    &definitions,
-                    id,
-                    position,
-                ));
-            }
+        if count < stack.0 {
+            stack.0 -= count;
+            spawn_on_ground(&mut commands, &definitions, id, count, position);
+        } else {
+            commands
+                .entity(item)
+                .remove::<HeldBy>()
+                .insert(on_ground(&definitions, id, position));
+        }
+    }
+}
+
+/// Merges items that just came to the ground (spawned or dropped, which gives them `Pickable`)
+/// into a stack of their type within [`MERGE_RADIUS`]. Items don't move on the ground, so they
+/// only need to be checked then.
+fn merge_on_ground(
+    mut commands: Commands,
+    landed: Query<Entity, (With<Item>, Without<HeldBy>, Added<Pickable>)>,
+    mut ground: Query<(Entity, &Item, &mut Stack, &Transform), (Without<HeldBy>, Without<Unique>)>,
+    // items merged this frame, which are only despawned once the commands are applied
+    mut merged: Local<Vec<Entity>>,
+) {
+    merged.clear();
+    for item in &landed {
+        let Ok((_, Item(id), stack, transform)) = ground.get(item) else {
+            continue;
+        };
+        let (id, count, position) = (id.clone(), stack.0, transform.translation.xy());
+        let target = ground
+            .iter()
+            .filter(|&(other, Item(other_id), ..)| {
+                other != item && *other_id == id && !merged.contains(&other)
+            })
+            .map(|(other, .., transform)| (other, transform.translation.xy().distance(position)))
+            .filter(|&(_, distance)| distance <= MERGE_RADIUS)
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(other, _)| other);
+        if let Some(target) = target {
+            ground.get_mut(target).unwrap().2.0 += count;
+            commands.entity(item).despawn();
+            merged.push(item);
         }
     }
 }
@@ -266,7 +299,7 @@ fn use_items(
     mut uses: MessageReader<UseItem>,
     mut used: MessageWriter<ItemUsed>,
     definitions: Res<ItemDefinitions>,
-    mut items: Query<(&Item, Option<&mut Stack>, &HeldBy)>,
+    mut items: Query<(&Item, &mut Stack, &HeldBy)>,
     // items used up this frame, which are only despawned once the commands are applied
     mut used_up: Local<Vec<Entity>>,
 ) {
@@ -275,25 +308,24 @@ fn use_items(
         if used_up.contains(&item) {
             continue;
         }
-        let Ok((Item(id), stack, &HeldBy(by))) = items.get_mut(item) else {
+        let Ok((Item(id), mut stack, &HeldBy(by))) = items.get_mut(item) else {
             continue;
         };
         let Some(effect) = definitions.get(id).and_then(|definition| definition.effect) else {
             continue;
         };
-        match stack {
-            Some(mut stack) if stack.0 > 1 => stack.0 -= 1,
-            _ => {
-                commands.entity(item).despawn();
-                used_up.push(item);
-            }
+        if stack.0 > 1 {
+            stack.0 -= 1;
+        } else {
+            commands.entity(item).despawn();
+            used_up.push(item);
         }
         used.write(ItemUsed { by, effect });
     }
 }
 
-/// Picking up, dropping and using items. The item types come from [`definitions::Plugin`], the player's
-/// input from [`input::Plugin`].
+/// Picking up, dropping, stacking and using items. The item types come from [`definitions::Plugin`],
+/// the player's input from [`input::Plugin`].
 pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
@@ -310,6 +342,7 @@ impl bevy::app::Plugin for Plugin {
                 (
                     pick_up,
                     drop_items,
+                    merge_on_ground,
                     hotbar::assign_slots,
                     hotbar::use_slots,
                     use_items,

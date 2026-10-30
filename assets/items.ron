@@ -1,7 +1,8 @@
-// Item types by id: name, weight of one item in kg, whether they stack, sRGB color of the
-// placeholder sprite, and optionally what using one does (`Heal(health)`)
+// Item types by id: name, weight of one item in kg, sRGB color of the placeholder sprite, and
+// optionally what using one does (`Heal(health)`). Items of the same type stack, unless one has a
+// state of its own (`items::Unique`).
 {
-    "apple": (name: "Apfel", weight: 0.2, stackable: true, color: (0.3, 0.8, 0.2), effect: Some(Heal(5.))),
-    "healing_potion": (name: "Heiltrank", weight: 0.5, stackable: true, color: (0.8, 0.2, 0.2), effect: Some(Heal(30.))),
-    "sword": (name: "Schwert", weight: 3.0, stackable: false, color: (0.7, 0.7, 0.8)),
+    "apple": (name: "Apfel", weight: 0.2, color: (0.3, 0.8, 0.2), effect: Some(Heal(5.))),
+    "healing_potion": (name: "Heiltrank", weight: 0.5, color: (0.8, 0.2, 0.2), effect: Some(Heal(30.))),
+    "sword": (name: "Schwert", weight: 3.0, color: (0.7, 0.7, 0.8)),
 }

@@ -115,9 +115,9 @@ const DRAG_THRESHOLD: f64 = 4.;
 #[derive(Clone, PartialEq)]
 struct Press {
     on: Target,
-    /// Item type and color it drags, `None` if it can't be dragged (an empty slot, or an item that
-    /// can't go into the hotbar)
-    dragged: Option<(ItemId, (f32, f32, f32))>,
+    /// What it drags, shown like in its tile or slot, `None` if it can't be dragged (an empty slot,
+    /// or an item that can't go into the hotbar)
+    dragged: Option<Cell>,
     /// Pointer position in CSS px where it was pressed
     start: (f64, f64),
     /// Current pointer position once it moved beyond [`DRAG_THRESHOLD`], which makes it a drag
@@ -125,11 +125,7 @@ struct Press {
 }
 
 impl Press {
-    fn new(
-        on: Target,
-        dragged: Option<(ItemId, (f32, f32, f32))>,
-        event: &Event<PointerData>,
-    ) -> Self {
+    fn new(on: Target, dragged: Option<Cell>, event: &Event<PointerData>) -> Self {
         Self {
             on,
             dragged,
@@ -179,11 +175,15 @@ fn is_right_click(event: &Event<PointerData>) -> bool {
 }
 
 /// How an item looks in the HUD, the same in the inventory, the hotbar and while dragged: so far a
-/// square in the placeholder color of its type.
-fn item_icon((r, g, b): (f32, f32, f32)) -> Element {
+/// square in the placeholder color of its type, with the count for stacks.
+fn item_icon(cell: &Cell) -> Element {
+    let (r, g, b) = cell.color;
     let color = format!("rgb({:.0}, {:.0}, {:.0})", r * 255., g * 255., b * 255.);
     rsx! {
         div { class: "icon", style: "background: {color}" }
+        if cell.count > 1 {
+            span { class: "count", "{cell.count}" }
+        }
     }
 }
 
@@ -323,9 +323,9 @@ pub fn app() -> Element {
                 {menu(state.settings, send)}
             }
             // next to the pointer instead of below it, so it doesn't hide the slot it is released on
-            if let Some(Press { dragged: Some((_, color)), position: Some((x, y)), .. }) = press() {
+            if let Some(Press { dragged: Some(cell), position: Some((x, y)), .. }) = press() {
                 div { class: "drag", style: "left: {x + 8.}px; top: {y + 8.}px",
-                    {item_icon(color)}
+                    {item_icon(&cell)}
                 }
             }
         }
@@ -388,7 +388,7 @@ struct Marks {
 }
 
 /// What a tile or slot shows: a stack in the inventory, or all items of a type in a slot.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct Cell {
     id: ItemId,
     name: String,
@@ -454,10 +454,7 @@ fn cell(
             class += " highlighted";
         }
     }
-    let dragged = content
-        .as_ref()
-        .filter(|content| content.usable)
-        .map(|content| (content.id.clone(), content.color));
+    let dragged = content.clone().filter(|content| content.usable);
     let used = content
         .as_ref()
         .and_then(|content| content.held.as_ref())
@@ -465,11 +462,6 @@ fn cell(
     let entered = content.as_ref().map(|content| content.id.clone());
     let left = entered.clone();
     let details = content.clone().filter(|_| is_selected);
-    // a slot always shows how many of its type there are, a tile only for stacks
-    let count = content
-        .as_ref()
-        .map(|content| content.count)
-        .filter(|&count| count > 1 || matches!(target, Target::Slot(_)));
 
     rsx! {
         div { class, key: "{key}",
@@ -508,10 +500,7 @@ fn cell(
                 span { class: "key", "{slot + 1}" }
             }
             if let Some(content) = &content {
-                {item_icon(content.color)}
-            }
-            if let Some(count) = count {
-                span { class: "count", "{count}" }
+                {item_icon(content)}
             }
             if let Some(details) = details {
                 {item_details(details, send)}

@@ -404,7 +404,7 @@ const SLOT_KEYS: [KeyCode; SLOTS] = [
 fn sync_state(
     mut ui: NonSendMut<UiDocument>,
     player: Query<(Entity, &Health, Option<&Inventory>, Option<&Hotbar>), With<Player>>,
-    items: Query<(&Item, Option<&Stack>)>,
+    items: Query<(&Item, &Stack)>,
     definitions: Res<ItemDefinitions>,
     mut keyboard_input: ResMut<ButtonInput<KeyCode>>,
     // one parameter, since a system has at most 16
@@ -504,7 +504,7 @@ fn sync_state(
         .filter_map(|&item| {
             let (Item(id), stack) = items.get(item).ok()?;
             let definition = definitions.get(id);
-            let count = stack.map_or(1, |stack| stack.0);
+            let count = stack.0;
             Some(hud::InventoryRow {
                 item,
                 id: id.clone(),

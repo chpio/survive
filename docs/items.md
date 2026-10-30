@@ -17,11 +17,10 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
 
   ```ron
   {
-      "healing_potion": (name: "Heiltrank", weight: 0.5, stackable: true, color: (0.8, 0.2, 0.2),
+      "healing_potion": (name: "Heiltrank", weight: 0.5, color: (0.8, 0.2, 0.2),
           effect: Some(Heal(30.))),
-      "apple": (name: "Apfel", weight: 0.2, stackable: true, color: (0.3, 0.8, 0.2),
-          effect: Some(Heal(5.))),
-      "sword": (name: "Schwert", weight: 3.0, stackable: false, color: (0.7, 0.7, 0.8)),
+      "apple": (name: "Apfel", weight: 0.2, color: (0.3, 0.8, 0.2), effect: Some(Heal(5.))),
+      "sword": (name: "Schwert", weight: 3.0, color: (0.7, 0.7, 0.8)),
   }
   ```
 
@@ -36,8 +35,11 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
 ## Items als Entities
 
 - Jedes Item ist eine eigene Entity mit `Item(ItemId)`. Die ID verweist auf die Definition.
-- Stapelbare Items haben zusätzlich `Stack(u32)` mit der Anzahl. Nicht stapelbare Items haben kein
-  `Stack` und zählen als 1.
+- Jedes Item hat `Stack(u32)` mit der Anzahl (von `Item` verlangt, sonst 1). Ob Items stapeln, ist
+  keine Eigenschaft des Typs, sondern folgt aus einer Regel: Gleicher Typ stapelt immer, außer
+  einzigartige Items. Einzigartig ist ein Exemplar mit eigenem Zustand (später Haltbarkeit,
+  Verzauberung oder ein Story-Einzelstück), markiert mit `Unique`. Bisher setzt das noch nichts.
+- Die Anzahl zeigt das HUD nur ab 2, ein einzelnes Item hat keine Zahl.
 - **Am Boden:** `Sprite` (ein Quadrat in der Farbe der Definition, 8 × 8 px) und `Transform`
   zwischen Karte (z = 0) und Spieler (z = 10), dazu `Pickable`. Ohne `Pickable` ignoriert Bevys
   Sprite-Picking ein Sprite.
@@ -57,8 +59,8 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
 - Dank des HUD-Pickings ([ui-events.md](ui-events.md)) kommt ein Klick durch ein HUD-Fenster nicht
   beim Item an.
 - `PickUp` versteckt das Item, entfernt `Pickable` und hängt es per `HeldBy` an den Besitzer.
-  - Ist es stapelbar und hat der Besitzer schon einen Stapel derselben ID, wird die Anzahl dort
-    addiert und das aufgehobene Item despawnt.
+  - Hat der Besitzer schon einen Stapel derselben ID und ist keins der beiden `Unique`, wird die
+    Anzahl dort addiert und das aufgehobene Item despawnt.
 - Hervorhebung: Bei `PointerOver` wird das Item heller, bei `PointerOut` wieder normal.
   Einen Tooltip mit Namen gibt es noch nicht.
 
@@ -69,7 +71,11 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
     Der Rest bleibt im Inventar.
   - Sonst wird das Item selbst abgelegt: `HeldBy` entfernen, `Sprite` (in der normalen Farbe),
     `Transform`, Sichtbarkeit und `Pickable` setzen.
-- Am Boden werden Stapel nicht zusammengeführt.
+- Am Boden wird automatisch gestapelt: Kommt ein Item auf den Boden (abgelegt oder gespawnt, beides
+  setzt `Pickable`), geht es im nächstgelegenen Stapel seines Typs innerhalb von `MERGE_RADIUS`
+  (12 px, so weit wie das Ablegen) auf. Mehrmals Ablegen landet so auf einem Stapel unter dem
+  Spieler. Items bewegen sich am Boden nicht, deshalb wird nur in diesem Moment geprüft, ohne
+  Physik und Kollider.
 
 ## Benutzen
 
@@ -141,8 +147,7 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
 
 - F spawnt ein Item an der Mausposition in der Welt. Ist die Maus außerhalb des Fensters, liegt es
   neben dem Spieler.
-- Jeder Druck nimmt die nächste ID aus den Definitionen (alphabetisch, reihum), damit sich Stapeln
-  und Nicht-Stapeln testen lassen.
+- Jeder Druck nimmt die nächste ID aus den Definitionen (alphabetisch, reihum).
 - Noch keine Definitionen geladen: Die Taste tut nichts.
 
 ## Code
@@ -159,8 +164,9 @@ Drei Plugins, damit die Tests ohne Asset-System und Eingabe auskommen:
   `items::input`.
 - `src/ui/hud.rs`: Inventarfenster, Leiste und das Ziehen. `src/ui/mod.rs`: Tab, Zustand
   und die Actions.
-- `tests/items.rs`: Aufheben mit und ohne Stapeln, Ablegen eines ganzen Stapels, Abspalten beim
-  Ablegen, keine Stapelung nicht stapelbarer Items, Benutzen (Stapel, letztes Item, ohne Wirkung,
+- `tests/items.rs`: Aufheben mit Stapeln, Ablegen eines ganzen Stapels, Abspalten beim Ablegen,
+  einzigartige Items stapeln weder im Inventar noch am Boden, Stapeln am Boden (nur gleicher Typ
+  im Radius), Benutzen (Stapel, letztes Item, ohne Wirkung,
   am Boden) und ob sich `assets/items.ron` lesen lässt, Leiste (Belegen, Verschieben, Leeren,
   nur benutzbare Typen, Benutzen über den Slot).
 - `tests/combat.rs`: Heilen durch `ItemUsed` bis zum Maximum.

@@ -3,24 +3,24 @@ use bevy::prelude::*;
 use std::collections::BTreeMap;
 use survival::items::{
     self, DROP_DISTANCE, DropItem, Effect, HeldBy, Inventory, Item, ItemDefinition,
-    ItemDefinitions, ItemId, ItemUsed, PickUp, Stack, UseItem,
+    ItemDefinitions, ItemId, ItemUsed, MERGE_RADIUS, PickUp, Stack, Unique, UseItem,
     hotbar::{AssignSlot, Hotbar, UseSlot},
+    spawn_on_ground,
 };
 
 fn app() -> App {
     let mut app = common::app_with(items::Plugin);
-    let definition = |stackable, effect| ItemDefinition {
+    let definition = |effect| ItemDefinition {
         name: String::new(),
         weight: 1.,
-        stackable,
         color: (1., 1., 1.),
         effect,
     };
     app.insert_resource(ItemDefinitions(BTreeMap::from([
-        ("apple".into(), definition(true, None)),
-        ("bread".into(), definition(true, Some(Effect::Heal(5.)))),
-        ("potion".into(), definition(true, Some(Effect::Heal(30.)))),
-        ("sword".into(), definition(false, None)),
+        ("apple".into(), definition(None)),
+        ("bread".into(), definition(Some(Effect::Heal(5.)))),
+        ("potion".into(), definition(Some(Effect::Heal(30.)))),
+        ("sword".into(), definition(None)),
     ])));
     app
 }
@@ -107,11 +107,12 @@ fn stacks_picked_up_in_the_same_frame_are_merged() {
 }
 
 #[test]
-fn items_that_do_not_stack_are_held_separately() {
+fn unique_items_are_held_separately() {
     let mut app = app();
     let owner = spawn_owner(&mut app, Vec2::ZERO);
     let first = spawn_item(&mut app, "sword", None);
     let second = spawn_item(&mut app, "sword", None);
+    app.world_mut().entity_mut(first).insert(Unique);
 
     pick_up(&mut app, first, owner);
     pick_up(&mut app, second, owner);
@@ -368,4 +369,83 @@ fn only_usable_types_go_into_the_hotbar() {
     assign(&mut app, owner, 1, Some("apple"));
 
     assert_eq!(hotbar(&app, owner), slots([None; 5]));
+}
+
+/// Items lying on the ground, with their counts.
+fn ground(app: &mut App) -> Vec<(Entity, u32)> {
+    let mut items = app
+        .world_mut()
+        .query_filtered::<(Entity, &Stack), (With<Item>, Without<HeldBy>)>();
+    items
+        .iter(app.world())
+        .map(|(item, stack)| (item, stack.0))
+        .collect()
+}
+
+#[test]
+fn items_dropped_on_the_same_spot_stack() {
+    let mut app = app();
+    let owner = spawn_owner(&mut app, Vec2::ZERO);
+    let first = spawn_held(&mut app, "sword", None, owner);
+    let second = spawn_held(&mut app, "sword", None, owner);
+    assert_eq!(inventory(&app, owner), [first], "picking up stacks them");
+
+    app.world_mut().write_message(DropItem {
+        item: first,
+        count: 1,
+    });
+    app.update();
+    app.world_mut().write_message(DropItem {
+        item: first,
+        count: 1,
+    });
+    app.update();
+
+    // the second drop merges into the first one's stack
+    assert!(app.world().get_entity(second).is_err());
+    assert_eq!(inventory(&app, owner), []);
+    let ground = ground(&mut app);
+    assert_eq!(ground.len(), 1);
+    assert_eq!(ground[0].1, 2);
+}
+
+#[test]
+fn spawned_items_stack_only_with_their_type_within_the_radius() {
+    let mut app = app();
+    let spawn = |app: &mut App, id: &str, position: Vec2| {
+        let definitions = app.world().resource::<ItemDefinitions>().clone();
+        let mut commands = app.world_mut().commands();
+        spawn_on_ground(&mut commands, &definitions, &id.into(), 1, position);
+        app.world_mut().flush();
+        app.update();
+    };
+
+    spawn(&mut app, "apple", Vec2::ZERO);
+    spawn(&mut app, "apple", Vec2::new(MERGE_RADIUS - 1., 0.));
+    assert_eq!(ground(&mut app).len(), 1);
+
+    spawn(&mut app, "bread", Vec2::ZERO);
+    spawn(&mut app, "apple", Vec2::new(MERGE_RADIUS * 3., 0.));
+    let mut counts: Vec<_> = ground(&mut app)
+        .into_iter()
+        .map(|(_, count)| count)
+        .collect();
+    counts.sort();
+    assert_eq!(counts, [1, 1, 2]);
+}
+
+#[test]
+fn unique_items_do_not_stack_on_the_ground() {
+    let mut app = app();
+    let owner = spawn_owner(&mut app, Vec2::ZERO);
+    let unique = spawn_held(&mut app, "sword", None, owner);
+    app.world_mut().entity_mut(unique).insert(Unique);
+    let other = spawn_held(&mut app, "sword", None, owner);
+
+    for item in [unique, other] {
+        app.world_mut().write_message(DropItem { item, count: 1 });
+        app.update();
+    }
+
+    assert_eq!(ground(&mut app).len(), 2);
 }
