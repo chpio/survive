@@ -95,6 +95,9 @@ pub struct DayNight {
     time: f64,
     /// Whether the clock stands still (a dev tool in the HUD)
     pub paused: bool,
+    /// Real seconds per day: the values' `day_length`, unless the time-lapse (a dev tool in the
+    /// HUD, see [`Self::cycle_time_lapse`]) shortened it
+    pub day_length: f32,
     phase: Phase,
     /// How far it is night, from 0 (day) to 1 (night)
     night: f32,
@@ -106,6 +109,7 @@ impl DayNight {
         let mut day_night = Self {
             time: hour as f64,
             paused: false,
+            day_length: values.day_length,
             phase: Phase::Day,
             night: 0.,
         };
@@ -143,6 +147,22 @@ impl DayNight {
             .unwrap_or(values.phase_starts()[0].1 + 24.);
         // a little past the start, so rounding can't leave it in the previous phase
         self.advance(next - since + 1e-6, values);
+    }
+
+    /// How many times faster than the values' `day_length` the clock runs.
+    pub fn time_lapse(&self, values: &LightValues) -> f32 {
+        values.day_length / self.day_length
+    }
+
+    /// Lets the clock run at the next speed in [`TIME_LAPSES`], or at the normal speed again after
+    /// the last one.
+    pub fn cycle_time_lapse(&mut self, values: &LightValues) {
+        let current = self.time_lapse(values);
+        let next = TIME_LAPSES
+            .into_iter()
+            .find(|&time_lapse| time_lapse > current + 0.01)
+            .unwrap_or(1.);
+        self.day_length = values.day_length / next;
     }
 
     /// The day since the start, beginning with 1.
@@ -226,6 +246,9 @@ fn smoothstep(from: f64, to: f64, x: f64) -> f64 {
 /// Game hours the debug key moves the clock on.
 pub const SKIP_HOURS: f64 = 1.;
 
+/// How many times faster the time-lapse lets the clock run, see [`DayNight::cycle_time_lapse`].
+pub const TIME_LAPSES: [f32; 2] = [10., 60.];
+
 /// Runs the clock with the game time, so it stands still while the game is paused.
 fn run_clock(
     time: Res<Time>,
@@ -235,7 +258,7 @@ fn run_clock(
 ) {
     let mut hours = 0.;
     if !day_night.paused {
-        hours += time.delta_secs_f64() * 24. / values.day_length as f64;
+        hours += time.delta_secs_f64() * 24. / day_night.day_length as f64;
     }
     if keyboard_input.is_some_and(|input| input.just_pressed(KeyCode::KeyN)) {
         hours += SKIP_HOURS;

@@ -149,6 +149,37 @@ fn clock_runs_with_the_game_time() {
 }
 
 #[test]
+fn time_lapse_cycles_through_its_speeds() {
+    let values = values();
+    let mut day_night = DayNight::new(8., &values);
+    assert_eq!(day_night.time_lapse(&values), 1.);
+
+    let mut speeds = Vec::new();
+    for _ in 0..3 {
+        day_night.cycle_time_lapse(&values);
+        speeds.push(day_night.time_lapse(&values));
+    }
+
+    assert_eq!(speeds, [10., 60., 1.]);
+    assert_eq!(day_night.day_length, 600.);
+}
+
+#[test]
+fn time_lapse_runs_the_clock_faster() {
+    let (mut app, _) = app();
+    let values = values();
+    app.world_mut()
+        .resource_mut::<DayNight>()
+        .cycle_time_lapse(&values);
+
+    // an hour at ten times the speed
+    common::run(&mut app, 2.5);
+
+    let hour = app.world().resource::<DayNight>().hour();
+    assert!((hour - 9.).abs() < 0.01, "{hour}");
+}
+
+#[test]
 fn paused_clock_stands_still() {
     let (mut app, _) = app();
     app.world_mut().resource_mut::<DayNight>().paused = true;

@@ -458,6 +458,11 @@ fn sync_state(
                     day_night.skip_to_next_phase(values);
                 }
             }
+            hud::Action::CycleTimeLapse => {
+                if let (Some(day_night), Some(values)) = (&mut day_night, &light_values) {
+                    day_night.cycle_time_lapse(values);
+                }
+            }
             hud::Action::PauseClock(paused) => {
                 if let Some(day_night) = &mut day_night {
                     day_night.paused = paused;
@@ -618,7 +623,7 @@ fn sync_state(
     let inventory = ui.show_inventory.then_some(rows);
 
     let new_state = hud::State {
-        clock: day_night.map(|day_night| {
+        clock: day_night.zip(light_values).map(|(day_night, values)| {
             let minutes = (day_night.hour() * 60.) as u32;
             hud::Clock {
                 day: day_night.day(),
@@ -626,6 +631,7 @@ fn sync_state(
                 minute: minutes % 60,
                 phase: day_night.phase(),
                 paused: day_night.paused,
+                time_lapse: day_night.time_lapse(&values),
             }
         }),
         player_health: player.map(|(_, health, ..)| *health),

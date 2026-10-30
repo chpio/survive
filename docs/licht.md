@@ -37,6 +37,10 @@ fürs Ausbalancieren.
   - Vorspulen um eine Spielstunde, auch per Taste N.
   - Zum Beginn der nächsten Phase springen.
   - Checkbox „Uhr anhalten“, um eine Tageszeit in Ruhe anzusehen.
+  - Zeitraffer: Der Knopf schaltet die Uhr durch ×10, ×60 und normal. Dafür liegt die Tageslänge
+    selbst in `DayNight` (`day_length`), anfangs der Wert der Werte-Datei; ändert sich die Datei,
+    gilt wieder ihr Wert. Bei ×60 ändert sich die Anzeige jeden Frame, das HUD malt dann ständig
+    neu.
 - Die Werkzeuge schicken `hud::Action`s, die `DayNight` direkt ändern. Alles davon Abgeleitete
   (Helligkeit, Sichtradius) folgt im selben Frame. Beim Vorspulen springen Helligkeit und Radius
   daher, statt langsam zu wandern.

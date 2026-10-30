@@ -45,6 +45,8 @@ pub struct Clock {
     pub phase: Phase,
     /// Whether the clock stands still
     pub paused: bool,
+    /// How many times faster than normal the clock runs
+    pub time_lapse: f32,
 }
 
 /// An item or a stack in the inventory.
@@ -91,6 +93,8 @@ pub enum Action {
     /// Moves the clock on to the start of the next phase
     SkipPhase,
     PauseClock(bool),
+    /// Lets the clock run at the next speed of the time-lapse, or at the normal speed again
+    CycleTimeLapse,
     SpawnEnemy,
     /// Shows the next flow field grid, or hides the overlay after the last one
     CycleFlowField,
@@ -296,6 +300,13 @@ pub fn app() -> Element {
                     div { class: "buttons",
                         button { onclick: move |_| send(Action::SkipHour), "+1 h (N)" }
                         button { onclick: move |_| send(Action::SkipPhase), "Nächste Phase" }
+                    }
+                    button { onclick: move |_| send(Action::CycleTimeLapse),
+                        if clock.time_lapse > 1. {
+                            "Zeitraffer: ×{clock.time_lapse:.0}"
+                        } else {
+                            "Zeitraffer: aus"
+                        }
                     }
                     label {
                         input {

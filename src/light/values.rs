@@ -1,6 +1,7 @@
 //! The values of the day-night cycle from `assets/light.ron`. The file is hot-reloaded like the
 //! other assets and copied into [`LightValues`] whenever it changes, so everything else (and the
-//! tests) only deal with the resource. The first time, it also starts the clock ([`DayNight`]).
+//! tests) only deal with the resource. The first time, it also starts the clock ([`DayNight`]);
+//! later changes set the clock's day length again, which ends a time-lapse.
 
 use super::{DayNight, LightValues};
 use bevy::{
@@ -57,7 +58,10 @@ fn update_values(
         return;
     };
     match day_night {
-        Some(mut day_night) => day_night.derive(values),
+        Some(mut day_night) => {
+            day_night.day_length = values.day_length;
+            day_night.derive(values);
+        }
         None => commands.insert_resource(DayNight::new(values.start, values)),
     }
     commands.insert_resource(values.clone());
