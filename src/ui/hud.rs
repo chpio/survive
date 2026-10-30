@@ -360,7 +360,7 @@ pub fn app() -> Element {
             // the inventory right above the hotbar
             div { class: "bottom",
                 if let Some(rows) = state.inventory {
-                    {inventory(rows, &marks, pointer, send)}
+                    {inventory(rows, &state.hotbar, &marks, pointer, send)}
                 }
                 {hotbar(state.hotbar, assignable, &marks, pointer, send)}
             }
@@ -399,6 +399,7 @@ fn hotbar(
 /// onto the hotbar, or put there with the hotbar's keys while the pointer is over them.
 fn inventory(
     rows: Vec<InventoryRow>,
+    hotbar: &[Option<HotbarSlot>],
     marks: &Marks,
     pointer: Pointer,
     send: Callback<Action>,
@@ -416,7 +417,12 @@ fn inventory(
             } else {
                 div { class: "grid",
                     for row in rows {
-                        {cell(Target::Tile(row.item), Some(Cell::from(row)), marks, pointer, send)}
+                        {
+                            let slot = hotbar
+                                .iter()
+                                .position(|slot| slot.as_ref().is_some_and(|slot| slot.id == row.id));
+                            cell(Target::Tile(row.item), Some(Cell { slot, ..Cell::from(row) }), marks, pointer, send)
+                        }
                     }
                 }
             }
@@ -443,6 +449,8 @@ struct Cell {
     held: Option<InventoryRow>,
     /// Whether it can be dragged onto the hotbar
     usable: bool,
+    /// The hotbar slot holding its type, whose key a tile shows like the slot
+    slot: Option<usize>,
 }
 
 impl From<InventoryRow> for Cell {
@@ -453,6 +461,7 @@ impl From<InventoryRow> for Cell {
             color: row.color,
             count: row.count,
             usable: row.usable,
+            slot: None,
             held: Some(row),
         }
     }
@@ -468,6 +477,8 @@ impl From<HotbarSlot> for Cell {
             held: slot.held,
             // only usable types are in the hotbar
             usable: true,
+            // shown from the slot's target
+            slot: None,
         }
     }
 }
@@ -507,6 +518,10 @@ fn cell(
     let entered = content.as_ref().map(|content| content.id.clone());
     let left = entered.clone();
     let details = content.clone().filter(|_| is_selected);
+    let slot_key = match target {
+        Target::Slot(slot) => Some(slot),
+        Target::Tile(_) => content.as_ref().and_then(|content| content.slot),
+    };
 
     rsx! {
         div { class, key: "{key}",
@@ -541,7 +556,7 @@ fn cell(
                 }
                 send(Action::Hover { target, over: false });
             },
-            if let Target::Slot(slot) = target {
+            if let Some(slot) = slot_key {
                 span { class: "key", "{slot + 1}" }
             }
             if let Some(content) = &content {

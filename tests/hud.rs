@@ -364,3 +364,15 @@ fn selected_item_type_is_marked_in_the_inventory_and_the_hotbar() {
     // the popup only at the tile that was clicked
     assert_eq!(doc.query_selector_all(".details").unwrap().len(), 1);
 }
+
+#[test]
+fn tiles_show_the_key_of_their_hotbar_slot() {
+    let (state, ..) = state();
+    let hud = hud(state);
+
+    // only the potion is in the hotbar, in the first slot
+    let doc = hud.doc.inner();
+    let keys = doc.query_selector_all(".tile .key").unwrap();
+    assert_eq!(keys.len(), 1);
+    assert_eq!(doc.get_node(keys[0]).unwrap().text_content(), "1");
+}

@@ -121,6 +121,8 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
   Er zeigt, wie viele Items dieses Typs der Spieler hat, und behält den Typ auch bei 0 (dann
   abgeblendet), damit der Trank-Slot nach dem letzten Trank nicht verschwindet.
 - Nur benutzbare Typen (mit `effect`) kommen in die Leiste.
+- Kacheln im Inventar, deren Typ in einem Slot liegt, tragen dessen Taste (1–5) oben links wie der
+  Slot selbst.
 - Fährt der Zeiger über eine Kachel oder einen Slot, wird der Item-Typ überall hervorgehoben, im
   Inventar und in der Leiste. Das hält das HUD selbst, das Spiel braucht es nicht.
 - Im Spiel (Inventar zu) benutzen Taste oder Klick auf den Slot ihn: `UseSlot { owner, slot }`,

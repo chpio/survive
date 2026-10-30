@@ -12,7 +12,9 @@ use std::path::{Path, PathBuf};
 pub const ZOOM_LEVELS: [f32; 7] = [0.5, 0.75, 1., 1.25, 1.5, 1.75, 2.];
 
 /// Sizes of the HUD the menu steps through, as a factor on the window's scale.
-pub const UI_SCALES: [f32; 8] = [0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2.];
+pub const UI_SCALES: [f32; 12] = [
+    0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3.,
+];
 
 #[derive(Resource, Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 // missing fields (e.g. settings added later) keep their defaults
