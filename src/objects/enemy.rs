@@ -104,7 +104,7 @@ pub struct Heading(pub Vec2);
 #[derive(Component)]
 pub struct Body;
 
-/// Spawns an enemy. The sources decide what spawns where, [`spawn_enemy`] only builds the entity.
+/// Spawns an enemy. The sources decide what spawns where, `spawn_enemy` only builds the entity.
 #[derive(Message, Clone, Copy, PartialEq, Debug)]
 pub struct SpawnEnemy {
     pub enemy: Enemy,
