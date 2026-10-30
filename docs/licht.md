@@ -2,13 +2,15 @@
 
 Umgesetzt sind Tag und Nacht mit Uhr und Dev-Werkzeugen im HUD, die Werte-Datei
 (`assets/light.ron`), die Nacht-Ebene mit leerer Lightmap und der `SightRadius` (`src/light/`).
-Lichtquellen und Color Grading fehlen noch. Alle Zahlen sind Startwerte fürs Ausbalancieren.
+Lichtquellen, Sonne und Color Grading fehlen noch. Alle Zahlen sind Startwerte fürs Ausbalancieren.
 
 ## Ziel
 
 - Tag und Nacht. Nachts ist es nicht komplett dunkel, die ganze Welt wird abgedunkelt und der
   Sichtradius kleiner.
 - Später Lichtquellen (Lagerfeuer, Fackel), die die Nacht aufhellen.
+- Tagsüber eine Sonne, deren Schatten von Gebäuden und Bäumen mit der Tageszeit wandern. Zwischen
+  den Schatten liegt das Sonnenlicht.
 - Zum Schluss Color Grading pro Tageszeit.
 
 ## Tag und Nacht
@@ -56,8 +58,7 @@ Lichtquellen und Color Grading fehlen noch. Alle Zahlen sind Startwerte fürs Au
 - Flowfield- und Deaktivierungs-Radius bleiben Konstanten. Spawnen außer Sicht profitiert nachts
   von selbst, weil mehr Zellen unsichtbar sind. Mit 120 px Sichtweite liegt
   `out_of_sight::MIN_DISTANCE` (120 px) allerdings am Rand der Sicht, Gegner tauchen nachts also
-  deutlich näher auf. Das beim Ausbalancieren prüfen. `tests/spawning.rs` vergleicht mit
-  `SIGHT_RADIUS` und muss angepasst werden.
+  deutlich näher auf. Das beim Ausbalancieren prüfen.
 
 ## Nacht-Ebene
 
@@ -67,8 +68,8 @@ Lichtquellen und Color Grading fehlen noch. Alle Zahlen sind Startwerte fürs Au
 - Sie ist ein `SightMaterial` wie die Sichtabdunklung: invertiert, Schwarz mit der Deckkraft der
   Nacht, aber mit der Lightmap statt der Sichtmaske als Textur. Anfangs ist die Lightmap leer, die
   Ebene dunkelt dann überall gleich stark ab.
-- `sight::render::write_mask` setzt den Bereich der Maske bisher in allen `SightMaterial`s. Das
-  muss auf die Materialien der Sichtmaske beschränkt werden, die Nacht-Ebene hat ihren eigenen.
+- `sight::render::write_mask` setzt den Bereich der Maske nur in den Materialien der Sichtmaske,
+  die Nacht-Ebene hat ihren eigenen.
 - Deckkraft etwa Nacht × (1 − Licht).
 - Die Sichtabdunklung bleibt unverändert, beide Ebenen liegen übereinander.
 - Mesh-Picking stört die Ebene nicht, es berücksichtigt nur `Pickable`-Entities.
@@ -94,6 +95,43 @@ Lichtquellen und Color Grading fehlen noch. Alle Zahlen sind Startwerte fürs Au
   Der Shader bleibt gleich.
 - Lichter können später den Sichtradius vergrößern.
 
+## Sonne und Schatten (später)
+
+- Die Sonne ist ein gerichtetes Licht: Alle Schatten zeigen in dieselbe Richtung, ihre Länge hängt
+  vom Sonnenstand und von der Höhe des Objekts ab. Das Licht zwischen Gebäuden ist alles, was
+  nicht im Schatten liegt; berechnet werden nur die Schatten.
+- Dafür wird die Nacht-Ebene zur Licht-Ebene mit einer Helligkeit pro Pixel: Umgebungslicht aus
+  `DayNight` (tagsüber 1, nachts 0,5), im Sonnenschatten gedrückt (etwa auf 70 %), plus die
+  Lichtquellen. Die Ebene ist dann auch tagsüber sichtbar. Da sie über allem liegt, werden Spieler
+  und Gegner im Schatten von selbst dunkler. Diese Umstellung kommt zuerst, danach lassen sich
+  Sonne und Lichtquellen unabhängig voneinander einbauen.
+- Höhenraster pro Karte auf den 4-px-Zellen (z. B. Baum 1, Haus 2), aus einer Tiled-Property
+  `height` an Ebene, Objekt oder Tile wie `blocks_sight`. Wie die Sichtmaske wird es zu einem
+  Fenster um die Kamera zusammengesetzt und als Textur hochgeladen, neu nur, wenn sich Karten
+  ändern.
+- Der Schatten entsteht im Shader: Von jedem Pixel aus geht er ein paar Schritte Richtung Sonne.
+  Ist eine Zelle höher als der Sonnenstrahl an dieser Stelle (Abstand × Steigung der Sonne), liegt
+  das Pixel im Schatten. So ergibt sich die Schattenlänge pro Objekt von selbst. Pro Frame ändern
+  sich nur Richtung und Höhe der Sonne als Uniform, die Sonne wandert also ohne Mehrkosten. Auf der
+  CPU müsste der Schatten bei jeder Winkeländerung neu berechnet werden.
+- Die Zellen der Schattenwerfer selbst bleiben hell, wie Hindernisse in der Sicht ihre Kante
+  zeigen, sonst läge ein Dach im eigenen Schatten.
+- Sonnenrichtung und -höhe leitet `DayNight` aus der Uhrzeit ab: morgens lange Schatten nach
+  Westen, mittags kurze, abends lange nach Osten. Nachts keine oder schwache Schatten vom Mond.
+- Erst einmal werfen die Kollider den Schatten, mit ihrer Form wie beim Rastern der
+  undurchsichtigen Zellen. Kollider sind aber oft nur Stamm oder Grundfläche, ein Baum soll
+  eigentlich den Schatten seiner Krone werfen. Später daher eigene Schattenformen: Objekte in Tiled
+  oder eine Höhe pro Tile. Das ist mehr Arbeit beim Kartenbau als im Code.
+- Die 4-px-Zellen geben diagonalen Schatten Treppenkanten. Das Weichzeichnen wie bei der Sicht
+  glättet sie, harte Schatten gibt es damit nicht.
+- Einheiten werfen keine Schatten über das Raster. Für sie besser kleine weiche Blob-Schatten als
+  Sprite unter jeder Einheit.
+- Der Look kommt vor allem über die Farbe: sonnige Bereiche etwas warm, Schatten etwas kühl. Das
+  kann der Shader der Licht-Ebene selbst, ohne Color Grading.
+- Optional: Lichtflecken unter Bäumen (eine langsam wandernde Rauschtextur) statt sichtbarer
+  Lichtstrahlen, die man von oben kaum sieht. Ein eigener kleiner Effekt, unabhängig von den
+  Schatten.
+
 ## Color Grading
 
 - Bevys `ColorGrading` an der Kamera, mit Parametern (Belichtung, Temperatur, Sättigung, Kontrast
@@ -106,9 +144,9 @@ Lichtquellen und Color Grading fehlen noch. Alle Zahlen sind Startwerte fürs Au
 
 ## Werte
 
-- Alle Werte (Tageslänge, Nachtanteil, Helligkeit, Sichtradien, Color Grading) in einer eigenen
-  RON-Datei unter `assets/`, mit Hot-Reload wie `items.ron` (eigener `AssetLoader`, Kopie in eine
-  Ressource, die Tests direkt einsetzen können). So lassen sie sich im laufenden Spiel
+- Alle Werte (Tageslänge, Nachtanteil, Helligkeit, Sichtradien, Sonne, Color Grading) in einer
+  eigenen RON-Datei unter `assets/`, mit Hot-Reload wie `items.ron` (eigener `AssetLoader`, Kopie
+  in eine Ressource, die Tests direkt einsetzen können). So lassen sie sich im laufenden Spiel
   ausbalancieren.
 
 ## Reihenfolge
@@ -116,8 +154,9 @@ Lichtquellen und Color Grading fehlen noch. Alle Zahlen sind Startwerte fürs Au
 1. `DayNight` mit Uhr, Werte-Datei, Uhr und Dev-Werkzeuge im HUD.
 2. Nacht-Ebene mit leerer Lightmap.
 3. `SightRadius` am Spieler.
-4. Lichtquellen.
-5. Color Grading mit HDR.
+4. Licht-Ebene mit Helligkeit pro Pixel statt Nacht-Ebene.
+5. Lichtquellen und Sonne, unabhängig voneinander.
+6. Color Grading mit HDR.
 
 ## Später
 
