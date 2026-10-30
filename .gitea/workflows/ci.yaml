@@ -33,7 +33,22 @@ jobs:
       - if: ${{ !cancelled() }}
         run: zizmor --offline .gitea/workflows/*.yaml
 
+  # Renovate merges its PRs by fast-forward, so a push to main often brings a commit the PR run
+  # already tested; the test job skips it then. A direct push has no PR run and is tested. Runs on
+  # every event (false outside a push): a job whose needs was skipped would be skipped too.
+  tested:
+    runs-on: ubuntu-latest
+    # built in the git/images repo, meant to float like in the other jobs; only node is needed
+    container: ${{ vars.DOCKER_REGISTRY }}/git/ci-base:latest # zizmor: ignore[unpinned-images]
+    outputs:
+      tested: ${{ steps.pr.outputs.tested }}
+    steps:
+      - id: pr
+        uses: https://git.i128.ovh/git/actions/tested-in-pr@bcad7f22f67887e10c61ffeee1ebef47d2f820d7 # v1.0.0
+
   test:
+    needs: tested
+    if: needs.tested.outputs.tested != 'true'
     runs-on: ubuntu-latest
     # built in the git/images repo, with the alsa and fontconfig dev libs the sys crates link
     # against.
