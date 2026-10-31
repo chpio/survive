@@ -4,6 +4,7 @@ use bevy::prelude::*;
 use survival::{
     light::{
         self, DayNight, LightValues, Phase, Sun,
+        grading::{Grading, Gradings},
         shadow::{Heights, ShadowHeights, SunShadow},
     },
     objects::player,
@@ -11,7 +12,7 @@ use survival::{
 };
 
 /// The values of `assets/light.ron`: a day of 600 s, the night from 21:00 to 05:00, dusk and dawn
-/// of 1.5 h each, the sun 50° high at noon.
+/// of 1.5 h each, the sun 50° high at noon. The gradings differ only in their temperature.
 fn values() -> LightValues {
     LightValues {
         day_length: 600.,
@@ -24,6 +25,19 @@ fn values() -> LightValues {
         night_sight_radius: 120.,
         sun_elevation: 50.,
         shadow_strength: 0.3,
+        grading: Gradings {
+            day: Grading::default(),
+            dusk: temperature(0.04),
+            night: temperature(-0.04),
+            dawn: temperature(0.02),
+        },
+    }
+}
+
+fn temperature(temperature: f32) -> Grading {
+    Grading {
+        temperature,
+        ..default()
     }
 }
 
@@ -54,6 +68,32 @@ fn night_darkens_and_shrinks_the_sight() {
     assert_eq!(day.sight_radius(&values), 200.);
     assert_eq!(night.darkness(&values), 0.5);
     assert_eq!(night.sight_radius(&values), 120.);
+}
+
+#[test]
+fn values_file_is_valid() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/light.ron");
+    let _: LightValues = ron::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+}
+
+#[test]
+fn grading_blends_through_the_twilight() {
+    let values = values();
+    let at = |hour| DayNight::new(hour, &values).grading(&values).temperature;
+    let close = |a: f32, b: f32| (a - b).abs() < 1e-4;
+
+    assert_eq!(at(12.), 0.);
+    assert!(close(at(21.), 0.04), "{}", at(21.));
+    assert!(close(at(1.), -0.04), "{}", at(1.));
+    assert!(close(at(5.), 0.02), "{}", at(5.));
+    // on the way from the day into the dusk, and from the dusk into the night
+    assert!(at(20.5) > 0. && at(20.5) < 0.04, "{}", at(20.5));
+    assert!(at(21.5) > -0.04 && at(21.5) < 0.04, "{}", at(21.5));
+    // no jumps where the twilight begins and ends
+    assert!(close(at(20.25), 0.), "{}", at(20.25));
+    assert!(close(at(21.75), -0.04), "{}", at(21.75));
+    assert!(close(at(4.25), -0.04), "{}", at(4.25));
+    assert!(close(at(5.75), 0.), "{}", at(5.75));
 }
 
 #[test]

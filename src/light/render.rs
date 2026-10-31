@@ -2,9 +2,10 @@
 //! the HUD) with its own [`LightMaterial`] (shader `assets/shaders/light.wesl`). It darkens by
 //! [`DayNight::darkness`] and the sun's shadows, from the [`SunShadow`] in a linearly filtered
 //! texture, and is lifted where the [`Lightmap`] is lit. The darkening outside the sight lies below
-//! it; the shadows are only drawn within the sight, so the two don't darken the same place.
+//! it; the shadows are only drawn within the sight, so the two don't darken the same place. The
+//! plugin also grades the camera's colors ([`super::grading`]).
 
-use super::{DayNight, LightValues, running, shadow::SunShadow};
+use super::{DayNight, LightValues, grading, running, shadow::SunShadow};
 use crate::sight::render::{BLUR, SightMask, mask_area, mask_image};
 use bevy::{
     prelude::*,
@@ -194,7 +195,13 @@ impl bevy::app::Plugin for Plugin {
         app.add_plugins(Material2dPlugin::<LightMaterial>::default())
             .init_resource::<Lightmap>()
             .add_systems(Startup, spawn_layer)
-            .add_systems(Update, (update_light.run_if(running), write_shadow))
+            .add_systems(
+                Update,
+                (
+                    (update_light, grading::grade_colors).run_if(running),
+                    write_shadow,
+                ),
+            )
             .add_systems(
                 PostUpdate,
                 (

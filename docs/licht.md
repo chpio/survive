@@ -1,8 +1,8 @@
 # Konzept: Licht
 
 Umgesetzt sind Tag und Nacht mit Uhr und Dev-Werkzeugen im HUD, die Werte-Datei
-(`assets/light.ron`), der `SightRadius` und die Licht-Ebene mit Nacht, Sonnenschatten und leerer
-Lightmap (`src/light/`). Lichtquellen und Color Grading fehlen noch. Alle Zahlen sind Startwerte
+(`assets/light.ron`), der `SightRadius`, die Licht-Ebene mit Nacht, Sonnenschatten und leerer
+Lightmap und das Color Grading (`src/light/`). Lichtquellen fehlen noch. Alle Zahlen sind Startwerte
 fürs Ausbalancieren.
 
 ## Ziel
@@ -152,13 +152,25 @@ fürs Ausbalancieren.
 
 ## Color Grading
 
-- Bevys `ColorGrading` an der Kamera, mit Parametern (Belichtung, Temperatur, Sättigung, Kontrast
-  usw.) pro Tageszeit, zwischen denen überblendet wird. Die Werte kommen in die Werte-Datei.
-- An der 2D-Kamera wirkt es, weil Bevy 0.20 ihr `Tonemapping::Linear` gibt. Ohne HDR macht aber
-  jeder Shader die Farbanpassung selbst (`SightMaterial` tut es schon), und der Tilemap-Shader von
-  `bevy_ecs_tilemap` 0.20 tut es nicht: Die Karte bliebe ungefärbt. Daher das Bevy-Feature `hdr`
-  einschalten und die Kamera auf HDR stellen, dann färbt der Tonemapping-Pass alles gemeinsam.
-  Vorher prüfen, ob das HUD dabei mitgefärbt wird und was HDR kostet.
+- Bevys `ColorGrading` an der Kamera, mit einer Stimmung pro Phase in der Werte-Datei
+  (`light::grading::Gradings`): Belichtung, Temperatur, Tint, Sättigung und Kontrast, gleich für
+  Schatten, Mitteltöne und Lichter. Ausgelassene Werte ändern nichts. Temperatur und Tint
+  verschieben den Weißpunkt in CIE-xy, schon wenige Hundertstel sind deutlich.
+- Kontrast unter 1 vermeiden: Bevy dreht ihn um 0,5 in linearen Farben, Schwarz wird dabei grau
+  (0,95 hebt es schon auf 44/255), was auf OLED-Displays auffällt. Die übrigen Werte lassen
+  Schwarz schwarz. Eine flachere Nacht besser über die Sättigung.
+- `DayNight::grading` blendet die Stimmungen von Tag und Nacht mit der Nacht über, und zur Mitte
+  der Dämmerung hin (um `night_start` und am Ende der Nacht) in die der Abend- bzw.
+  Morgendämmerung. Am Anfang und Ende der Dämmerung springt nichts.
+- Ohne HDR macht jeder Shader die Farbanpassung selbst (`SightMaterial` tut es schon), der
+  Tilemap-Shader von `bevy_ecs_tilemap` 0.20 aber nicht: Die Karte bliebe ungefärbt. Daher rendert
+  die Kamera mit der Komponente `Hdr` in eine Zwischentextur (`Rgba16Float`), und der
+  Tonemapping-Pass (`Tonemapping::Linear`, Bevys Vorgabe für 2D) färbt alles gemeinsam, auch die
+  Licht-Ebene. Ausgegeben wird weiter SDR; HDR-Ausgabe kann Bevy nicht. Das Bevy-Feature `hdr`
+  braucht es nicht, es lädt nur `.hdr`-Bilder.
+- Das HUD zeichnet Bevy erst nach dem Tonemapping, es behält seine Farben. Überblendet wird mit
+  HDR wie ohne linear, die Licht-Ebene sieht also gleich aus.
+- Kosten: die größere Zwischentextur und ein Vollbild-Pass. Bei 4K prüfen.
 
 ## Werte
 
@@ -175,7 +187,7 @@ fürs Ausbalancieren.
 4. Licht-Ebene mit Helligkeit pro Pixel statt Nacht-Ebene.
 5. Sonne mit Schatten der Kollider.
 6. Lichtquellen.
-7. Color Grading mit HDR.
+7. Color Grading mit HDR (vor den Lichtquellen umgesetzt).
 
 ## Später
 

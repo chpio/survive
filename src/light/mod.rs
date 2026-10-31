@@ -1,8 +1,10 @@
 //! Day and night (see `docs/licht.md`). [`DayNight`] keeps the time of day and derives from it how
 //! dark the night is, which shrinks the player's [`SightRadius`], and where the sun is. [`render`]
-//! draws both in a layer above everything, with the sun's shadows of what [`shadow`] rasterizes.
-//! The values come from `assets/light.ron` ([`values`]).
+//! draws both in a layer above everything, with the sun's shadows of what [`shadow`] rasterizes,
+//! and grades the colors by the time of day ([`grading`]). The values come from `assets/light.ron`
+//! ([`values`]).
 
+pub mod grading;
 pub mod render;
 pub mod shadow;
 pub mod values;
@@ -35,6 +37,8 @@ pub struct LightValues {
     pub sun_elevation: f32,
     /// How much the sun's shadows darken by day, from 0 (not at all) to 1 (black)
     pub shadow_strength: f32,
+    /// How the colors are graded in each phase
+    pub grading: grading::Gradings,
 }
 
 impl LightValues {
