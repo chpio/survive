@@ -26,6 +26,8 @@ fn main() {
                     ..default()
                 }),
         )
+        // black beyond the maps, instead of Bevy's dark gray
+        .insert_resource(ClearColor(Color::BLACK))
         .add_plugins(TiledPlugin::default())
         .add_systems(Startup, startup)
         .add_systems(Update, update_camera_position)
