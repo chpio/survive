@@ -26,8 +26,8 @@
   - Item effects in `assets/items.ron` (healing of the potion and the apple).
   - Swarm enemies in `assets/swarm.ron` (`docs/schwarm.md`): damage, speeds, timings, the
     number of tokens and how long they are held (`token_time`). The circle distance went down from
-    60–80 px to 15–20 px, since the swarm stayed too far away; check how close it should circle
-    once enemies have sprites.
+    60–80 px to 15–20 px, since the swarm stayed too far away, and up again to 25–30 px; check how
+    close it should circle once enemies have sprites.
 
 ## Input
 
