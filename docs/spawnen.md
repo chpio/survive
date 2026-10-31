@@ -148,7 +148,7 @@ genutzt.
 ## Verhalten
 
 - Angriffs-Tokens, damit nur wenige Gegner gleichzeitig angreifen und der Rest wartet oder den
-  Spieler umkreist.
+  Spieler umkreist (siehe [schwarm.md](schwarm.md)).
 - Reize wie Lärm locken Gegner an.
 
 ## Code
