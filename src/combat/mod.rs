@@ -5,8 +5,8 @@
 //! deals damage and knocks the target away from the attacker with an impulse, so lighter units
 //! fly further. Enemies without health are despawned. When the player dies, the round starts
 //! over: all enemies are removed and the player is healed. Used items with a healing effect heal
-//! their user. Units with [`tokens::NeedsToken`] only attack while they hold an
-//! [`tokens::AttackToken`].
+//! their user. [`Restrained`] units only attack while they are [`Striking`], e.g. swarm enemies
+//! during their approach, which needs an attack token ([`tokens`]).
 
 use crate::{
     items::{Effect, ItemUsed},
@@ -18,7 +18,6 @@ use crate::{
 use avian2d::prelude::*;
 use bevy::{ecs::query::QueryFilter, prelude::*};
 use std::time::Duration;
-use tokens::{AttackToken, NeedsToken};
 
 pub mod health_bar;
 pub mod tokens;
@@ -65,6 +64,14 @@ impl Attack {
         }
     }
 }
+
+/// A unit that only attacks while it is [`Striking`].
+#[derive(Component, Default, Clone, Copy, PartialEq, Debug)]
+pub struct Restrained;
+
+/// A [`Restrained`] unit that attacks right now.
+#[derive(Component, Clone, Copy, PartialEq, Debug)]
+pub struct Striking;
 
 /// A unit with an [`Attack`] hit another one.
 #[derive(Message, Clone, Copy, PartialEq, Debug)]
@@ -166,7 +173,7 @@ impl bevy::app::Plugin for Plugin {
                         (
                             With<Enemy>,
                             Without<Asleep>,
-                            Or<(Without<NeedsToken>, With<AttackToken>)>,
+                            Or<(Without<Restrained>, With<Striking>)>,
                         ),
                         With<Player>,
                     >

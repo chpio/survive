@@ -1,8 +1,9 @@
-//! Attack tokens (see `docs/schwarm.md`): units that need one only attack the player while they
-//! hold one, and only [`AttackTokens::max`] of them exist. That caps the damage per second no
-//! matter how many enemies are around. A token is a component of its holder, so it is given back
-//! when the holder is despawned or the component removed. Who gets a free token is up to the
-//! units' behavior, e.g. `enemy::swarm`.
+//! Attack tokens (see `docs/schwarm.md`): units that use them only start an attack on the player
+//! while they hold one, and only [`AttackTokens::max`] of them exist. That caps the damage per
+//! second no matter how many enemies are around. A token is a component of its holder, so it is
+//! given back when the holder is despawned or the component removed. Who gets a free token and
+//! when it is given back is up to the units' behavior, e.g. `enemy::swarm`; whether a unit
+//! attacks is up to [`super::Striking`].
 
 use bevy::prelude::*;
 
@@ -19,10 +20,6 @@ impl AttackTokens {
     }
 }
 
-/// Permission to attack the player, for a unit with [`NeedsToken`].
+/// Permission to start an attack on the player.
 #[derive(Component, Clone, Copy, PartialEq, Debug)]
 pub struct AttackToken;
-
-/// A unit that only attacks while it holds an [`AttackToken`].
-#[derive(Component, Default, Clone, Copy, PartialEq, Debug)]
-pub struct NeedsToken;

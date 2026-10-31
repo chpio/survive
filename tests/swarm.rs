@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use std::time::Duration;
 use survival::{
     combat::{
-        self, Health,
+        self, Health, Striking,
         tokens::{AttackToken, AttackTokens},
     },
     flowfield::{self, FlowField},
@@ -81,6 +81,10 @@ fn has_token(app: &App, enemy: Entity) -> bool {
     app.world().get::<AttackToken>(enemy).is_some()
 }
 
+fn is_striking(app: &App, enemy: Entity) -> bool {
+    app.world().get::<Striking>(enemy).is_some()
+}
+
 #[test]
 fn enemy_wakes_up_circling() {
     let mut app = app(0);
@@ -129,15 +133,17 @@ fn only_enemies_with_a_token_approach() {
     let mut approached = vec![false; enemies.len()];
     for _ in 0..64 * 10 {
         app.update();
-        let mut approaching = 0;
+        let mut holding = 0;
         for (i, &enemy) in enemies.iter().enumerate() {
-            assert_eq!(is_approaching(&app, enemy), has_token(&app, enemy));
+            // tokens are held a while longer than the approach
             if is_approaching(&app, enemy) {
-                approaching += 1;
+                assert!(has_token(&app, enemy));
                 approached[i] = true;
             }
+            assert_eq!(is_approaching(&app, enemy), is_striking(&app, enemy));
+            holding += has_token(&app, enemy) as usize;
         }
-        most = most.max(approaching);
+        most = most.max(holding);
     }
 
     assert_eq!(most, 2);
@@ -164,7 +170,39 @@ fn enemy_retreats_after_hitting_the_player() {
         player::MAX_HEALTH - values().damage
     );
     assert!(is_retreating(&app, enemy), "{:?}", state(&app, enemy));
-    assert!(!has_token(&app, enemy));
+    assert!(!is_striking(&app, enemy));
+}
+
+#[test]
+fn token_is_given_back_its_time_after_the_approach_began() {
+    let mut app = app(1);
+    spawn_idle_player(&mut app);
+    let enemies = spawn_swarm(&mut app, 2);
+
+    // frames at which each enemy started approaching
+    let mut starts = vec![vec![]; enemies.len()];
+    for frame in 0..64 * 6 {
+        let before: Vec<_> = enemies.iter().map(|&e| is_approaching(&app, e)).collect();
+        app.update();
+        for (i, &enemy) in enemies.iter().enumerate() {
+            if is_approaching(&app, enemy) && !before[i] {
+                starts[i].push(frame);
+            }
+        }
+    }
+
+    let mut all: Vec<_> = starts.concat();
+    all.sort();
+    assert!(all.len() >= 2, "approaches at frames {all:?}");
+    let token_time = (values().token_time * 64.) as i32;
+    for pair in all.windows(2) {
+        let gap = pair[1] - pair[0];
+        // the next approach starts in the frame after the token is given back
+        assert!(
+            (gap - token_time).abs() <= 2,
+            "approaches at frames {all:?}, {gap} frames apart"
+        );
+    }
 }
 
 #[test]
@@ -350,10 +388,14 @@ fn time_to_death(count: usize) -> f32 {
 fn time_to_death_hardly_depends_on_the_number_of_enemies() {
     let five = time_to_death(5);
     let eight = time_to_death(8);
-    // about 11 s for both; the concept aims at 20–30 s, which needs tokens to be held longer
-    // (see `TODO.md`)
+    for time in [five, eight] {
+        assert!(
+            (20. ..=30.).contains(&time),
+            "five enemies: {five:.1} s, eight: {eight:.1} s"
+        );
+    }
     assert!(
-        (five - eight).abs() < five * 0.15,
+        (five - eight).abs() < five * 0.1,
         "five enemies: {five:.1} s, eight: {eight:.1} s"
     );
 }

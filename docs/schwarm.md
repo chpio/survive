@@ -20,11 +20,11 @@ Ein Zustandsautomat pro Gegner, als Komponente `SwarmState`. Jeder Zustand setzt
 `DesiredVelocity`, die kraftbasierte Bewegung sorgt für Abbremsen und Umdrehen.
 
 - **`Circle { since }`:** Startzustand nach dem Aufwachen. Der Gegner umkreist den Spieler im
-  Kreisabstand und wartet auf ein Angriffs-Token.
+  Kreisabstand und wartet auf ein Angriffs-Token, sobald er sein letztes zurückgegeben hat.
 - **`Approach`:** Mit Token läuft er per Flowfield auf den Spieler zu, schneller als normal.
-- **`Strike`:** Bei Kontakt ein Treffer, danach sofort `Retreat`. Kein eigener Zustand: Das Token
-  erlaubt den Angriff, `combat` trifft wie bei allen Gegnern, sobald der Spieler in Reichweite ist,
-  und meldet den Treffer (`combat::Hit`).
+- **`Strike`:** Bei Kontakt ein Treffer, danach sofort `Retreat`. Kein eigener Zustand: Im Anlauf
+  ist der Gegner `combat::Striking`, `combat` trifft dann wie bei allen Gegnern, sobald der Spieler
+  in Reichweite ist, und meldet den Treffer (`combat::Hit`).
 - **`Retreat { target, timer, stuck }`:** Er läuft zu einem Rückzugspunkt (siehe unten). Danach geht es
   zurück in `Circle`.
 
@@ -37,7 +37,11 @@ Ein Zustandsautomat pro Gegner, als Komponente `SwarmState`. Jeder Zustand setzt
 - `Strike` → `Retreat`: immer.
 - `Retreat` → `Circle`: Timer abgelaufen, Ziel erreicht oder festgefahren.
 
-Das Token wird beim Wechsel nach `Retreat` zurückgegeben, egal aus welchem Grund.
+Das Token wird erst `token_time` nach Beginn des Anlaufs zurückgegeben, egal was der Gegner bis
+dahin tut. Wird es früher frei, etwa beim Wechsel nach `Retreat`, wäre es nach dem kurzen Anlauf
+(etwa 0,3 s) schon wieder frei: Mit genug kreisenden Gegnern käme so mehr als ein Treffer pro
+Token alle paar Sekunden, und der Schaden pro Sekunde wüchse doch mit der Zahl der Gegner. So
+erlaubt jedes Token höchstens einen Treffer pro `token_time`.
 
 ## Rückzug
 
@@ -85,13 +89,15 @@ In einer RON-Datei unter `assets/` mit Hot-Reload, wie `items.ron`:
 - Schaden pro Treffer: 4 % der maximalen Lebenspunkte
 - Anlauf: 1,5-fache Normalgeschwindigkeit
 - `APPROACH_TIMEOUT`: 2 s
+- `token_time`: 2 s
 - Rückzug: 1,0–2,0 s
 - Drehung des Rückzugspunkts: 90–150°
 - Kreisabstand: 30–40 px
 - `MAX_TOKENS`: 2
 
-Grobe Rechnung: Mit zwei Tokens und etwa 2 s pro Zyklus kommt ungefähr ein Treffer pro Sekunde. Bei
-4 % pro Treffer überlebt ein untätiger Spieler etwa 25 s, egal ob drei oder acht Gegner da sind.
+Rechnung: Mit zwei Tokens und je 2 s pro Token kommt höchstens ein Treffer pro Sekunde. Bei 4 % pro
+Treffer überlebt ein untätiger Spieler 25 s, egal ob zwei oder acht Gegner da sind (so gemessen;
+ein einzelner Gegner braucht 49 s, da sein Zyklus länger ist als `token_time`).
 
 ## Zusammenspiel
 
@@ -125,8 +131,10 @@ Das kommt in ein eigenes Konzept. Gemeinsam ist beiden nur die Ressource `Attack
   `DesiredVelocity`. `move_towards_player` lässt Schwarm-Gegner aus; die Trennung teilen sich beide
   über `enemy::Crowd`.
 - `combat::tokens`: `AttackTokens` (Obergrenze), `AttackToken` als Komponente am Halter, so gibt
-  ein despawnter oder sterbender Gegner es von selbst zurück. Einheiten mit `NeedsToken` (alle
-  `Swarm`) greifen nur mit Token an. Wer ein freies Token bekommt, entscheidet die Gegnerart.
+  ein despawnter oder sterbender Gegner es von selbst zurück. Wer ein freies Token bekommt und wann
+  er es zurückgibt, entscheidet die Gegnerart; beim Schwarm hält `swarm::TokenHold` die Zeit.
+- `combat::Restrained` (alle `Swarm`): Solche Einheiten greifen nur an, solange sie
+  `combat::Striking` sind, beim Schwarm während des Anlaufs.
 - `combat::Hit` meldet jeden Treffer mit Angreifer und Ziel. Ein Treffer in `Approach`, eigener oder
   des Spielers, beendet den Anlauf.
 - `assets/swarm.ron` (`SwarmValues`, hot-reloaded über `swarm::values`), das auch `AttackTokens`
@@ -135,23 +143,16 @@ Das kommt in ein eigenes Konzept. Gemeinsam ist beiden nur die Ressource `Attack
 ## Tests
 
 - Zustandswechsel: `Circle` → `Approach` nur mit Token, `Strike` → `Retreat` immer.
-- Tokens: Nie mehr als `MAX_TOKENS` Gegner gleichzeitig in `Approach`. Ein sterbender, schlafender
-  oder despawnter Gegner gibt sein Token zurück.
+- Tokens: Nie mehr als `MAX_TOKENS` gleichzeitig vergeben, nur mit Token in `Approach`. Ein Token
+  wird `token_time` nach Beginn des Anlaufs frei. Ein schlafender oder despawnter Gegner gibt sein
+  Token zurück.
 - Rückzugspunkt in einer blockierten Zelle: Es wird ein freier gewählt.
 - Festgefahren im Rückzug: Gegner wechselt nach `Circle`.
-- Zeit bis zum Tod: Fünf Schwarm-Gegner gegen einen untätigen Spieler, headless. Die Zeit ändert
-  sich mit acht Gegnern kaum. Den Zielbereich (20–30 s) erreicht sie noch nicht, siehe „Token zu
-  früh frei“.
+- Zeit bis zum Tod: Fünf Schwarm-Gegner gegen einen untätigen Spieler, headless. Die Zeit liegt im
+  Zielbereich (20–30 s) und ändert sich mit acht Gegnern kaum.
 
 ## Offen
 
-- **Token zu früh frei:** Ein Gegner hält sein Token nur während des Anlaufs (etwa 0,5 s). Mit
-  genug Gegnern im Kreis kommen so bis zu `MAX_TOKENS` / 0,5 s Treffer pro Sekunde, bei acht
-  Gegnern also eher vier als einer, und die Rechnung unter „Werte“ geht nicht auf. Abhilfe: Ein
-  Token wird erst eine feste Zeit nach Beginn des Anlaufs wieder frei (etwa 2 s, als Wert in der
-  RON-Datei), oder erst am Ende von `Retreat`. Gemessen (Test „Zeit bis zum Tod“): Ein untätiger
-  Spieler stirbt gegen zwei Gegner nach etwa 20 s, gegen drei nach 14 s, ab fünf nach etwa 11 s
-  (rund 2,3 Treffer pro Sekunde).
 - **Angriff des Spielers:** Der Spieler schlägt noch automatisch alle 0,5 s zu und reicht weiter
   als ein kleiner Gegner, trifft einen anlaufenden Gegner also fast immer zuerst und bricht den
   Anlauf ab. „Gutes Timing“ gibt es erst mit einem Angriff per Eingabe.

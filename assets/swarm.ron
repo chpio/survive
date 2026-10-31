@@ -8,6 +8,8 @@
     retreat_speed: 1.,
     // in seconds
     approach_timeout: 2.,
+    // from the start of an approach until the token is given back
+    token_time: 2.,
     retreat_time: (1., 2.),
     // degrees from the direction of the attack, to either side
     retreat_angle: (90., 150.),

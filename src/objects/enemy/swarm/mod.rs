@@ -1,7 +1,8 @@
 //! Swarm enemies (see `docs/schwarm.md`): small enemies circle the player and wait for an
 //! [`AttackToken`], then run at the player, hit once and retreat to the side, so the next attack
-//! comes from another direction. Since only [`AttackTokens::max`] of them attack at once, the
-//! damage per second doesn't grow with their number. Each state only sets the
+//! comes from another direction. A token is only given back [`SwarmValues::token_time`] after the
+//! approach began, so each token allows one hit per that time at most, and the damage per second
+//! doesn't grow with the number of enemies. Each state only sets the
 //! [`DesiredVelocity`]; the force-based movement brakes and turns. The values come from
 //! `assets/swarm.ron` ([`values`]).
 
@@ -10,8 +11,8 @@ pub mod values;
 use super::{Asleep, Crowd, Enemy, Heading, MOVE_SPEED, Separation, towards_player};
 use crate::{
     combat::{
-        Attack, Hit,
-        tokens::{AttackToken, AttackTokens, NeedsToken},
+        Attack, Hit, Restrained, Striking,
+        tokens::{AttackToken, AttackTokens},
     },
     flowfield::FlowField,
     movement::DesiredVelocity,
@@ -57,6 +58,9 @@ pub struct SwarmValues {
     pub retreat_speed: f32,
     /// Seconds after which an enemy that didn't reach the player gives up
     pub approach_timeout: f32,
+    /// Seconds from the start of an approach until the enemy gives its token back, whatever it
+    /// does by then
+    pub token_time: f32,
     /// Seconds a retreat lasts at most
     pub retreat_time: (f32, f32),
     /// Degrees the retreat point is turned from the direction of the attack, to either side
@@ -85,7 +89,7 @@ impl SwarmRng {
 /// An enemy that attacks as part of a swarm, given to small enemies when they spawn. It gets a
 /// [`SwarmState`] while it is awake.
 #[derive(Component, Default, Clone, Copy, PartialEq, Debug)]
-#[require(NeedsToken)]
+#[require(Restrained)]
 pub struct Swarm;
 
 /// How an awake swarm enemy circles the player, picked when it wakes up.
@@ -97,12 +101,17 @@ pub struct Orbit {
     pub turn: f32,
 }
 
-/// What an awake swarm enemy is doing. It holds an [`AttackToken`] exactly while it approaches.
-/// A hit isn't a state of its own: the enemy attacks the player once it is in reach while
-/// approaching (the token lets it), and retreats right after.
+/// When a swarm enemy gives its [`AttackToken`] back, held along with it.
+#[derive(Component, Clone, PartialEq, Debug)]
+pub struct TokenHold(pub Timer);
+
+/// What an awake swarm enemy is doing. It gets an [`AttackToken`] when it starts approaching and
+/// keeps it for [`SwarmValues::token_time`], also while retreating or circling afterwards. A hit
+/// isn't a state of its own: the enemy is [`Striking`] while approaching, so it attacks the
+/// player once it is in reach, and retreats right after.
 #[derive(Component, Clone, PartialEq, Debug)]
 pub enum SwarmState {
-    /// Circles the player at its [`Orbit`] and waits for a token.
+    /// Circles the player at its [`Orbit`] and waits for a token, once it gave its last one back.
     Circle {
         /// Elapsed game time when it started circling, so the one waiting longest goes first
         since: Duration,
@@ -144,7 +153,7 @@ pub fn start_and_stop(
     for entity in &asleep {
         commands
             .entity(entity)
-            .try_remove::<(SwarmState, Orbit, AttackToken)>();
+            .try_remove::<(SwarmState, Orbit, Striking, AttackToken, TokenHold)>();
     }
 }
 
@@ -179,7 +188,8 @@ pub fn retreat_target(
 }
 
 /// Switches the states of the swarm enemies: hits and timeouts end an approach, the end of a
-/// retreat leads back to circling, and free tokens go to the enemies circling longest.
+/// retreat leads back to circling, tokens are given back after their time, and free ones go to
+/// the enemies circling longest.
 pub fn update_states(
     mut commands: Commands,
     time: Res<Time>,
@@ -199,6 +209,7 @@ pub fn update_states(
         &Orbit,
         &mut Attack,
         &mut SwarmState,
+        Option<&mut TokenHold>,
     )>,
 ) {
     let player = player.translation.xy();
@@ -210,10 +221,28 @@ pub fn update_states(
     let mut held = held.iter().count();
     let mut waiting = vec![];
 
-    for (entity, enemy, transform, velocity, desired, orbit, _, mut state) in &mut enemies {
+    for (entity, enemy, transform, velocity, desired, orbit, _, mut state, hold) in &mut enemies {
         let position = transform.translation.xy();
+        let holds_token = match hold {
+            Some(mut hold) => {
+                hold.0.tick(time.delta());
+                let given_back = hold.0.is_finished();
+                if given_back {
+                    commands
+                        .entity(entity)
+                        .try_remove::<(AttackToken, TokenHold)>();
+                    held = held.saturating_sub(1);
+                }
+                !given_back
+            }
+            None => false,
+        };
         match &mut *state {
-            SwarmState::Circle { since } => waiting.push((*since, entity)),
+            SwarmState::Circle { since } => {
+                if !holds_token {
+                    waiting.push((*since, entity));
+                }
+            }
             SwarmState::Approach { timer } => {
                 timer.tick(time.delta());
                 if hit.contains(&entity) || timer.is_finished() {
@@ -230,8 +259,7 @@ pub fn update_states(
                         timer: Timer::from_seconds(rng.range(values.retreat_time), TimerMode::Once),
                         stuck: Duration::ZERO,
                     };
-                    commands.entity(entity).try_remove::<AttackToken>();
-                    held = held.saturating_sub(1);
+                    commands.entity(entity).try_remove::<Striking>();
                 }
             }
             SwarmState::Retreat {
@@ -259,7 +287,7 @@ pub fn update_states(
 
     waiting.sort();
     for (_, entity) in waiting.into_iter().take(tokens.free(held)) {
-        let Ok((.., mut attack, mut state)) = enemies.get_mut(entity) else {
+        let Ok((.., mut attack, mut state, _)) = enemies.get_mut(entity) else {
             continue;
         };
         // the values may have changed since its last attack
@@ -267,7 +295,11 @@ pub fn update_states(
         *state = SwarmState::Approach {
             timer: Timer::from_seconds(values.approach_timeout, TimerMode::Once),
         };
-        commands.entity(entity).try_insert(AttackToken);
+        commands.entity(entity).try_insert((
+            AttackToken,
+            TokenHold(Timer::from_seconds(values.token_time, TimerMode::Once)),
+            Striking,
+        ));
     }
 }
 

@@ -28,16 +28,10 @@
     and the deactivation radius can stand on an unloaded map and are despawned instead of falling
     asleep, which is fine for now.
   - Item effects in `assets/items.ron` (healing of the potion and the apple).
-  - Swarm enemies in `assets/swarm.ron` (`docs/schwarm.md`): damage, speeds, timings and the
-    number of tokens. The circle distance was halved to 30–40 px, since at 60–80 px the swarm
-    stayed too far away; check how close it should circle once enemies have sprites.
-
-- Swarm enemies (`docs/schwarm.md`): release an attack token only a fixed time after the approach
-  started (about 2 s) or at the end of the retreat, instead of when the retreat starts. Otherwise
-  enemies hold a token only for the approach (about 0.5 s), and with many enemies circling the
-  damage per second grows with their number after all (see „Token zu früh frei“). An idle player
-  now dies after about 11 s against five or more enemies instead of 20–30 s; once fixed, let
-  `time_to_death_hardly_depends_on_the_number_of_enemies` check that range too.
+  - Swarm enemies in `assets/swarm.ron` (`docs/schwarm.md`): damage, speeds, timings, the
+    number of tokens and how long they are held (`token_time`). The circle distance was halved to
+    30–40 px, since at 60–80 px the swarm stayed too far away; check how close it should circle
+    once enemies have sprites.
 
 ## Input
 
