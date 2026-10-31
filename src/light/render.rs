@@ -6,7 +6,7 @@
 //! plugin also grades the camera's colors ([`super::grading`]).
 
 use super::{DayNight, LightValues, grading, running, shadow::SunShadow};
-use crate::sight::render::{BLUR, SightMask, mask_area, mask_image};
+use crate::sight::render::{SightMask, mask_area, mask_image};
 use bevy::{
     prelude::*,
     render::render_resource::AsBindGroup,
@@ -56,9 +56,6 @@ pub struct LightMaterial {
     /// See [`SightMask::area`]
     #[uniform(0)]
     sight_area: Vec4,
-    /// See [`BLUR`]
-    #[uniform(0)]
-    sight_blur: f32,
     /// See [`SunShadow`], one pixel per cell
     #[texture(1)]
     #[sampler(2)]
@@ -106,7 +103,6 @@ fn spawn_layer(
             lightmap_area: mask_area(Rect::new(0., 0., 1., 1.)),
             lightmap: lightmap.image.clone(),
             sight_area: sight_mask.area(),
-            sight_blur: BLUR,
             sight_mask: sight_mask.image().clone(),
         })),
         Transform::from_xyz(0., 0., LIGHT_Z),

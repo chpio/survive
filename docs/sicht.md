@@ -51,8 +51,12 @@ lohnen weder Speicher noch Spielstand dafür. Kommt eine Karte dazu, lässt er s
 ## Darstellung
 
 - Die Maske wird in eine Textur geschrieben (ein Pixel pro Zelle, `R8Unorm`, lineare Filterung).
-- Der Shader liest sie an 16 Punkten in einer Kreisscheibe mit dem Radius `BLUR` (6 px) und mittelt
-  sie, sodass Schattenkanten und angeschnittene Gegner weich auslaufen.
+- Vorher wird sie auf der CPU verwischt (`sight::render::blur`), sodass Schattenkanten und
+  angeschnittene Gegner weich auslaufen: Jede Zelle bekommt den Mittelwert der linear gefilterten
+  Maske an 16 Punkten in einer Kreisscheibe mit dem Radius `BLUR` (6 px) um ihre Mitte, als
+  fester Kern über 5×5 Zellen. Der Shader liest die Textur dann einmal pro Pixel. Anfangs las er
+  die 16 Punkte pro Pixel selbst; das kostete bei 4K etwa 1,8 ms pro Ebene, die die Maske liest
+  (Sichtabdunklung und Licht-Ebene), und sah nicht anders aus (höchstens 5/255 Unterschied).
 - Das Material `SightMaterial` (eigener WESL-Shader) rechnet aus der Weltposition eines Pixels die
   Stelle in der Maske aus:
   - **Gegner**: Körper und Punkt verwenden es statt `ColorMaterial`. Die Deckkraft wird mit der

@@ -4,7 +4,7 @@
 //! can't be masked, so [`HiddenOutsideSight`] hides them as a whole: outside the sight, only the
 //! map is drawn.
 
-use super::{Sight, WINDOW_SIZE};
+use super::{CELL_SIZE, Sight, WINDOW_SIZE};
 use bevy::{
     asset::RenderAssetUsages,
     camera::visibility::VisibilitySystems,
@@ -31,6 +31,68 @@ const DARKNESS_SIZE: f32 = 8192.;
 /// sight are soft.
 pub const BLUR: f32 = 6.;
 
+/// Samples of the blur, spread evenly over a disk of [`BLUR`] (a Vogel spiral).
+const BLUR_SAMPLES: usize = 16;
+
+/// Cells the blur reaches from a cell, see [`blur_kernel`].
+const KERNEL_RADIUS: i32 = (BLUR / CELL_SIZE) as i32 + 1;
+const KERNEL_SIZE: usize = 2 * KERNEL_RADIUS as usize + 1;
+
+/// Weight of each cell around a cell in [`blur`], row by row from the bottom: the average of the
+/// linearly filtered mask at [`BLUR_SAMPLES`] points on a disk of [`BLUR`] around the cell's
+/// center. It used to be sampled like that per pixel, which cost about 1.8 ms per frame at 4K for
+/// each layer reading the mask; blurred once per cell, the texture's linear filtering in between
+/// looks the same.
+fn blur_kernel() -> [[f32; KERNEL_SIZE]; KERNEL_SIZE] {
+    const GOLDEN_ANGLE: f32 = 2.399_963;
+    let mut kernel = [[0.; KERNEL_SIZE]; KERNEL_SIZE];
+    for i in 0..BLUR_SAMPLES {
+        let radius = BLUR * ((i as f32 + 0.5) / BLUR_SAMPLES as f32).sqrt();
+        let angle = i as f32 * GOLDEN_ANGLE;
+        // in cells from the cell's center, where its texel lies
+        let offset = Vec2::from_angle(angle) * radius / CELL_SIZE;
+        let low = offset.floor();
+        let fraction = offset - low;
+        let low = low.as_ivec2() + KERNEL_RADIUS;
+        for (dx, dy, weight) in [
+            (0, 0, (1. - fraction.x) * (1. - fraction.y)),
+            (1, 0, fraction.x * (1. - fraction.y)),
+            (0, 1, (1. - fraction.x) * fraction.y),
+            (1, 1, fraction.x * fraction.y),
+        ] {
+            kernel[(low.y + dy) as usize][(low.x + dx) as usize] += weight / BLUR_SAMPLES as f32;
+        }
+    }
+    kernel
+}
+
+/// The mask of `size` cells (row by row from the bottom) blurred over [`BLUR`], for its texture.
+/// Cells beyond the mask count as not visible.
+pub fn blur(size: UVec2, values: &[u8]) -> Vec<u8> {
+    let kernel = blur_kernel();
+    let size = size.as_ivec2();
+    let mut blurred = vec![0; values.len()];
+    for y in 0..size.y {
+        for x in 0..size.x {
+            let mut sum = 0.;
+            for (ky, row) in kernel.iter().enumerate() {
+                let sy = y + ky as i32 - KERNEL_RADIUS;
+                if !(0..size.y).contains(&sy) {
+                    continue;
+                }
+                for (kx, weight) in row.iter().enumerate() {
+                    let sx = x + kx as i32 - KERNEL_RADIUS;
+                    if (0..size.x).contains(&sx) {
+                        sum += weight * values[(sy * size.x + sx) as usize] as f32;
+                    }
+                }
+            }
+            blurred[(y * size.x + x) as usize] = sum.round() as u8;
+        }
+    }
+    blurred
+}
+
 /// Hidden while [`Sight::shows`] says the player doesn't see its position, for whatever isn't
 /// masked by [`SightMaterial`]. Its children are hidden along with it.
 #[derive(Component, Clone, Copy, Default, Debug)]
@@ -49,7 +111,7 @@ fn hide_outside_sight(
     }
 }
 
-/// Texture of the mask, one pixel per cell, filtered linearly so edges are soft.
+/// Texture of the mask, one pixel per cell, [`blur`]red and filtered linearly so edges are soft.
 #[derive(Resource)]
 pub struct SightMask {
     image: Handle<Image>,
@@ -123,9 +185,6 @@ pub struct SightMaterial {
     /// 0 to show the color where the mask is visible, 1 where it isn't
     #[uniform(0)]
     invert: f32,
-    /// See [`BLUR`]
-    #[uniform(0)]
-    blur: f32,
     #[texture(1)]
     #[sampler(2)]
     mask: Handle<Image>,
@@ -139,7 +198,6 @@ impl SightMaterial {
             // updated whenever the mask moves
             mask_area: mask.area,
             invert: 0.,
-            blur: BLUR,
             mask: mask.image.clone(),
         }
     }
@@ -197,7 +255,8 @@ fn write_mask(
         return;
     }
     if let Some(mut image) = images.get_mut(&mask.image) {
-        *image = mask_image(UVec2::splat(WINDOW_SIZE as u32), sight.mask());
+        let size = UVec2::splat(WINDOW_SIZE as u32);
+        *image = mask_image(size, &blur(size, sight.mask()));
     }
 
     let area = sight.window_rect();

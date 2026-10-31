@@ -74,9 +74,10 @@ fürs Ausbalancieren.
   (1 − Dunkelheit der Nacht) × (1 − Schatten der Sonne) + Licht aus der Lightmap. Die Ebene ist
   schwarz mit der Deckkraft 1 − Helligkeit. Anfangs ist die Lightmap leer (ein dunkles Pixel).
 - Tagsüber zeigt sie die Schatten, nachts die Dunkelheit. Unsichtbar ist sie nur, wenn es weder
-  das eine noch das andere gibt (etwa mit `shadow_strength` 0 am Tag).
+  das eine noch das andere gibt (etwa mit `shadow_strength` 0 am Tag). Ohne Schatten liest der
+  Shader weder die Schattenmaske noch die Sicht.
 - Die Sichtabdunklung bleibt unverändert darunter. Die Schatten der Sonne zeigt die Licht-Ebene
-  nur in der Sicht: Sie liest die Sichtmaske, mit derselben Unschärfe wie die Sichtabdunklung
+  nur in der Sicht: Sie liest die Sichtmaske, die schon verwischt ist wie für die Sichtabdunklung
   (gemeinsamer Shader-Teil `assets/shaders/sight_mask.wesl`), und gewichtet den Schatten mit der
   Sichtbarkeit. Sonst lägen außerhalb der Sicht beide Abdunklungen übereinander, was seltsam
   aussah. Die Nacht dunkelt weiterhin die ganze Welt ab.

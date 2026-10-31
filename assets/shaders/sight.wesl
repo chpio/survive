@@ -17,8 +17,6 @@ struct SightMaterial {
     mask_area: vec4<f32>,
     // 0 to show the color where the mask is visible, 1 where it isn't
     invert: f32,
-    // radius in world space over which the mask is blurred
-    blur: f32,
 };
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> material: SightMaterial;
@@ -31,7 +29,6 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         mask,
         mask_sampler,
         material.mask_area,
-        material.blur,
         in.world_position.xy,
     );
     let alpha = mix(visibility, 1.0 - visibility, material.invert);

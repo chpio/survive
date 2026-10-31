@@ -15,8 +15,6 @@ struct LightMaterial {
     lightmap_area: vec4<f32>,
     // bottom-left corner (xy) and size (zw) of the sight mask in world space
     sight_area: vec4<f32>,
-    // radius in world space over which the sight mask is blurred
-    sight_blur: f32,
 };
 
 // distance in px of the samples of the shadow mask around each pixel, which soften the edges of
@@ -58,20 +56,24 @@ fn light(world_position: vec2<f32>) -> f32 {
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let position = in.world_position.xy;
     let lit = light(position);
-    let shade = (shadow(position + vec2(-SOFTNESS, -SOFTNESS))
-        + shadow(position + vec2(SOFTNESS, -SOFTNESS))
-        + shadow(position + vec2(-SOFTNESS, SOFTNESS))
-        + shadow(position + vec2(SOFTNESS, SOFTNESS))) / 4.0;
-    // outside the sight, the darkening of the sight takes the place of the shadows, blurred the
-    // same way
-    let seen = sight_mask::visibility(
-        sight_mask_texture,
-        sight_sampler,
-        material.sight_area,
-        material.sight_blur,
-        position,
-    );
+    // without sun, e.g. at night or with the shadows turned off, the masks aren't read at all (the
+    // branch is the same for all pixels, so the samples in it are allowed)
+    var shaded = 0.0;
+    if material.shadow > 0.0 {
+        let shade = (shadow(position + vec2(-SOFTNESS, -SOFTNESS))
+            + shadow(position + vec2(SOFTNESS, -SOFTNESS))
+            + shadow(position + vec2(-SOFTNESS, SOFTNESS))
+            + shadow(position + vec2(SOFTNESS, SOFTNESS))) / 4.0;
+        // outside the sight, the darkening of the sight takes the place of the shadows
+        let seen = sight_mask::visibility(
+            sight_mask_texture,
+            sight_sampler,
+            material.sight_area,
+            position,
+        );
+        shaded = material.shadow * shade * seen;
+    }
 
-    let brightness = (1.0 - material.darkness) * (1.0 - material.shadow * shade * seen) + lit;
+    let brightness = (1.0 - material.darkness) * (1.0 - shaded) + lit;
     return vec4(0.0, 0.0, 0.0, clamp(1.0 - brightness, 0.0, 1.0));
 }
