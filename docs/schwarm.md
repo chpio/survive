@@ -92,7 +92,7 @@ In einer RON-Datei unter `assets/` mit Hot-Reload, wie `items.ron`:
 - `token_time`: 2 s
 - Rückzug: 1,0–2,0 s
 - Drehung des Rückzugspunkts: 90–150°
-- Kreisabstand: 30–40 px
+- Kreisabstand: 15–20 px
 - `MAX_TOKENS`: 2
 
 Rechnung: Mit zwei Tokens und je 2 s pro Token kommt höchstens ein Treffer pro Sekunde. Bei 4 % pro

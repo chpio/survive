@@ -14,7 +14,7 @@
     // degrees from the direction of the attack, to either side
     retreat_angle: (90., 150.),
     // px from the player, per enemy
-    circle_distance: (30., 40.),
+    circle_distance: (15., 20.),
     // how many enemies attack at once
     max_tokens: 2,
 )
