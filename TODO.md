@@ -50,14 +50,12 @@
 - Build release executables in CI on `v*` tags and attach them to the release: Linux natively,
   Windows cross-compiled with `x86_64-pc-windows-gnu` (MinGW and the target added to the CI image).
   Before that:
-  - Move `dynamic_linking` and `file_watcher` into a `dev` feature (with a cargo alias so
-    `cargo run` stays the same), since a dynamically linked executable can't be shipped.
   - Embed all assets in release builds, so the executable is a single file: a `build.rs` lists the
     files in `assets/` as `include_bytes!`, and outside the `dev` feature they replace the default
     asset source through Bevy's `MemoryAssetReader` (`bevy_embedded_assets` doesn't support Bevy
     0.20 yet). Check that `bevy_ecs_tiled` still finds the tileset and its image.
   - Hide the console window on Windows with `#![windows_subsystem = "windows"]` in release builds.
-  - Try the Windows build locally first.
+  - Run the Windows build on Windows (or under Wine); it cross-compiles and links, see CLAUDE.md.
 
 ## Code
 

@@ -26,6 +26,12 @@ type_complexity = "allow"
 # Bevy systems take everything they access as parameters
 too_many_arguments = "allow"
 
+[features]
+default = ["dev"]
+# faster rebuilds and hot-reloaded assets; a shipped build turns it off with --no-default-features,
+# a dynamically linked executable can't be shipped
+dev = ["bevy/dynamic_linking", "bevy/file_watcher"]
+
 [dependencies]
 anyrender_vello = "0.15"
 avian2d = "0.8"
@@ -45,9 +51,6 @@ vello = { version = "0.11", default-features = false, features = ["wgpu"] }
 version = "0.20"
 default-features = false
 features = [
-    "dynamic_linking",
-    "file_watcher",
-
     # default features https://docs.rs/bevy/0.20.0/bevy/index.html#default-features
     "std",
     "async_executor",

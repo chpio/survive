@@ -23,7 +23,8 @@ Tests live in `tests/` (never inline) and run with `cargo test`; filter with `ca
 Build notes:
 - Bevy uses `default-features = false` with a hand-picked feature list in `Cargo.toml`. The commented-out lines mirror Bevy's default features. If a Bevy type or plugin is missing, the feature that provides it is probably commented out.
 - Gizmos (physics debug outlines, flow field arrows) need both `bevy_gizmos` and `bevy_gizmos_render`; without the latter they are recorded but never drawn.
-- The `dynamic_linking` feature is always on, including in release builds.
+- The default feature `dev` turns on Bevy's `dynamic_linking` and `file_watcher`, in release builds too. A build to ship turns it off with `--no-default-features`; a dynamically linked executable can't be shipped.
+- Windows builds cross-compile from Linux with MinGW (`mingw-w64-gcc` on Arch) and `rustup target add x86_64-pc-windows-gnu`: `cargo build --release --target x86_64-pc-windows-gnu --no-default-features`. The executable needs `assets/` next to it.
 - Dev builds use `opt-level = 1` for the crate and `3` for dependencies.
 
 Open work is collected in `TODO.md`; remove entries once they are done.
