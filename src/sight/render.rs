@@ -89,6 +89,17 @@ pub fn mask_area(rect: Rect) -> Vec4 {
     Vec4::new(rect.min.x, rect.min.y, rect.width(), rect.height())
 }
 
+impl SightMask {
+    pub fn image(&self) -> &Handle<Image> {
+        &self.image
+    }
+
+    /// Bottom-left corner (xy) and size (zw) of the area it covers in world space
+    pub fn area(&self) -> Vec4 {
+        self.area
+    }
+}
+
 impl FromWorld for SightMask {
     fn from_world(world: &mut World) -> Self {
         let size = UVec2::splat(WINDOW_SIZE as u32);

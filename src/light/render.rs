@@ -2,10 +2,10 @@
 //! the HUD) with its own [`LightMaterial`] (shader `assets/shaders/light.wesl`). It darkens by
 //! [`DayNight::darkness`] and the sun's shadows, from the [`SunShadow`] in a linearly filtered
 //! texture, and is lifted where the [`Lightmap`] is lit. The darkening outside the sight lies below
-//! it.
+//! it; the shadows are only drawn within the sight, so the two don't darken the same place.
 
 use super::{DayNight, LightValues, running, shadow::SunShadow};
-use crate::sight::render::{mask_area, mask_image};
+use crate::sight::render::{BLUR, SightMask, mask_area, mask_image};
 use bevy::{
     prelude::*,
     render::render_resource::AsBindGroup,
@@ -52,6 +52,12 @@ pub struct LightMaterial {
     /// Bottom-left corner (xy) and size (zw) of the lightmap in world space
     #[uniform(0)]
     lightmap_area: Vec4,
+    /// See [`SightMask::area`]
+    #[uniform(0)]
+    sight_area: Vec4,
+    /// See [`BLUR`]
+    #[uniform(0)]
+    sight_blur: f32,
     /// See [`SunShadow`], one pixel per cell
     #[texture(1)]
     #[sampler(2)]
@@ -59,6 +65,10 @@ pub struct LightMaterial {
     #[texture(3)]
     #[sampler(4)]
     lightmap: Handle<Image>,
+    /// Where the shadows are drawn, see [`SightMask`]
+    #[texture(5)]
+    #[sampler(6)]
+    sight_mask: Handle<Image>,
 }
 
 impl Material2d for LightMaterial {
@@ -77,6 +87,7 @@ struct LightLayer;
 fn spawn_layer(
     mut commands: Commands,
     lightmap: Res<Lightmap>,
+    sight_mask: Res<SightMask>,
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<LightMaterial>>,
@@ -93,6 +104,9 @@ fn spawn_layer(
             shadow_mask: images.add(mask_image(UVec2::ONE, &[0])),
             lightmap_area: mask_area(Rect::new(0., 0., 1., 1.)),
             lightmap: lightmap.image.clone(),
+            sight_area: sight_mask.area(),
+            sight_blur: BLUR,
+            sight_mask: sight_mask.image().clone(),
         })),
         Transform::from_xyz(0., 0., LIGHT_Z),
         // shown once there is a night or shadows to draw
@@ -148,6 +162,22 @@ fn write_shadow(
     material.shadow_area = mask_area(mask.rect().world_rect());
 }
 
+/// Passes the sight mask's area to the layer whenever it moved.
+fn write_sight_area(
+    sight_mask: Res<SightMask>,
+    layer: Single<&MeshMaterial2d<LightMaterial>, With<LightLayer>>,
+    mut materials: ResMut<Assets<LightMaterial>>,
+) {
+    if !sight_mask.is_changed() {
+        return;
+    }
+    if let Some(mut material) = materials.get_mut(*layer)
+        && material.sight_area != sight_mask.area()
+    {
+        material.sight_area = sight_mask.area();
+    }
+}
+
 /// Keeps the layer around the camera, wherever the player walks.
 fn follow_camera(
     camera: Single<&Transform, (With<Camera2d>, Without<LightLayer>)>,
@@ -156,7 +186,7 @@ fn follow_camera(
     layer.translation = camera.translation.xy().extend(LIGHT_Z);
 }
 
-/// Draws the light. Needs [`super::Plugin`].
+/// Draws the light. Needs [`super::Plugin`] and [`crate::sight::render::Plugin`].
 pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
@@ -167,7 +197,11 @@ impl bevy::app::Plugin for Plugin {
             .add_systems(Update, (update_light.run_if(running), write_shadow))
             .add_systems(
                 PostUpdate,
-                follow_camera.before(TransformSystems::Propagate),
+                (
+                    // after the sight wrote its mask in `Update`
+                    write_sight_area,
+                    follow_camera.before(TransformSystems::Propagate),
+                ),
             );
     }
 }

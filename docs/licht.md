@@ -75,7 +75,11 @@ fürs Ausbalancieren.
   schwarz mit der Deckkraft 1 − Helligkeit. Anfangs ist die Lightmap leer (ein dunkles Pixel).
 - Tagsüber zeigt sie die Schatten, nachts die Dunkelheit. Unsichtbar ist sie nur, wenn es weder
   das eine noch das andere gibt (etwa mit `shadow_strength` 0 am Tag).
-- Die Sichtabdunklung bleibt unverändert, beide Ebenen liegen übereinander.
+- Die Sichtabdunklung bleibt unverändert darunter. Die Schatten der Sonne zeigt die Licht-Ebene
+  nur in der Sicht: Sie liest die Sichtmaske, mit derselben Unschärfe wie die Sichtabdunklung
+  (gemeinsamer Shader-Teil `assets/shaders/sight_mask.wesl`), und gewichtet den Schatten mit der
+  Sichtbarkeit. Sonst lägen außerhalb der Sicht beide Abdunklungen übereinander, was seltsam
+  aussah. Die Nacht dunkelt weiterhin die ganze Welt ab.
 - Mesh-Picking stört die Ebene nicht, es berücksichtigt nur `Pickable`-Entities.
 
 ## Lichtquellen (später)
@@ -104,8 +108,9 @@ fürs Ausbalancieren.
 - Die Sonne ist ein gerichtetes Licht: Alle Schatten zeigen in dieselbe Richtung, ihre Länge hängt
   vom Sonnenstand und von der Höhe des Objekts ab. Das Licht zwischen Gebäuden ist alles, was
   nicht im Schatten liegt; berechnet werden nur die Schatten.
-- Die Licht-Ebene drückt die Helligkeit im Sonnenschatten (`shadow_strength`, 30 %). Da sie über
-  allem liegt, werden Spieler und Gegner im Schatten von selbst dunkler.
+- Die Licht-Ebene drückt die Helligkeit im Sonnenschatten (`shadow_strength`, 30 %), nur in der
+  Sicht (siehe Licht-Ebene). Da sie über allem liegt, werden Spieler und Gegner im Schatten von
+  selbst dunkler.
 - Höhenraster pro Karte auf den 4-px-Zellen (`light::shadow::Heights`, Höhe in px, höchstens 255),
   aus der Tiled-Property `height` an Objekt, Tile oder Ebene wie `blocks_sight`. Die Bäume haben
   24 px. `ShadowHeights` setzt die Raster der geladenen Karten im kleinsten Rechteck um sie
