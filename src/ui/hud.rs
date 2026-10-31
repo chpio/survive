@@ -6,7 +6,7 @@ use crate::{
     perf::Averages,
     settings::Settings,
 };
-use bevy::ecs::entity::Entity;
+use bevy::{ecs::entity::Entity, render::view::Msaa};
 use dioxus::{html::input_data::MouseButton, prelude::*};
 use std::{sync::mpsc, time::Duration};
 
@@ -599,6 +599,14 @@ fn item_details(cell: Cell, send: Callback<Action>) -> Element {
 fn menu(settings: Settings, send: Callback<Action>) -> Element {
     let zoom = format!("{:.0} %", settings.zoom * 100.);
     let ui_scale = format!("{:.0} %", settings.ui_scale * 100.);
+    let fps_limit = match settings.fps_limit {
+        Some(limit) => format!("{limit} FPS"),
+        None => "aus".to_string(),
+    };
+    let msaa = match settings.msaa() {
+        Msaa::Off => "aus".to_string(),
+        msaa => format!("{}×", msaa.samples()),
+    };
     let change = move |settings| send(Action::ChangeSettings(settings));
 
     rsx! {
@@ -636,6 +644,39 @@ fn menu(settings: Settings, send: Callback<Action>) -> Element {
                         span { "{ui_scale}" }
                         button { onclick: move |_| change(Settings { ui_scale: settings.next_ui_scale(true), ..settings }), "+" }
                     }
+                }
+                span { class: "section", "Grafik" }
+                div { class: "setting",
+                    span { "FPS-Limit" }
+                    div { class: "stepper",
+                        button { onclick: move |_| change(Settings { fps_limit: settings.next_fps_limit(false), ..settings }), "−" }
+                        span { "{fps_limit}" }
+                        button { onclick: move |_| change(Settings { fps_limit: settings.next_fps_limit(true), ..settings }), "+" }
+                    }
+                }
+                div { class: "setting",
+                    span { "Kantenglättung" }
+                    div { class: "stepper",
+                        button { onclick: move |_| change(Settings { msaa: settings.next_msaa(false), ..settings }), "−" }
+                        span { "{msaa}" }
+                        button { onclick: move |_| change(Settings { msaa: settings.next_msaa(true), ..settings }), "+" }
+                    }
+                }
+                label {
+                    input {
+                        r#type: "checkbox",
+                        checked: settings.color_grading,
+                        oninput: move |event| change(Settings { color_grading: event.checked(), ..settings }),
+                    }
+                    "Farbstimmung (Color Grading)"
+                }
+                label {
+                    input {
+                        r#type: "checkbox",
+                        checked: settings.shadows,
+                        oninput: move |event| change(Settings { shadows: event.checked(), ..settings }),
+                    }
+                    "Schatten"
                 }
             }
         }

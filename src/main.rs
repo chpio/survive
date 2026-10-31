@@ -93,9 +93,7 @@ fn startup(
 ) {
     commands.spawn((
         Camera2d,
-        // so the tonemapping pass grades the whole image, the tilemap's shader doesn't grade
-        // (see `light::grading`)
-        bevy::camera::Hdr,
+        // set by `light::grading`; `settings` gives the camera `Hdr` for it and sets its `Msaa`
         bevy::render::view::ColorGrading::default(),
         // the only camera mesh picking uses (see `items::render::Plugin`)
         bevy::picking::mesh_picking::MeshPickingCamera,

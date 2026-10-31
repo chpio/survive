@@ -8,10 +8,6 @@
   `distance % 15` makes push and pop O(1), without the heap's sifting and mispredicted branches.
   The distances stay the same.
 
-- Optional FPS limit in the settings, e.g. as a power saving mode. `bevy_framepace` isn't available
-  for Bevy 0.20, so build it like it does: sleep at the end of the render world's frame until the
-  next frame is due.
-
 ## Gameplay
 
 - Balance the game's values together, once enemies have real sprites (their size on screen

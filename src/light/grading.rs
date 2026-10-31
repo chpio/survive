@@ -1,10 +1,11 @@
 //! Color grading by the time of day: `assets/light.ron` holds a [`Grading`] per phase
-//! ([`Gradings`]), and [`DayNight::grading`] blends them by the clock. The camera renders in HDR,
-//! so Bevy's tonemapping pass grades the whole image at once (the tilemap's shader doesn't grade
-//! by itself); the HUD is drawn after it and keeps its colors.
+//! ([`Gradings`]), and [`DayNight::grading`] blends them by the clock. With the setting on, the
+//! camera renders in HDR, so Bevy's tonemapping pass grades the whole image at once (the tilemap's
+//! shader doesn't grade by itself); the HUD is drawn after it and keeps its colors.
 
 use super::{DayNight, LightValues, Phase};
 use bevy::{
+    camera::Hdr,
     prelude::*,
     render::view::{ColorGrading, ColorGradingGlobal, ColorGradingSection},
 };
@@ -101,14 +102,18 @@ impl DayNight {
     }
 }
 
-/// Grades the camera's colors by the time of day.
+/// Grades the camera's colors by the time of day, while it renders in HDR (see
+/// `Settings::color_grading`). Without HDR, only some shaders would grade their colors, the
+/// tilemap's not.
 pub(super) fn grade_colors(
     day_night: Res<DayNight>,
     values: Res<LightValues>,
-    mut camera: Single<&mut ColorGrading, With<Camera2d>>,
+    camera: Single<(&mut ColorGrading, Has<Hdr>), With<Camera2d>>,
 ) {
-    if !day_night.is_changed() && !values.is_changed() {
-        return;
-    }
-    camera.set_if_neq(day_night.grading(&values).color_grading());
+    let (mut grading, hdr) = camera.into_inner();
+    grading.set_if_neq(if hdr {
+        day_night.grading(&values).color_grading()
+    } else {
+        ColorGrading::default()
+    });
 }

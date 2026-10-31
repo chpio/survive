@@ -8,6 +8,7 @@ use survival::{
         shadow::{Heights, ShadowHeights, SunShadow},
     },
     objects::player,
+    settings::Settings,
     sight::SightRadius,
 };
 
@@ -218,6 +219,21 @@ fn app() -> (App, Entity) {
         .insert_resource(values);
     let player = common::spawn(&mut app, player::Player, Vec2::ZERO);
     (app, player)
+}
+
+#[test]
+fn shadows_are_only_computed_while_turned_on() {
+    let (mut app, _) = app();
+    app.insert_resource(tree()).insert_resource(Settings {
+        shadows: false,
+        ..default()
+    });
+    app.update();
+    assert!(app.world().resource::<SunShadow>().mask().is_none());
+
+    app.world_mut().resource_mut::<Settings>().shadows = true;
+    app.update();
+    assert!(app.world().resource::<SunShadow>().mask().is_some());
 }
 
 #[test]

@@ -4,7 +4,7 @@
 //! shader (at 4K, a cell covers hundreds of pixels), and only again once the sun has moved the
 //! shadows' tips by a pixel. `render` draws it.
 
-use super::{DayNight, LightValues, Sun, running};
+use super::{DayNight, LightValues, Sun, running, shadows_on};
 use crate::{
     cells::{self, CellRect, Raster},
     world::{self, MapRaster, MapRasters},
@@ -228,6 +228,6 @@ impl bevy::app::Plugin for Plugin {
                 )
                     .chain(),
             )
-            .add_systems(Update, update_sun_shadow.run_if(running));
+            .add_systems(Update, update_sun_shadow.run_if(running).run_if(shadows_on));
     }
 }

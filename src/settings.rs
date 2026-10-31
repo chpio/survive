@@ -2,11 +2,16 @@
 //! a RON file.
 
 use bevy::{
+    camera::Hdr,
     prelude::*,
+    render::view::Msaa,
     window::{MonitorSelection, PresentMode, PrimaryWindow, WindowMode},
 };
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
 
 /// Zoom levels the menu steps through, as a factor on the camera's default view.
 pub const ZOOM_LEVELS: [f32; 7] = [0.5, 0.75, 1., 1.25, 1.5, 1.75, 2.];
@@ -14,6 +19,12 @@ pub const ZOOM_LEVELS: [f32; 7] = [0.5, 0.75, 1., 1.25, 1.5, 1.75, 2.];
 /// Sizes of the HUD the menu steps through, as a factor on its size for the window (see
 /// `ui::hud_scale`).
 pub const UI_SCALES: [f32; 8] = [0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2.];
+
+/// Frame rate limits the menu steps through, `None` for no limit.
+pub const FPS_LIMITS: [Option<u32>; 5] = [None, Some(30), Some(60), Some(120), Some(144)];
+
+/// Samples per pixel the menu steps through for MSAA, 1 for none.
+pub const MSAA_SAMPLES: [u32; 3] = [1, 2, 4];
 
 #[derive(Resource, Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 // missing fields (e.g. settings added later) keep their defaults
@@ -26,6 +37,17 @@ pub struct Settings {
     pub zoom: f32,
     /// Size of the HUD, as a factor on its size for the window (see `ui::hud_scale`)
     pub ui_scale: f32,
+    /// Highest frame rate, `None` for no limit (but the display's with VSync), see
+    /// [`limit_frame_rate`]
+    pub fps_limit: Option<u32>,
+    /// Samples per pixel of the camera's MSAA, 1 for none (see [`MSAA_SAMPLES`]). It only smooths
+    /// the edges of meshes, and 4 samples doubled the frame time at 4K with color grading (HDR).
+    pub msaa: u32,
+    /// Colors graded by the time of day (`light::grading`). It needs an HDR camera, which costs
+    /// about 1.3 ms per frame at 4K.
+    pub color_grading: bool,
+    /// The sun's shadows (`light::shadow`)
+    pub shadows: bool,
 }
 
 impl Default for Settings {
@@ -35,6 +57,10 @@ impl Default for Settings {
             fullscreen: false,
             zoom: 1.,
             ui_scale: 1.,
+            fps_limit: None,
+            msaa: 1,
+            color_grading: true,
+            shadows: true,
         }
     }
 }
@@ -74,6 +100,27 @@ impl Settings {
         next_level(&UI_SCALES, self.ui_scale, larger)
     }
 
+    /// The next frame rate limit in [`FPS_LIMITS`] in the direction of `higher` (no limit is the
+    /// lowest), or the current one at the end.
+    pub fn next_fps_limit(&self, higher: bool) -> Option<u32> {
+        next_level(&FPS_LIMITS, self.fps_limit, higher)
+    }
+
+    /// The next MSAA samples in [`MSAA_SAMPLES`] in the direction of `more`, or the current ones at
+    /// the end.
+    pub fn next_msaa(&self, more: bool) -> u32 {
+        next_level(&MSAA_SAMPLES, self.msaa, more)
+    }
+
+    /// The camera's MSAA, none for unsupported samples.
+    pub fn msaa(&self) -> Msaa {
+        match self.msaa {
+            2 => Msaa::Sample2,
+            4 => Msaa::Sample4,
+            _ => Msaa::Off,
+        }
+    }
+
     fn present_mode(&self) -> PresentMode {
         if self.vsync {
             PresentMode::AutoVsync
@@ -93,7 +140,7 @@ impl Settings {
 
 /// The first of the sorted `levels` above `current` (`up`) or below it, or `current` at the end.
 /// A value between the levels (e.g. edited by hand) goes to the neighboring level.
-fn next_level(levels: &[f32], current: f32, up: bool) -> f32 {
+fn next_level<T: PartialOrd + Copy>(levels: &[T], current: T, up: bool) -> T {
     let next = if up {
         levels.iter().find(|&&level| level > current)
     } else {
@@ -153,13 +200,40 @@ fn apply_to_window(settings: &Settings, window: &mut Window) {
 
 fn apply(
     settings: Res<Settings>,
+    mut commands: Commands,
     mut window: Single<&mut Window, With<PrimaryWindow>>,
-    mut projection: Single<&mut Projection, With<Camera2d>>,
+    camera: Single<(Entity, &mut Projection, Option<&Msaa>, Has<Hdr>), With<Camera2d>>,
 ) {
     apply_to_window(&settings, &mut window);
-    if let Projection::Orthographic(projection) = &mut **projection {
+    let (camera, mut projection, msaa, hdr) = camera.into_inner();
+    if let Projection::Orthographic(projection) = &mut *projection {
         projection.scale = 1. / settings.zoom;
     }
+    // only changed when needed, since the camera's pipelines are specialized again then
+    let mut camera = commands.entity(camera);
+    if msaa != Some(&settings.msaa()) {
+        camera.insert(settings.msaa());
+    }
+    if settings.color_grading != hdr {
+        if settings.color_grading {
+            camera.insert(Hdr);
+        } else {
+            camera.remove::<Hdr>();
+        }
+    }
+}
+
+/// Waits at the end of the frame until the next one is due by [`Settings::fps_limit`]. A frame
+/// that took longer isn't made up for by shorter ones.
+pub fn limit_frame_rate(settings: Res<Settings>, mut next_frame: Local<Option<Instant>>) {
+    let Some(limit) = settings.fps_limit.filter(|&limit| limit > 0) else {
+        *next_frame = None;
+        return;
+    };
+    let now = Instant::now();
+    let due = next_frame.unwrap_or(now).max(now);
+    std::thread::sleep(due - now);
+    *next_frame = Some(due + Duration::from_secs_f64(1. / limit as f64));
 }
 
 fn save(settings: Res<Settings>, file: Res<SettingsFile>) {
@@ -210,6 +284,7 @@ impl bevy::app::Plugin for Plugin {
                     save.run_if(resource_changed::<Settings>),
                 )
                     .chain(),
-            );
+            )
+            .add_systems(Last, limit_frame_rate);
     }
 }

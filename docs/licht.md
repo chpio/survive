@@ -74,8 +74,8 @@ fürs Ausbalancieren.
   (1 − Dunkelheit der Nacht) × (1 − Schatten der Sonne) + Licht aus der Lightmap. Die Ebene ist
   schwarz mit der Deckkraft 1 − Helligkeit. Anfangs ist die Lightmap leer (ein dunkles Pixel).
 - Tagsüber zeigt sie die Schatten, nachts die Dunkelheit. Unsichtbar ist sie nur, wenn es weder
-  das eine noch das andere gibt (etwa mit `shadow_strength` 0 am Tag). Ohne Schatten liest der
-  Shader weder die Schattenmaske noch die Sicht.
+  das eine noch das andere gibt (etwa mit `shadow_strength` 0 oder ausgeschalteten Schatten am
+  Tag). Ohne Schatten liest der Shader weder die Schattenmaske noch die Sicht.
 - Die Sichtabdunklung bleibt unverändert darunter. Die Schatten der Sonne zeigt die Licht-Ebene
   nur in der Sicht: Sie liest die Sichtmaske, die schon verwischt ist wie für die Sichtabdunklung
   (gemeinsamer Shader-Teil `assets/shaders/sight_mask.wesl`), und gewichtet den Schatten mit der
@@ -112,6 +112,9 @@ fürs Ausbalancieren.
 - Die Licht-Ebene drückt die Helligkeit im Sonnenschatten (`shadow_strength`, 30 %), nur in der
   Sicht (siehe Licht-Ebene). Da sie über allem liegt, werden Spieler und Gegner im Schatten von
   selbst dunkler.
+- Die Schatten lassen sich in den Einstellungen ausschalten (`Settings::shadows`). Dann rechnet
+  `SunShadow` nicht mehr, und die Licht-Ebene bekommt keinen Schatten. Später gilt der Schalter
+  auch für die Schatten der Lichtquellen.
 - Höhenraster pro Karte auf den 4-px-Zellen (`light::shadow::Heights`, Höhe in px, höchstens 255),
   aus der Tiled-Property `height` an Objekt, Tile oder Ebene wie `blocks_sight`. Die Bäume haben
   24 px. `ShadowHeights` setzt die Raster der geladenen Karten im kleinsten Rechteck um sie
@@ -171,7 +174,12 @@ fürs Ausbalancieren.
   braucht es nicht, es lädt nur `.hdr`-Bilder.
 - Das HUD zeichnet Bevy erst nach dem Tonemapping, es behält seine Farben. Überblendet wird mit
   HDR wie ohne linear, die Licht-Ebene sieht also gleich aus.
-- Kosten: die größere Zwischentextur und ein Vollbild-Pass. Bei 4K prüfen.
+- Kosten: die größere Zwischentextur und ein Vollbild-Pass, bei 4K auf einer integrierten GPU
+  etwa 1,3 ms. Zusammen mit Bevys 4×-MSAA der 2D-Kamera verdoppelte HDR die Frame-Zeit (13,3 statt
+  6,8 ms). MSAA glättet nur die Kanten von Meshes und ist daher standardmäßig aus.
+- Color Grading und MSAA sind Einstellungen (`Settings::color_grading`, `Settings::msaa`). Ohne
+  Color Grading rendert die Kamera ohne `Hdr`, und `grade_colors` setzt ein neutrales
+  `ColorGrading` (ohne HDR würden nur manche Shader färben, die Tilemap nicht).
 
 ## Werte
 

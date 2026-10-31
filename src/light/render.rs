@@ -5,8 +5,11 @@
 //! it; the shadows are only drawn within the sight, so the two don't darken the same place. The
 //! plugin also grades the camera's colors ([`super::grading`]).
 
-use super::{DayNight, LightValues, grading, running, shadow::SunShadow};
-use crate::sight::render::{SightMask, mask_area, mask_image};
+use super::{DayNight, LightValues, grading, running, shadow::SunShadow, shadows_on};
+use crate::{
+    settings::Settings,
+    sight::render::{SightMask, mask_area, mask_image},
+};
 use bevy::{
     prelude::*,
     render::render_resource::AsBindGroup,
@@ -111,19 +114,28 @@ fn spawn_layer(
     ));
 }
 
-/// Passes the night and the sun to the layer, and hides it while it would draw nothing.
+/// Passes the night and the sun to the layer (without shadows if they are turned off), and hides it
+/// while it would draw nothing.
 fn update_light(
     day_night: Res<DayNight>,
     values: Res<LightValues>,
+    settings: Option<Res<Settings>>,
     layer: Single<(&MeshMaterial2d<LightMaterial>, &mut Visibility), With<LightLayer>>,
     mut materials: ResMut<Assets<LightMaterial>>,
 ) {
-    if !day_night.is_changed() && !values.is_changed() {
+    if !day_night.is_changed()
+        && !values.is_changed()
+        && !settings.as_ref().is_some_and(Res::is_changed)
+    {
         return;
     }
     let (material, mut visibility) = layer.into_inner();
     let darkness = day_night.darkness(&values);
-    let shadow = day_night.shadow(&values);
+    let shadow = if shadows_on(settings) {
+        day_night.shadow(&values)
+    } else {
+        0.
+    };
     visibility.set_if_neq(if darkness > 0. || shadow > 0. {
         Visibility::Inherited
     } else {

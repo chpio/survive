@@ -9,7 +9,7 @@ pub mod render;
 pub mod shadow;
 pub mod values;
 
-use crate::{objects::player::Player, sight::SightRadius};
+use crate::{objects::player::Player, settings::Settings, sight::SightRadius};
 use bevy::prelude::*;
 use serde::Deserialize;
 
@@ -257,6 +257,12 @@ pub const TIME_LAPSES: [f32; 2] = [10., 60.];
 /// values and the clock (or a test did).
 pub fn running(values: Option<Res<LightValues>>, day_night: Option<Res<DayNight>>) -> bool {
     values.is_some() && day_night.is_some()
+}
+
+/// Run condition of the sun's shadows: whether [`Settings::shadows`] are on (or there are no
+/// settings, as in tests).
+pub fn shadows_on(settings: Option<Res<Settings>>) -> bool {
+    settings.is_none_or(|settings| settings.shadows)
 }
 
 /// Runs the clock with the game time, so it stands still while the game is paused.

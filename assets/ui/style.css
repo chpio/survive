@@ -134,6 +134,12 @@ input[type="checkbox"] {
     font-weight: bold;
 }
 
+.menu .section {
+    margin-top: 4px;
+    font-size: 16px;
+    font-weight: bold;
+}
+
 .menu label,
 .menu .setting {
     display: flex;
