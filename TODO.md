@@ -29,6 +29,11 @@
     asleep, which is fine for now.
   - Item effects in `assets/items.ron` (healing of the potion and the apple).
 
+- Swarm enemies (`docs/schwarm.md`): release an attack token only a fixed time after the approach
+  started (about 2 s) or at the end of the retreat, instead of when the retreat starts. Otherwise
+  enemies hold a token only for the approach (about 0.5 s), and with many enemies circling the
+  damage per second grows with their number after all (see „Token zu früh frei“).
+
 ## Input
 
 - Rebindable keys: the bindings (WASD, Tab, 1–5, the debug keys) in one place, e.g. a resource

@@ -132,6 +132,11 @@ Das kommt in ein eigenes Konzept. Gemeinsam ist beiden nur die Ressource `Attack
 
 ## Offen
 
+- **Token zu früh frei:** Ein Gegner hält sein Token nur während des Anlaufs (etwa 0,5 s). Mit
+  genug Gegnern im Kreis kommen so bis zu `MAX_TOKENS` / 0,5 s Treffer pro Sekunde, bei acht
+  Gegnern also eher vier als einer, und die Rechnung unter „Werte“ geht nicht auf. Abhilfe: Ein
+  Token wird erst eine feste Zeit nach Beginn des Anlaufs wieder frei (etwa 2 s, als Wert in der
+  RON-Datei), oder erst am Ende von `Retreat`. Zeigt sich spätestens beim Test „Zeit bis zum Tod“.
 - **Tokens bei mehreren Zielen:** Später greifen Gegner vielleicht auch Begleiter oder Brunnen an.
   Dann braucht jedes Ziel eigene Tokens.
 - **Kreisen in engen Gängen:** Ohne Platz für einen Kreis stauen sich die Gegner. Erst beobachten.
