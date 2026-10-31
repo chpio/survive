@@ -10,11 +10,18 @@ use crate::{
     world::MapArea,
 };
 use avian2d::prelude::*;
-use bevy::{prelude::*, time::common_conditions::on_timer, window::PrimaryWindow};
+use bevy::{
+    ecs::system::SystemParam, prelude::*, time::common_conditions::on_timer, window::PrimaryWindow,
+};
 use std::{
     f32::consts::{GOLDEN_RATIO, TAU},
     time::Duration,
 };
+
+pub mod swarm;
+
+/// How fast enemies walk, in px/s. Swarm enemies walk faster or slower depending on their state.
+pub const MOVE_SPEED: f32 = 100.;
 
 /// How fast enemies turn towards their [`Heading`], in rad/s.
 pub const TURN_SPEED: f32 = TAU;
@@ -202,6 +209,9 @@ fn spawn_enemy(
         if asleep {
             entity.insert(Asleep);
         }
+        if enemy.radius <= swarm::MAX_RADIUS {
+            entity.insert(swarm::Swarm);
+        }
     }
 }
 
@@ -267,54 +277,42 @@ fn stop(mut enemies: Query<&mut DesiredVelocity, With<Enemy>>) {
     }
 }
 
-/// Lets the awake enemies walk towards the player, around obstacles and away from each other.
-pub fn move_towards_player(
-    player: Single<&Transform, With<player::Player>>,
-    flow_field: Res<FlowField>,
-    spatial_query: SpatialQuery,
-    others: Query<(&Transform, &Separation), With<Enemy>>,
-    mut enemies: Query<
-        (
-            Entity,
-            &Enemy,
-            &Transform,
-            &Separation,
-            &mut Heading,
-            &mut DesiredVelocity,
-        ),
-        Without<Asleep>,
-    >,
-) {
-    const MOVE_SPEED: f32 = 100.;
+/// How enemies steer away from each other while their personal spaces overlap.
+#[derive(SystemParam)]
+pub struct Crowd<'w, 's> {
+    spatial_query: SpatialQuery<'w, 's>,
+    others: Query<'w, 's, (&'static Transform, &'static Separation), With<Enemy>>,
+}
 
-    let max_radius = others
-        .iter()
-        .map(|(_, separation)| separation.radius)
-        .fold(0., f32::max);
+impl Crowd<'_, '_> {
+    /// Radius of the largest personal space.
+    fn max_radius(&self) -> f32 {
+        self.others
+            .iter()
+            .map(|(_, separation)| separation.radius)
+            .fold(0., f32::max)
+    }
 
-    for (entity, enemy, transform, separation, mut heading, mut desired) in &mut enemies {
-        let position = transform.translation.xy();
-
-        // follow the flow field around obstacles, walk straight if the player can't be reached
-        let direction = flow_field
-            .direction(position, enemy.radius)
-            .unwrap_or_else(|| (player.translation.xy() - position).normalize_or_zero());
-        // keep the last heading when standing on the player
-        if direction != Vec2::ZERO {
-            heading.set_if_neq(Heading(direction));
-        }
-
+    /// Direction away from the enemies whose personal space overlaps with the one of `entity`,
+    /// longer the more they overlap. `max_radius` is [`Self::max_radius`].
+    fn push(
+        &self,
+        entity: Entity,
+        position: Vec2,
+        separation: &Separation,
+        max_radius: f32,
+    ) -> Vec2 {
         // finds every enemy whose personal space could overlap with this one's
         let neighborhood = Collider::circle(separation.radius + max_radius);
         let mut push = Vec2::ZERO;
-        spatial_query.shape_intersections_callback(
+        self.spatial_query.shape_intersections_callback(
             &neighborhood,
             position,
             0.,
             &SpatialQueryFilter::default().with_excluded_entities([entity]),
             |other| {
                 // the query also finds the player and obstacles
-                let Ok((other_transform, other_separation)) = others.get(other) else {
+                let Ok((other_transform, other_separation)) = self.others.get(other) else {
                     return true;
                 };
                 let offset = position - other_transform.translation.xy();
@@ -331,7 +329,46 @@ pub fn move_towards_player(
                 true
             },
         );
+        push
+    }
+}
 
+/// Direction for `enemy` at `position` to walk towards the player: along the flow field around
+/// obstacles, straight if the player can't be reached.
+fn towards_player(flow_field: &FlowField, enemy: &Enemy, position: Vec2, player: Vec2) -> Vec2 {
+    flow_field
+        .direction(position, enemy.radius)
+        .unwrap_or_else(|| (player - position).normalize_or_zero())
+}
+
+/// Lets the awake enemies walk towards the player, around obstacles and away from each other.
+/// Swarm enemies walk by their own state ([`swarm`]).
+pub fn move_towards_player(
+    player: Single<&Transform, With<player::Player>>,
+    flow_field: Res<FlowField>,
+    crowd: Crowd,
+    mut enemies: Query<
+        (
+            Entity,
+            &Enemy,
+            &Transform,
+            &Separation,
+            &mut Heading,
+            &mut DesiredVelocity,
+        ),
+        (Without<Asleep>, Without<swarm::Swarm>),
+    >,
+) {
+    let max_radius = crowd.max_radius();
+    for (entity, enemy, transform, separation, mut heading, mut desired) in &mut enemies {
+        let position = transform.translation.xy();
+        let direction = towards_player(&flow_field, enemy, position, player.translation.xy());
+        // keep the last heading when standing on the player
+        if direction != Vec2::ZERO {
+            heading.set_if_neq(Heading(direction));
+        }
+
+        let push = crowd.push(entity, position, separation, max_radius);
         desired.set_if_neq(DesiredVelocity(
             (direction + push * separation.strength).clamp_length_max(1.) * MOVE_SPEED,
         ));
@@ -398,7 +435,9 @@ impl bevy::app::Plugin for Plugin {
                         (
                             move_towards_player,
                             // after the heading is updated
-                            face_heading.after(move_towards_player),
+                            face_heading
+                                .after(move_towards_player)
+                                .after(swarm::move_swarm),
                         )
                             .run_if(active),
                         stop.run_if(not(active)),

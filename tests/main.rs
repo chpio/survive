@@ -12,5 +12,6 @@ mod perf;
 mod settings;
 mod sight;
 mod spawning;
+mod swarm;
 mod ui;
 mod world;

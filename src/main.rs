@@ -52,6 +52,8 @@ fn main() {
         )
         .add_plugins((
             objects::enemy::Plugin,
+            objects::enemy::swarm::Plugin,
+            objects::enemy::swarm::values::Plugin,
             objects::player::Plugin,
             objects::well::Plugin,
         ))
