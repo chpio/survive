@@ -90,6 +90,13 @@ Umgesetzt, siehe `src/flowfield/`:
 - Quellen: Kenney (CC0), itch.io-Packs, LPC auf OpenGameArt (CC-BY-SA/GPL).
 - SVG wäre möglich über `bevy_svg`, `bevy_vello` oder Rastern mit `resvg`. Für Animation und
   Pixel-Look sind PNG-Spritesheets einfacher.
+- Entschieden: Figuren bekommen Skeletal-Animation statt Spritesheets, da Einzelbilder zu groß
+  werden. Erstmal starre, einfarbige 2D-Teile ohne Skinning, jedes an einem Knochen. Animiert
+  wird in Blender, exportiert als glTF (Hierarchie und Bewegungen); in Bevy wird jedes Teil als
+  2D-Fläche mit dem `SightMaterial` gezeichnet, so wie die Gegner heute. Übergänge zwischen
+  Animationen übernimmt Bevys Animationssystem. Kein Spine: Die Lizenz der Runtimes passt nicht
+  zu einem Open-Source-Spiel. Skinning (sich biegende Teile) bräuchte Bevys 3D-Pipeline und
+  eine 3D-Fassung des `SightMaterial`, also erst später, falls nötig.
 
 ## Inventar
 
