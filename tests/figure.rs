@@ -4,7 +4,7 @@ use survival::figure::{self, FigureData, Keyframes};
 fn beetle() -> FigureData {
     let bytes = std::fs::read(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/assets/characters/small_enemy.glb"
+        "/assets/characters/beetle.glb"
     ))
     .unwrap();
     figure::parse(&bytes).unwrap()
@@ -69,7 +69,7 @@ fn animations_only_turn_around_z() {
 }
 
 #[test]
-fn beetle_fits_around_the_small_enemys_collider() {
+fn beetle_fits_around_a_collider_of_its_radius() {
     let beetle = beetle();
     let transforms = world_transforms(&beetle);
     let reach = beetle
@@ -83,7 +83,7 @@ fn beetle_fits_around_the_small_enemys_collider() {
         })
         .map(Vec2::length)
         .fold(0., f32::max);
-    // radius 5 px; legs and antennae may reach a bit beyond the collider
+    // made for a radius of 5 px; legs and antennae may reach a bit beyond the collider
     assert!(
         (4.5..7.).contains(&reach),
         "reaches {reach} px from the center"

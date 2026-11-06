@@ -1,13 +1,10 @@
 use crate::{
     combat::{Attack, Died, Health},
-    figure::FigureRoot,
+    figure::{Figure, FigureRoot},
     flowfield::FlowField,
     movement::{self, DesiredVelocity},
     objects::player,
-    sight::{
-        Sight,
-        render::{SightMask, SightMaterial},
-    },
+    sight::Sight,
     world::MapArea,
 };
 use avian2d::prelude::*;
@@ -150,34 +147,22 @@ fn spawn_enemy_on_key(
     }
 }
 
-/// Mesh and materials shared by all enemies, so they are drawn in batches. The mesh is a unit
-/// circle, scaled to each enemy's radius. The materials only show the parts in the player's sight.
+/// The figure all enemies are drawn as, scaled to their radius.
 #[derive(Resource)]
 struct EnemyAssets {
-    circle: Handle<Mesh>,
-    body: Handle<SightMaterial>,
-    dot: Handle<SightMaterial>,
-    beetle: Handle<crate::figure::Figure>,
+    beetle: Handle<Figure>,
 }
 
-/// Radius in px the beetle figure is made for; swarm enemies of other sizes scale it.
+/// Radius in px the beetle figure is made for; enemies of other sizes scale it.
 const BEETLE_RADIUS: f32 = 5.;
 
-/// Speed in px/s at which the walk animation plays at its own pace; faster enemies play it faster.
+/// Speed in px/s at which the walk animation of an enemy with [`BEETLE_RADIUS`] plays at its own
+/// pace; faster enemies play it faster, larger ones slower, since their steps are longer.
 const WALK_ANIMATION_SPEED: f32 = 40.;
 
-fn create_assets(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<SightMaterial>>,
-    mask: Res<SightMask>,
-) {
+fn create_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.insert_resource(EnemyAssets {
-        circle: meshes.add(Circle::new(1.)),
-        body: materials.add(SightMaterial::new(Color::srgb(0.8, 0.2, 0.2), &mask)),
-        dot: materials.add(SightMaterial::new(Color::srgb(1., 0.9, 0.9), &mask)),
-        beetle: asset_server.load("characters/small_enemy.glb"),
+        beetle: asset_server.load("characters/beetle.glb"),
     });
 }
 
@@ -203,29 +188,15 @@ fn spawn_enemy(
             // shown through its children
             Visibility::default(),
         ));
+        let scale = enemy.radius / BEETLE_RADIUS;
+        entity.with_child((
+            Body,
+            FigureRoot(assets.beetle.clone()),
+            Transform::from_scale(Vec3::new(scale, scale, 1.)),
+            Visibility::default(),
+        ));
         if enemy.radius <= swarm::MAX_RADIUS {
-            // swarm enemies are beetles
-            let scale = enemy.radius / BEETLE_RADIUS;
-            entity.insert(swarm::Swarm).with_child((
-                Body,
-                FigureRoot(assets.beetle.clone()),
-                Transform::from_scale(Vec3::new(scale, scale, 1.)),
-                Visibility::default(),
-            ));
-        } else {
-            entity.with_child((
-                Body,
-                Mesh2d(assets.circle.clone()),
-                MeshMaterial2d(assets.body.clone()),
-                Transform::from_scale(Vec3::new(enemy.radius, enemy.radius, 1.)),
-                // dot at the front, showing where the enemy faces (+x when not rotated), in
-                // units of the radius
-                children![(
-                    Mesh2d(assets.circle.clone()),
-                    MeshMaterial2d(assets.dot.clone()),
-                    Transform::from_xyz(0.55, 0., 0.1).with_scale(Vec3::new(0.25, 0.25, 1.)),
-                )],
-            ));
+            entity.insert(swarm::Swarm);
         }
         if asleep {
             entity.insert(Asleep);
@@ -435,16 +406,18 @@ pub fn despawn_outside_maps(
     }
 }
 
-/// Plays the walk animation of the enemies' figures as fast as they move, so it stops with them.
+/// Plays the walk animation of the enemies' figures as fast as they move, so it stops with them,
+/// and slower for larger enemies.
 fn animate_walk(
-    enemies: Query<&LinearVelocity, With<Enemy>>,
+    enemies: Query<(&Enemy, &LinearVelocity)>,
     mut bodies: Query<(&ChildOf, &mut AnimationPlayer), With<Body>>,
 ) {
     for (child_of, mut player) in &mut bodies {
-        let Ok(velocity) = enemies.get(child_of.parent()) else {
+        let Ok((enemy, velocity)) = enemies.get(child_of.parent()) else {
             continue;
         };
-        let speed = (velocity.length() / WALK_ANIMATION_SPEED).min(4.);
+        let scale = enemy.radius / BEETLE_RADIUS;
+        let speed = (velocity.length() / (WALK_ANIMATION_SPEED * scale)).min(4.);
         for (_, animation) in player.playing_animations_mut() {
             animation.set_speed(speed);
         }

@@ -1,10 +1,10 @@
-"""Builds the small enemy, a beetle of rigid single-colored 2D parts on an armature, with a walk cycle.
+"""Builds the beetle all enemies are drawn as, out of rigid single-colored 2D parts on an armature, with a walk cycle.
 
 Run headless from the repository root:
 
-    blender -b --factory-startup -P art/small_enemy.py -- [--preview DIR]
+    blender -b --factory-startup -P art/beetle.py -- [--preview DIR]
 
-Writes `assets/characters/small_enemy.glb` for the game and `art/small_enemy.blend` to look at
+Writes `assets/characters/beetle.glb` for the game and `art/beetle.blend` to look at
 in Blender; the script is the source, so changes belong here, not in the `.blend`, which isn't
 checked in. With `--preview`, renders the walk cycle's frames as PNGs into DIR.
 
@@ -136,8 +136,8 @@ def build():
     scene.render.fps = FPS
     scene.frame_start, scene.frame_end = 0, CYCLE - 1
 
-    armature = bpy.data.armatures.new("small_enemy")
-    rig = bpy.data.objects.new("small_enemy", armature)
+    armature = bpy.data.armatures.new("beetle")
+    rig = bpy.data.objects.new("beetle", armature)
     scene.collection.objects.link(rig)
     bpy.context.view_layer.objects.active = rig
     bpy.ops.object.mode_set(mode="EDIT")
@@ -212,8 +212,8 @@ def animate_walk(rig):
 
 
 def export(rig):
-    bpy.ops.wm.save_as_mainfile(filepath=str(ROOT / "art" / "small_enemy.blend"))
-    out = ROOT / "assets" / "characters" / "small_enemy.glb"
+    bpy.ops.wm.save_as_mainfile(filepath=str(ROOT / "art" / "beetle.blend"))
+    out = ROOT / "assets" / "characters" / "beetle.glb"
     out.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.export_scene.gltf(
         filepath=str(out),
