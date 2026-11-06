@@ -30,7 +30,9 @@ fn app(max_tokens: usize) -> App {
     app.insert_resource(values())
         .insert_resource(AttackTokens { max: max_tokens })
         .insert_resource(SwarmRng(fastrand::Rng::with_seed(7)))
-        .init_resource::<FlowField>();
+        .init_resource::<FlowField>()
+        // the player's plugin needs input, so only its reaction to deaths is added
+        .add_observer(player::start_over_on_death);
     app
 }
 

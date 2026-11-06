@@ -11,7 +11,11 @@ use survival::{
 };
 
 fn app() -> App {
-    common::app_with(combat::Plugin)
+    let mut app = common::app_with(combat::Plugin);
+    // the objects' plugins need rendering and input, so only their reactions to deaths are added
+    app.add_observer(enemy::despawn_on_death)
+        .add_observer(player::start_over_on_death);
+    app
 }
 
 fn spawn_player(app: &mut App, position: Vec2) -> Entity {

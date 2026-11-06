@@ -1,6 +1,7 @@
 use crate::{
-    combat::{Attack, Health},
+    combat::{Attack, Died, Health},
     movement::{self, DesiredVelocity},
+    objects::enemy::Enemy,
     sight::SightRadius,
 };
 use avian2d::prelude::*;
@@ -63,10 +64,29 @@ fn move_player(
     desired.set_if_neq(DesiredVelocity(direction.normalize_or_zero() * MOVE_SPEED));
 }
 
+/// The player's death starts the round over: all enemies are removed and the player is healed.
+pub fn start_over_on_death(
+    died: On<Died>,
+    mut players: Query<&mut Health, With<Player>>,
+    enemies: Query<Entity, With<Enemy>>,
+    mut commands: Commands,
+) {
+    let Ok(mut health) = players.get_mut(died.entity) else {
+        return;
+    };
+    info!("player died, starting over");
+    health.current = health.max;
+    for enemy in &enemies {
+        // may already be despawned for dying in the same frame
+        commands.entity(enemy).try_despawn();
+    }
+}
+
 pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, move_player);
+        app.add_systems(Update, move_player)
+            .add_observer(start_over_on_death);
     }
 }

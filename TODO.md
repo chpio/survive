@@ -51,8 +51,6 @@
 
 ## Code
 
-- Let combat trigger a `Died` event instead of handling the deaths of players and enemies itself, so
-  `combat` doesn't need to know about the objects. The combat tests would need the observers then.
 - Bodies sliding along an edge of the map's triangulated colliders are still pushed off its end
   by up to 0.8 px, depending on where they pass the corner within a physics step
   (`body_slides_past_corner_of_triangulated_collider` passes only for some starting points).

@@ -3,9 +3,9 @@
 //! A unit with an [`Attack`] hits every opponent whose collider is within its reach as soon as its
 //! cooldown is over: the player hits all enemies around it, an awake enemy hits the player. A hit
 //! deals damage and knocks the target away from the attacker with an impulse, so lighter units
-//! fly further. Enemies without health are despawned. When the player dies, the round starts
-//! over: all enemies are removed and the player is healed. Used items with a healing effect heal
-//! their user. [`Restrained`] units only attack while they are [`Striking`], e.g. swarm enemies
+//! fly further. A hit that takes the last health triggers [`Died`] on the target; the objects
+//! decide what dying means (enemies are despawned, the player starts the round over). Used items
+//! with a healing effect heal their user. [`Restrained`] units only attack while they are [`Striking`], e.g. swarm enemies
 //! during their approach, which needs an attack token ([`tokens`]).
 
 use crate::{
@@ -80,6 +80,13 @@ pub struct Hit {
     pub target: Entity,
 }
 
+/// A hit took the last health of `entity`. Triggered once per death; the target's own observers
+/// handle it, e.g. by despawning or healing it.
+#[derive(EntityEvent, Clone, Copy, PartialEq, Debug)]
+pub struct Died {
+    pub entity: Entity,
+}
+
 /// Units matching `Attacker` hit units matching `Target` that are in reach. There are few
 /// attackers or few targets (the player on one side), so checking every pair is cheap.
 fn attack<Attacker: QueryFilter, Target: QueryFilter>(
@@ -87,6 +94,7 @@ fn attack<Attacker: QueryFilter, Target: QueryFilter>(
     mut attackers: Query<(Entity, &Transform, &mut Attack), Attacker>,
     mut targets: Query<(Entity, &Transform, &Collider, &mut Health, Forces), Target>,
     mut hits: MessageWriter<Hit>,
+    mut commands: Commands,
 ) {
     for (attacker, transform, mut attack) in &mut attackers {
         attack.cooldown.tick(time.delta());
@@ -105,6 +113,7 @@ fn attack<Attacker: QueryFilter, Target: QueryFilter>(
             }
 
             attack.cooldown.reset();
+            let was_alive = !health.is_dead();
             health.current = (health.current - attack.damage).max(0.);
             // units on the same spot are pushed in any direction
             let away = (target_position - position)
@@ -112,14 +121,9 @@ fn attack<Attacker: QueryFilter, Target: QueryFilter>(
                 .unwrap_or(Vec2::X);
             forces.apply_linear_impulse(away * attack.knockback);
             hits.write(Hit { attacker, target });
-        }
-    }
-}
-
-fn despawn_dead_enemies(mut commands: Commands, enemies: Query<(Entity, &Health), With<Enemy>>) {
-    for (entity, health) in &enemies {
-        if health.is_dead() {
-            commands.entity(entity).despawn();
+            if was_alive && health.is_dead() {
+                commands.trigger(Died { entity: target });
+            }
         }
     }
 }
@@ -133,26 +137,6 @@ fn apply_item_effects(mut used: MessageReader<ItemUsed>, mut healths: Query<&mut
         match effect {
             Effect::Heal(amount) => health.current = (health.current + amount).min(health.max),
         }
-    }
-}
-
-/// Starts the round over when the player dies: removes all enemies and heals the player.
-fn restart_on_player_death(
-    mut commands: Commands,
-    mut player: Query<&mut Health, With<Player>>,
-    enemies: Query<Entity, With<Enemy>>,
-) {
-    let Ok(mut health) = player.single_mut() else {
-        return;
-    };
-    if !health.is_dead() {
-        return;
-    }
-    info!("player died, starting over");
-    health.current = health.max;
-    for enemy in &enemies {
-        // may already be despawned for dying in the same frame
-        commands.entity(enemy).try_despawn();
     }
 }
 
@@ -178,8 +162,6 @@ impl bevy::app::Plugin for Plugin {
                         With<Player>,
                     >
                         .run_if(enemy::active),
-                    despawn_dead_enemies,
-                    restart_on_player_death,
                 )
                     .chain(),
             );

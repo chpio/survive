@@ -1,5 +1,5 @@
 use crate::{
-    combat::{Attack, Health},
+    combat::{Attack, Died, Health},
     flowfield::FlowField,
     movement::{self, DesiredVelocity},
     objects::player,
@@ -417,11 +417,20 @@ pub fn despawn_outside_maps(
     }
 }
 
+/// Dead enemies are despawned.
+pub fn despawn_on_death(died: On<Died>, enemies: Query<(), With<Enemy>>, mut commands: Commands) {
+    if enemies.contains(died.entity) {
+        // the player's death may despawn all enemies in the same frame
+        commands.entity(died.entity).try_despawn();
+    }
+}
+
 pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_message::<SpawnEnemy>()
+            .add_observer(despawn_on_death)
             .init_resource::<Frozen>()
             .add_systems(Startup, create_assets)
             .add_systems(
