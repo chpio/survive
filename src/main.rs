@@ -92,12 +92,7 @@ fn main() {
         .run();
 }
 
-fn startup(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
+fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((
         Camera2d,
         // set by `light::grading`; `settings` gives the camera `Hdr` for it and sets its `Msaa`
@@ -119,10 +114,11 @@ fn startup(
         objects::player::physics(),
         objects::player::combat(),
         items::hotbar::Hotbar::default(),
-        Mesh2d(meshes.add(objects::player::SHAPE)),
-        MeshMaterial2d(materials.add(Color::srgb(0.2, 0.4, 0.9))),
         // above the map layers
         Transform::from_translation(objects::player::START.extend(10.)),
+        // shown through its children
+        Visibility::default(),
+        objects::player::body(&asset_server),
     ));
 
     // bevy_ecs_tiled gives the settings to each map it loads, and the maps' events bubble up to

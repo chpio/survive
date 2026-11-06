@@ -1,23 +1,27 @@
-//! Animated figures: rigid, single-colored 2D parts on a skeleton, modeled and animated in Blender
-//! (`art/`) and loaded from `.glb` files.
+//! Animated figures: the player and the enemies, modeled in 3D and animated in Blender (`art/`),
+//! exported as flat parts per direction of the game's oblique view and loaded from `.glb` files
+//! (see `docs/architecture/figure.md`).
 //!
-//! A figure faces +X and lies on the XY plane; Z only orders its parts. Every node of the glTF
-//! (bones and parts) may only rotate around Z and keep its Z scale, so a part's depth can be moved
-//! from its vertices into its entity, where Bevy's 2D sorting needs it. The parts are drawn with a
-//! [`SightMaterial`] in their glTF base color, so only what is in sight shows. Animations become
-//! Bevy [`AnimationClip`]s in one [`AnimationGraph`] per figure.
+//! Every node of the glTF may only rotate around Z and keep its Z scale, so a part's depth can be
+//! moved from its vertices into its entity, where Bevy's 2D sorting needs it. The parts are drawn
+//! with a [`SightMaterial`] in their glTF base color, anchored at the figure's feet. Animations
+//! become Bevy [`AnimationClip`]s, one per animation and direction, in one [`AnimationGraph`].
 //!
-//! Put [`FigureRoot`] on an entity to show a figure as its children; its first animation plays in
-//! a loop on the entity's [`AnimationPlayer`]. Saving the `.glb` again rebuilds the figures.
+//! Put [`FigureRoot`] on an entity to show a figure as its children and steer it with its
+//! [`FigureControl`]. Saving the `.glb` again rebuilds the figures.
 
 use crate::sight::render::{SightMask, SightMaterial};
 use bevy::{
     animation::{AnimatedBy, AnimationTargetId, animated_field},
     asset::{AssetLoader, LoadContext, RenderAssetUsages, io::Reader},
     curve::UnevenSampleAutoCurve,
-    mesh::{Indices, PrimitiveTopology},
+    mesh::{Indices, MeshTag, PrimitiveTopology},
     platform::collections::HashMap,
     prelude::*,
+};
+use std::{
+    f32::consts::{PI, TAU},
+    ops::Range,
 };
 
 /// A node of a figure: a bone, or the holder of a part.
@@ -222,24 +226,63 @@ fn read_part(
 }
 
 /// A loaded figure, ready to be spawned with [`FigureRoot`].
+/// A loaded figure, ready to be spawned with [`FigureRoot`].
 #[derive(Asset, TypePath, Debug)]
 pub struct Figure {
     nodes: Vec<NodeData>,
     /// Node, mesh, color and depth of each part
     parts: Vec<(usize, Handle<Mesh>, Color, f32)>,
+    /// Nodes of each direction: its node and its descendants, which follow it
+    directions: Vec<Range<usize>>,
     pub graph: Handle<AnimationGraph>,
-    /// Graph node of each animation, by name, in the file's order
-    pub animations: Vec<(String, AnimationNodeIndex)>,
+    /// Names of the animations, in the file's order
+    names: Vec<String>,
+    /// Graph node of each animation and direction
+    clips: HashMap<(String, usize), AnimationNodeIndex>,
 }
 
 impl Figure {
-    /// The graph node of the animation `name`.
-    pub fn animation(&self, name: &str) -> Option<AnimationNodeIndex> {
-        self.animations
-            .iter()
-            .find(|(n, _)| n == name)
-            .map(|&(_, index)| index)
+    /// The graph node of the animation `name` in `direction`.
+    pub fn clip(&self, name: &str, direction: usize) -> Option<AnimationNodeIndex> {
+        self.clips.get(&(name.to_owned(), direction)).copied()
     }
+
+    /// Number of directions the figure was drawn in.
+    pub fn directions(&self) -> usize {
+        self.directions.len()
+    }
+}
+
+/// The direction of `count` (evenly spread, the first facing +X, counterclockwise) to show for
+/// `facing`. The `current` one stays until `facing` is a few degrees closer to another one, so
+/// a figure walking just between two directions doesn't flicker.
+pub fn direction_for(facing: Vec2, current: Option<usize>, count: usize) -> usize {
+    const HYSTERESIS: f32 = 0.1;
+    let step = TAU / count as f32;
+    let angle = facing.to_angle();
+    if let Some(current) = current {
+        let offset = (angle - current as f32 * step + PI).rem_euclid(TAU) - PI;
+        if offset.abs() <= step / 2. + HYSTERESIS {
+            return current;
+        }
+    }
+    (angle / step).round().rem_euclid(count as f32) as usize % count
+}
+
+/// `MeshTag` that makes the sight material sample the mask at `position` (rounded to whole px)
+/// for the whole mesh, instead of at each pixel: x and y offset by 2^15 in the low and high half.
+/// Covers positions within ±32767 px; 0 (never produced) means sampling at each pixel.
+pub fn anchor_tag(position: Vec2) -> u32 {
+    let x = (position.x.round() + 32768.).clamp(0., 65535.) as u32;
+    let y = (position.y.round() + 32768.).clamp(0., 65535.) as u32;
+    (y << 16 | x).max(1)
+}
+
+/// Z within a unit (at z = 10) of a figure at height `y` with the camera at `camera_y`: lower on
+/// screen is in front, 1 px apart is 0.001 apart, more than a figure's parts span. Figures up to
+/// 450 px above or below the camera are sorted, which covers the view.
+pub fn sorted_z(y: f32, camera_y: f32) -> f32 {
+    (0.45 + (camera_y - y) * 0.001).clamp(0., 0.9)
 }
 
 fn target_id(node: &NodeData) -> AnimationTargetId {
@@ -322,18 +365,45 @@ impl AssetLoader for FigureLoader {
         }
         let (graph, indices) = AnimationGraph::from_clips(clips);
         let graph = load_context.add_labeled_asset("graph".to_owned(), graph);
-        let animations = data
-            .animations
-            .into_iter()
-            .map(|animation| animation.name)
-            .zip(indices)
+        let mut names = Vec::new();
+        let mut clips = HashMap::new();
+        for (animation, index) in data.animations.into_iter().zip(indices) {
+            let (name, direction) = animation
+                .name
+                .rsplit_once('/')
+                .and_then(|(name, d)| Some((name.to_owned(), d.parse().ok()?)))
+                .ok_or_else(|| {
+                    format!(
+                        "animation {} isn't named <name>/<direction>",
+                        animation.name
+                    )
+                })?;
+            if !names.contains(&name) {
+                names.push(name.clone());
+            }
+            clips.insert((name, direction), index);
+        }
+
+        // the top node holds the directions, whose subtrees follow each other
+        let starts: Vec<_> = (0..data.nodes.len())
+            .filter(|&i| data.nodes[i].parent == Some(0))
+            .collect();
+        if starts.is_empty() {
+            return Err("the figure has no directions".into());
+        }
+        let directions = starts
+            .iter()
+            .zip(starts.iter().skip(1).copied().chain([data.nodes.len()]))
+            .map(|(&start, end)| start..end)
             .collect();
 
         Ok(Figure {
             nodes: data.nodes,
             parts,
+            directions,
             graph,
-            animations,
+            names,
+            clips,
         })
     }
 
@@ -342,77 +412,193 @@ impl AssetLoader for FigureLoader {
     }
 }
 
-/// Shows the figure as children of this entity, which needs a `Transform` and `Visibility`.
+/// Shows the figure as children of this entity, which needs a `Transform` and `Visibility`. The
+/// entity's z is set to sort it by its height on screen (see [`sorted_z`]).
 #[derive(Component, Clone, Debug)]
+#[require(FigureControl)]
 pub struct FigureRoot(pub Handle<Figure>);
 
-/// The figure's top nodes, spawned once the figure was loaded.
+/// What a figure shows: which animation, facing where, how fast.
+#[derive(Component, Clone, Debug)]
+pub struct FigureControl {
+    /// Name of the animation; empty for the figure's first one
+    pub animation: &'static str,
+    /// Direction the figure faces on the ground; the closest drawn direction is shown
+    pub facing: Vec2,
+    /// Speed of the animation, 1 for its own pace
+    pub speed: f32,
+}
+
+impl Default for FigureControl {
+    fn default() -> Self {
+        Self {
+            animation: "",
+            // towards the viewer
+            facing: Vec2::NEG_Y,
+            speed: 1.,
+        }
+    }
+}
+
+/// The spawned direction of a figure.
 #[derive(Component)]
-struct Instance(Vec<Entity>);
+struct Instance {
+    direction: usize,
+    animation: String,
+    /// Node of the direction, holding all others
+    top: Entity,
+    parts: Vec<Entity>,
+    /// Current [`anchor_tag`] of the parts
+    tag: u32,
+}
 
 /// One material per color, shared by all figures.
 #[derive(Resource, Default)]
 struct Materials(HashMap<[u32; 4], Handle<SightMaterial>>);
 
-fn instantiate(
+/// Spawns each figure's current direction, switches direction and animation as its
+/// [`FigureControl`] asks, sorts it by its height on screen and anchors its sight at its feet.
+#[allow(clippy::type_complexity)]
+fn update(
     mut commands: Commands,
-    roots: Query<(Entity, &FigureRoot), Without<Instance>>,
+    mut roots: Query<(
+        Entity,
+        &FigureRoot,
+        &FigureControl,
+        &GlobalTransform,
+        &mut Transform,
+        Option<&mut Instance>,
+        Option<&mut AnimationPlayer>,
+    )>,
+    camera: Query<&GlobalTransform, (With<Camera2d>, Without<FigureRoot>)>,
     figures: Res<Assets<Figure>>,
     mut materials: ResMut<Assets<SightMaterial>>,
     mut cache: ResMut<Materials>,
     mask: Res<SightMask>,
 ) {
-    for (root, FigureRoot(handle)) in &roots {
+    let camera_y = camera.single().map_or(0., |c| c.translation().y);
+    for (root, FigureRoot(handle), control, global, mut transform, instance, player) in &mut roots {
         let Some(figure) = figures.get(handle) else {
             continue;
         };
-        let mut entities = Vec::with_capacity(figure.nodes.len());
-        let mut top = Vec::new();
-        for node in &figure.nodes {
-            let parent = node.parent.map_or(root, |p| entities[p]);
-            let entity = commands
-                .spawn((
-                    Name::new(node.name.clone()),
-                    node.transform,
-                    Visibility::default(),
-                    target_id(node),
-                    AnimatedBy(root),
-                    ChildOf(parent),
-                ))
-                .id();
-            if node.parent.is_none() {
-                top.push(entity);
-            }
-            entities.push(entity);
+        let position = global.translation().xy();
+        let z = sorted_z(position.y, camera_y);
+        if transform.translation.z != z {
+            transform.translation.z = z;
         }
+        let tag = anchor_tag(position);
+        let animation = match control.animation {
+            "" => figure.names.first().map_or("", String::as_str),
+            name => name,
+        };
+        let current = instance.as_ref().map(|i| i.direction);
+        let direction = direction_for(control.facing, current, figure.directions());
+
+        if let Some(mut instance) = instance {
+            if instance.direction == direction && instance.animation == animation {
+                if let Some(mut player) = player {
+                    for (_, active) in player.playing_animations_mut() {
+                        if active.speed() != control.speed {
+                            active.set_speed(control.speed);
+                        }
+                    }
+                }
+                if instance.tag != tag {
+                    instance.tag = tag;
+                    for &part in &instance.parts {
+                        commands.entity(part).insert(MeshTag::new(tag));
+                    }
+                }
+                continue;
+            }
+            if instance.direction == direction {
+                // only the animation changes
+                let Some(clip) = figure.clip(animation, direction) else {
+                    continue;
+                };
+                instance.animation = animation.to_owned();
+                commands
+                    .entity(root)
+                    .insert(new_player(clip, 0., control.speed));
+                continue;
+            }
+            commands.entity(instance.top).despawn();
+        }
+
+        let Some(clip) = figure.clip(animation, direction) else {
+            continue;
+        };
+        // a new direction of the same animation goes on where the old one was
+        let time = player
+            .as_ref()
+            .and_then(|p| p.playing_animations().next().map(|(_, a)| a.seek_time()))
+            .filter(|_| current.is_some())
+            .unwrap_or(0.);
+
+        let range = figure.directions[direction].clone();
+        let mut entities = Vec::with_capacity(range.len());
+        for node in &figure.nodes[range.clone()] {
+            let parent = node
+                .parent
+                .filter(|p| range.contains(p))
+                .map_or(root, |p| entities[p - range.start]);
+            entities.push(
+                commands
+                    .spawn((
+                        Name::new(node.name.clone()),
+                        node.transform,
+                        Visibility::default(),
+                        target_id(node),
+                        AnimatedBy(root),
+                        ChildOf(parent),
+                    ))
+                    .id(),
+            );
+        }
+        let mut parts = Vec::new();
         for (node, mesh, color, z) in &figure.parts {
+            if !range.contains(node) {
+                continue;
+            }
             let key = color.to_linear().to_f32_array().map(f32::to_bits);
             let material = cache
                 .0
                 .entry(key)
                 .or_insert_with(|| materials.add(SightMaterial::new(*color, &mask)))
                 .clone();
-            commands.spawn((
-                Mesh2d(mesh.clone()),
-                MeshMaterial2d(material),
-                Transform::from_xyz(0., 0., *z),
-                ChildOf(entities[*node]),
-            ));
-        }
-
-        let mut player = AnimationPlayer::default();
-        if let Some(&(_, animation)) = figure.animations.first() {
-            player.play(animation).repeat();
+            parts.push(
+                commands
+                    .spawn((
+                        Mesh2d(mesh.clone()),
+                        MeshMaterial2d(material),
+                        MeshTag::new(tag),
+                        Transform::from_xyz(0., 0., *z),
+                        ChildOf(entities[node - range.start]),
+                    ))
+                    .id(),
+            );
         }
         commands.entity(root).insert((
-            Instance(top),
-            player,
+            Instance {
+                direction,
+                animation: animation.to_owned(),
+                top: entities[0],
+                parts,
+                tag,
+            },
+            new_player(clip, time, control.speed),
             AnimationGraphHandle(figure.graph.clone()),
         ));
     }
 }
 
-/// Removes the figures of a changed `.glb` file, so [`instantiate`] builds them again.
+fn new_player(clip: AnimationNodeIndex, time: f32, speed: f32) -> AnimationPlayer {
+    let mut player = AnimationPlayer::default();
+    player.play(clip).repeat().seek_to(time).set_speed(speed);
+    player
+}
+
+/// Removes the figures of a changed `.glb` file, so [`update`] builds them again.
 fn rebuild_changed(
     mut commands: Commands,
     mut events: MessageReader<AssetEvent<Figure>>,
@@ -422,11 +608,9 @@ fn rebuild_changed(
         let AssetEvent::Modified { id } = event else {
             continue;
         };
-        for (root, FigureRoot(handle), Instance(top)) in &roots {
+        for (root, FigureRoot(handle), instance) in &roots {
             if handle.id() == *id {
-                for &entity in top {
-                    commands.entity(entity).despawn();
-                }
+                commands.entity(instance.top).despawn();
                 commands.entity(root).remove::<Instance>();
             }
         }
@@ -440,6 +624,6 @@ impl bevy::app::Plugin for Plugin {
         app.init_asset::<Figure>()
             .init_asset_loader::<FigureLoader>()
             .init_resource::<Materials>()
-            .add_systems(Update, (rebuild_changed, instantiate).chain());
+            .add_systems(Update, (rebuild_changed, update).chain());
     }
 }

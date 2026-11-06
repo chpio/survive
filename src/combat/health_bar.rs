@@ -21,13 +21,23 @@ struct HealthBar {
     width: f32,
 }
 
-fn spawn_health_bar(add: On<Add<Health>>, colliders: Query<&Collider>, mut commands: Commands) {
-    let Ok(collider) = colliders.get(add.entity) else {
+/// How far in px a unit's figure rises above its center, so its health bar goes above it
+/// instead of above its collider.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct UnitHeight(pub f32);
+
+fn spawn_health_bar(
+    add: On<Add<Health>>,
+    units: Query<(&Collider, Option<&UnitHeight>)>,
+    mut commands: Commands,
+) {
+    let Ok((collider, height)) = units.get(add.entity) else {
         return;
     };
     let aabb = collider.aabb(Vec2::ZERO, Rotation::IDENTITY, 0.);
     let size = aabb.max - aabb.min;
     let width = size.x.max(8.);
+    let top = height.map_or(size.y / 2., |h| h.0.max(size.y / 2.));
 
     let holder = commands
         .spawn((
@@ -52,7 +62,7 @@ fn spawn_health_bar(add: On<Add<Health>>, colliders: Query<&Collider>, mut comma
             Name::new("Health bar"),
             Sprite::from_color(Color::srgb(0.15, 0.15, 0.15), Vec2::new(width, HEIGHT)),
             // above the unit, and in front of the units at z = 10
-            Transform::from_xyz(0., size.y / 2. + GAP + HEIGHT / 2., 1.),
+            Transform::from_xyz(0., top + GAP + HEIGHT / 2., 1.),
             Visibility::Hidden,
             ChildOf(holder),
         ))

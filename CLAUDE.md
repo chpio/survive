@@ -63,7 +63,7 @@ The details of each area are in `docs/architecture/`; read the area's file befor
 - Commands on enemies use `try_insert`/`try_remove` where combat may despawn them in the same frame.
 - A tile layer's colliders are merged into one whose AABB spans the whole map: code dealing with obstacles uses the collider's shape, not its `ColliderAabb`.
 - New map-driven objects get a type in Tiled and a match arm in the observers in `main.rs`; properties for tiles go on their layer (see `tiled.md`).
-- Z order: map layers 2 apart (y-sorting moves chunks by up to 1.5), the darkening outside the sight at 8, items at 9, units at 10 (health bars up to 11.1), the light layer at 20; the HUD is drawn above everything.
+- Z order: map layers 2 apart (y-sorting moves chunks by up to 1.5), the darkening outside the sight at 8, items at 9, units at 10 (their figures up to 10.9, sorted by height on screen; health bars up to 11.1), the light layer at 20; the HUD is drawn above everything.
 - The HUD has no user-agent stylesheet (new kinds of elements may need an entry in the base section of `assets/ui/style.css`) and only paints again after input, a state change or a resize; anything else that changes its look has to set `needs_paint`.
 - The `Settings` resource is the only source of truth for the player's settings.
 

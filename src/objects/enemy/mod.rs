@@ -1,6 +1,6 @@
 use crate::{
-    combat::{Attack, Died, Health},
-    figure::{Figure, FigureRoot},
+    combat::{Attack, Died, Health, health_bar::UnitHeight},
+    figure::{Figure, FigureControl, FigureRoot},
     flowfield::FlowField,
     movement::{self, DesiredVelocity},
     objects::player,
@@ -104,8 +104,8 @@ impl Default for Separation {
 #[derive(Component, Default, PartialEq)]
 pub struct Heading(pub Vec2);
 
-/// Visible body of an enemy, a child that turns towards the [`Heading`]. The enemy itself never
-/// rotates, so other children like the health bar stay upright.
+/// Visible body of an enemy, a child showing its figure, which turns towards the [`Heading`]
+/// (through [`FigureControl::facing`]).
 #[derive(Component)]
 pub struct Body;
 
@@ -183,6 +183,8 @@ fn spawn_enemy(
             enemy.separation(),
             enemy.physics(),
             enemy.combat(),
+            // the beetle's shell
+            UnitHeight(5. * enemy.radius / BEETLE_RADIUS),
             // above the map layers
             Transform::from_translation(position.extend(10.)),
             // shown through its children
@@ -192,6 +194,10 @@ fn spawn_enemy(
         entity.with_child((
             Body,
             FigureRoot(assets.beetle.clone()),
+            FigureControl {
+                animation: "walk",
+                ..default()
+            },
             Transform::from_scale(Vec3::new(scale, scale, 1.)),
             Visibility::default(),
         ));
@@ -368,19 +374,21 @@ pub fn move_towards_player(
 pub fn face_heading(
     time: Res<Time>,
     headings: Query<&Heading, With<Enemy>>,
-    mut bodies: Query<(&ChildOf, &mut Transform), With<Body>>,
+    mut bodies: Query<(&ChildOf, &mut FigureControl), With<Body>>,
 ) {
     let max_step = TURN_SPEED * time.delta_secs();
-    for (child_of, mut transform) in &mut bodies {
+    for (child_of, mut control) in &mut bodies {
         let Ok(heading) = headings.get(child_of.parent()) else {
             continue;
         };
         if heading.0 == Vec2::ZERO {
             continue;
         }
-        let target = Quat::from_rotation_z(heading.0.to_angle());
-        let rotation = transform.rotation.rotate_towards(target, max_step);
-        transform.set_if_neq(transform.with_rotation(rotation));
+        let angle = control.facing.angle_to(heading.0);
+        let step = angle.clamp(-max_step, max_step);
+        if step != 0. {
+            control.facing = Vec2::from_angle(step).rotate(control.facing);
+        }
     }
 }
 
@@ -410,16 +418,17 @@ pub fn despawn_outside_maps(
 /// and slower for larger enemies.
 fn animate_walk(
     enemies: Query<(&Enemy, &LinearVelocity)>,
-    mut bodies: Query<(&ChildOf, &mut AnimationPlayer), With<Body>>,
+    mut bodies: Query<(&ChildOf, &mut FigureControl), With<Body>>,
 ) {
-    for (child_of, mut player) in &mut bodies {
+    for (child_of, mut control) in &mut bodies {
         let Ok((enemy, velocity)) = enemies.get(child_of.parent()) else {
             continue;
         };
         let scale = enemy.radius / BEETLE_RADIUS;
         let speed = (velocity.length() / (WALK_ANIMATION_SPEED * scale)).min(4.);
-        for (_, animation) in player.playing_animations_mut() {
-            animation.set_speed(speed);
+        // compared first, so unchanged speeds don't count as changes
+        if (control.speed - speed).abs() > 0.01 {
+            control.speed = speed;
         }
     }
 }

@@ -21,6 +21,13 @@
     60–80 px to 15–20 px, since the swarm stayed too far away, and up again to 25–30 px; check how
     close it should circle once enemies have sprites.
 
+## Figures
+
+- Sort units against the map's objects (trees, houses) by their height on screen, so they can
+  walk behind them; for now they are drawn above all map layers.
+- Fade between animations (idle and walk) instead of switching at once.
+- Check the figures in the game: sizes, speeds of the animations, the order of their parts.
+
 ## Input
 
 - Rebindable keys: the bindings (WASD, Tab, 1–5, the debug keys) in one place, e.g. a resource

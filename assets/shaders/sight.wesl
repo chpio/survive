@@ -2,6 +2,7 @@
 // src/sight/render.rs).
 
 import bevy_sprite_render::mesh2d::vertex_output::VertexOutput;
+import bevy_sprite_render::mesh2d::functions;
 import super::sight_mask;
 
 @if(TONEMAP_IN_SHADER)
@@ -25,11 +26,18 @@ struct SightMaterial {
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
+    // a mesh tag anchors the whole mesh at one point, e.g. a figure at its feet
+    // (figure::anchor_tag): x and y offset by 2^15 in its low and high half
+    let tag = functions::get_tag(in.instance_index);
+    var position = in.world_position.xy;
+    if tag != 0u {
+        position = vec2<f32>(f32(tag & 0xffffu), f32(tag >> 16u)) - 32768.0;
+    }
     let visibility = sight_mask::visibility(
         mask,
         mask_sampler,
         material.mask_area,
-        in.world_position.xy,
+        position,
     );
     let alpha = mix(visibility, 1.0 - visibility, material.invert);
 

@@ -91,12 +91,13 @@ Umgesetzt, siehe `src/flowfield/`:
 - SVG wäre möglich über `bevy_svg`, `bevy_vello` oder Rastern mit `resvg`. Für Animation und
   Pixel-Look sind PNG-Spritesheets einfacher.
 - Entschieden: Figuren bekommen Skeletal-Animation statt Spritesheets, da Einzelbilder zu groß
-  werden. Erstmal starre, einfarbige 2D-Teile ohne Skinning, jedes an einem Knochen. Animiert
-  wird in Blender, exportiert als glTF (Hierarchie und Bewegungen); in Bevy wird jedes Teil als
-  2D-Fläche mit dem `SightMaterial` gezeichnet, so wie die Gegner heute. Übergänge zwischen
-  Animationen übernimmt Bevys Animationssystem. Kein Spine: Die Lizenz der Runtimes passt nicht
-  zu einem Open-Source-Spiel. Skinning (sich biegende Teile) bräuchte Bevys 3D-Pipeline und
-  eine 3D-Fassung des `SightMaterial`, also erst später, falls nötig.
+  werden. Kein Spine: Die Lizenz der Runtimes passt nicht zu einem Open-Source-Spiel.
+- Entschieden: Die Perspektive ist die schräge des Tilesets (Boden von oben, Wände von vorn).
+  Figuren werden deshalb in Blender als 3D-Modelle aus einfachen, einfarbigen Teilen gebaut und
+  einmal animiert; das Exportskript projiziert sie für 8 Richtungen in diese Ansicht, als starre
+  2D-Teile. Im Spiel bleibt alles 2D. Ein anderer Blickwinkel heißt nur, die Skripte neu laufen
+  zu lassen. Die Sicht wird für eine ganze Figur an ihren Füßen abgefragt. Details in
+  `docs/architecture/figure.md`.
 
 ## Inventar
 

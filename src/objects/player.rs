@@ -1,5 +1,6 @@
 use crate::{
-    combat::{Attack, Died, Health},
+    combat::{Attack, Died, Health, health_bar::UnitHeight},
+    figure::{FigureControl, FigureRoot},
     movement::{self, DesiredVelocity},
     objects::enemy::Enemy,
     sight::SightRadius,
@@ -15,7 +16,7 @@ pub struct Player;
 /// Where the player starts, on the first map.
 pub const START: Vec2 = Vec2::new(218., -386.);
 
-/// Shape of the collider and the placeholder mesh.
+/// Shape of the collider, at the figure's feet.
 pub const SHAPE: Circle = Circle::new(5.);
 
 pub const MASS: f32 = 3.;
@@ -34,6 +35,8 @@ pub fn combat() -> impl Bundle {
     (
         Health::new(MAX_HEALTH),
         Attack::new(10., SHAPE.radius + 6., 300., Duration::from_millis(500)),
+        // the figure's head
+        UnitHeight(17.),
     )
 }
 
@@ -82,11 +85,50 @@ pub fn start_over_on_death(
     }
 }
 
+/// Visible body of the player, a child showing its figure.
+#[derive(Component)]
+pub struct Body;
+
+/// The player's figure as a child, for its bundle.
+pub fn body(asset_server: &AssetServer) -> impl Bundle {
+    children![(
+        Body,
+        FigureRoot(asset_server.load("characters/player.glb")),
+        Transform::default(),
+        Visibility::default(),
+    )]
+}
+
+/// Speed in px/s at which the walk animation plays at its own pace.
+const WALK_ANIMATION_SPEED: f32 = 80.;
+
+/// Shows the player walking where it wants to go, or standing.
+fn animate(
+    player: Single<(&DesiredVelocity, &LinearVelocity), With<Player>>,
+    mut body: Single<&mut FigureControl, With<Body>>,
+) {
+    let (desired, velocity) = *player;
+    let control = &mut **body;
+    let (animation, speed) = if desired.0 == Vec2::ZERO {
+        ("idle", 1.)
+    } else {
+        control.facing = desired.0.normalize();
+        (
+            "walk",
+            (velocity.length() / WALK_ANIMATION_SPEED).clamp(0.5, 4.),
+        )
+    };
+    control.animation = animation;
+    if (control.speed - speed).abs() > 0.01 {
+        control.speed = speed;
+    }
+}
+
 pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, move_player)
+        app.add_systems(Update, (move_player, animate))
             .add_observer(start_over_on_death);
     }
 }

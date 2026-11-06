@@ -2,6 +2,7 @@ use crate::common::{self, SMALL};
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use survival::{
+    figure::FigureControl,
     flowfield::{self, FlowField},
     objects::{
         enemy::{self, Enemy},
@@ -101,7 +102,14 @@ fn facing_app(heading: Vec2) -> (App, Entity) {
             SMALL,
             SMALL.physics(),
             enemy::Heading(heading),
-            children![(enemy::Body, Transform::default())],
+            children![(
+                enemy::Body,
+                FigureControl {
+                    facing: Vec2::X,
+                    ..default()
+                },
+                Transform::default()
+            )],
         ),
         Vec2::ZERO,
     );
@@ -111,8 +119,7 @@ fn facing_app(heading: Vec2) -> (App, Entity) {
 /// Direction the enemy's body faces.
 fn facing(app: &App, enemy: Entity) -> Vec2 {
     let body = app.world().get::<Children>(enemy).unwrap()[0];
-    let transform = app.world().get::<Transform>(body).unwrap();
-    (transform.rotation * Vec3::X).xy()
+    app.world().get::<FigureControl>(body).unwrap().facing
 }
 
 #[test]
