@@ -1,13 +1,5 @@
 # TODO
 
-## Performance
-
-- Low priority, only if the flow field's search turns out to be costly: replace the `BinaryHeap`
-  in `Grid::compute_distances` with a bucket queue (Dial's algorithm). Steps cost only 10 or 14, so
-  the waiting distances always lie within 15 consecutive values; a ring of 15 `Vec`s indexed by
-  `distance % 15` makes push and pop O(1), without the heap's sifting and mispredicted branches.
-  The distances stay the same.
-
 ## Gameplay
 
 - Balance the game's values together, once enemies have real sprites (their size on screen

@@ -30,7 +30,6 @@ use crate::{
 };
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use std::{cmp::Reverse, collections::BinaryHeap};
 
 pub mod debug;
 
@@ -66,6 +65,10 @@ pub const REACH: f32 = (WINDOW_RADIUS + 1) as f32 * CELL_SIZE + MAX_CLEARANCE;
 /// Cost of a straight and a diagonal step between cells (roughly 1 : √2).
 const STRAIGHT_COST: u32 = 10;
 const DIAGONAL_COST: u32 = 14;
+
+/// Buckets of the search's queue: the distances waiting in it always lie within this many
+/// consecutive values, since every step costs at least 1 and at most [`DIAGONAL_COST`].
+const BUCKETS: usize = DIAGONAL_COST as usize + 1;
 
 const NEIGHBORS: [IVec2; 8] = [
     IVec2::new(1, 0),
@@ -150,6 +153,8 @@ pub struct Grid {
     /// Target cell the distances were computed for, `None` while they are outdated
     target: Option<IVec2>,
     target_position: Vec2,
+    /// Queue of the search, kept between searches so its buckets keep their capacity
+    buckets: [Vec<usize>; BUCKETS],
 }
 
 /// State of a cell in the window of a [`Grid`].
@@ -192,6 +197,7 @@ impl Grid {
             window: Raster::new(CellRect::around(IVec2::ZERO, WINDOW_RADIUS), OUTSIDE),
             target: None,
             target_position: Vec2::ZERO,
+            buckets: Default::default(),
         }
     }
 
@@ -336,6 +342,10 @@ impl Grid {
     }
 
     /// Dijkstra search from `target` within the window, which is moved to be centered on it.
+    ///
+    /// The queue is a bucket queue (Dial's algorithm): cells waiting with distance `d` lie in
+    /// bucket `d % BUCKETS`, which only holds that distance, since the waiting distances span
+    /// fewer than [`BUCKETS`] values. So pushing and popping are O(1).
     fn compute_distances(&mut self, target: IVec2, maps: &[&Obstacles]) {
         self.target = Some(target);
         self.compose(target, maps);
@@ -343,28 +353,40 @@ impl Grid {
         let start = window.index(target).unwrap();
         self.window[start].distance = 0;
 
-        let mut queue = BinaryHeap::from([Reverse((0, start))]);
-        while let Some(Reverse((distance, index))) = queue.pop() {
-            if distance > self.window[index].distance {
-                continue;
-            }
-            // copied out, since the steps borrow the grid
-            let mut steps = [(0, 0); NEIGHBORS.len()];
-            let mut count = 0;
-            for (next, cost) in self.steps(window.cell(index)) {
-                if let Some(next_index) = window.index(next) {
-                    steps[count] = (next_index, cost);
-                    count += 1;
+        // taken out of the grid, which the steps borrow
+        let mut buckets = std::mem::take(&mut self.buckets);
+        buckets[0].push(start);
+        let mut waiting = 1;
+        let mut distance = 0;
+        while waiting > 0 {
+            let bucket = distance as usize % BUCKETS;
+            while let Some(index) = buckets[bucket].pop() {
+                waiting -= 1;
+                if distance > self.window[index].distance {
+                    continue;
+                }
+                // copied out, since the steps borrow the grid
+                let mut steps = [(0, 0); NEIGHBORS.len()];
+                let mut count = 0;
+                for (next, cost) in self.steps(window.cell(index)) {
+                    if let Some(next_index) = window.index(next) {
+                        steps[count] = (next_index, cost);
+                        count += 1;
+                    }
+                }
+                for &(next_index, cost) in &steps[..count] {
+                    let next_distance = distance + cost;
+                    if next_distance < self.window[next_index].distance {
+                        self.window[next_index].distance = next_distance;
+                        // never this bucket, since a step costs less than `BUCKETS`
+                        buckets[next_distance as usize % BUCKETS].push(next_index);
+                        waiting += 1;
+                    }
                 }
             }
-            for &(next_index, cost) in &steps[..count] {
-                let next_distance = distance + cost;
-                if next_distance < self.window[next_index].distance {
-                    self.window[next_index].distance = next_distance;
-                    queue.push(Reverse((next_distance, next_index)));
-                }
-            }
+            distance += 1;
         }
+        self.buckets = buckets;
     }
 
     /// Whether all cells on the line from `from` to `to` are walkable.
