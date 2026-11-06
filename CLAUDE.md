@@ -13,12 +13,13 @@ cargo run          # run the game (assets are loaded from ./assets, hot-reloaded
 cargo check        # fast type check
 cargo clippy       # lint
 cargo fmt          # format
+cargo bench --no-default-features   # Criterion benchmarks in benches/, see docs/architecture/benchmarks.md
 cargo tracy        # release build with Bevy's spans sent to the Tracy profiler (alias in .cargo/config.toml)
 ```
 
 `cargo tracy` enables `bevy/trace_tracy`: every system and schedule becomes a span in the Tracy profiler (version 0.14). Use it for the time of single systems, which the HUD's "Performance" view doesn't measure; the spans slow down the frame a bit.
 
-Tests live in `tests/` (never inline) and run with `cargo test`; filter with `cargo test --test it enemy`. They form a single test binary `it` (`autotests = false`; `tests/main.rs` only declares the modules), so the game and its dependencies are linked once; the lib and binary have no test targets of their own (`test = false` in `Cargo.toml`). All tests run as threads of one process, so they must not share process-wide state (statics, environment variables, the current directory). Game code is in the `survival` lib crate (`src/lib.rs`) so tests can use it; `src/main.rs` only builds the `App`. `tests/common.rs` builds a headless physics app; `common::app_with` takes extra plugins, which can't be added once the app is finished.
+Tests live in `tests/` (never inline) and run with `cargo test`; filter with `cargo test --test it enemy`. They form a single test binary `it` (`autotests = false`; `tests/main.rs` only declares the modules), so the game and its dependencies are linked once; the lib and binary have no test or bench targets of their own (`test = false`, `bench = false` in `Cargo.toml`). All tests run as threads of one process, so they must not share process-wide state (statics, environment variables, the current directory). Game code is in the `survival` lib crate (`src/lib.rs`) so tests can use it; `src/main.rs` only builds the `App`. `tests/common.rs` builds a headless physics app; `common::app_with` takes extra plugins, which can't be added once the app is finished.
 
 Build notes:
 - Bevy uses `default-features = false` with a hand-picked feature list in `Cargo.toml`. The commented-out lines mirror Bevy's default features. If a Bevy type or plugin is missing, the feature that provides it is probably commented out.
@@ -49,6 +50,7 @@ The details of each area are in `docs/architecture/`; read the area's file befor
 | Day and night, shadows, color grading | `src/light/` | `light.md` | `licht.md` |
 | Spawning | `src/spawning/` | `spawning.md` | `spawnen.md` |
 | Settings, performance measuring | `src/settings.rs`, `src/perf.rs` | `settings.md` | |
+| Benchmarks | `benches/` | `benchmarks.md` | |
 | Debug keys and HUD dev tools | | `debug.md` | |
 
 ### Rules across areas

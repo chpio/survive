@@ -11,14 +11,22 @@ autotests = false
 name = "it"
 path = "tests/main.rs"
 
-# without tests of their own, they would only link empty test binaries
+# Criterion benchmarks, run with `cargo bench`; see docs/architecture/benchmarks.md
+[[bench]]
+name = "flowfield"
+harness = false
+
+# without tests or benchmarks of their own, they would only link empty binaries, and libtest
+# would reject Criterion's arguments to `cargo bench`
 [lib]
 test = false
+bench = false
 doctest = false
 
 [[bin]]
 name = "survival"
 test = false
+bench = false
 
 [lints.clippy]
 # Bevy system params (queries with filters) are complex types by nature
@@ -46,6 +54,9 @@ serde = { version = "1", features = ["derive"] }
 # Blitz's style engine, the same version and features, to mark nodes for recomputation (ui::resize)
 style = { package = "stylo", version = "0.22" }
 vello = { version = "0.11", default-features = false, features = ["wgpu"] }
+
+[dev-dependencies]
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
 
 [dependencies.bevy]
 version = "0.20"
