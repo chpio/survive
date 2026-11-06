@@ -26,6 +26,7 @@ Build notes:
 - Gizmos (physics debug outlines, flow field arrows) need both `bevy_gizmos` and `bevy_gizmos_render`; without the latter they are recorded but never drawn.
 - The default feature `dev` turns on Bevy's `dynamic_linking` and `file_watcher`, in release builds too. A build to ship turns it off with `--no-default-features`; a dynamically linked executable can't be shipped.
 - Windows builds cross-compile from Linux with MinGW (`mingw-w64-gcc` on Arch) and `rustup target add x86_64-pc-windows-gnu`: `cargo build --release --target x86_64-pc-windows-gnu --no-default-features`. The executable needs `assets/` next to it.
+- A build for x86-64-v3 CPUs (AVX2, FMA; crashes with an illegal instruction on CPUs without them) uses the profile `release-v3`, which only gives it its own `target/release-v3/`, and gets the target CPU from `RUSTFLAGS`: `RUSTFLAGS="-C target-cpu=x86-64-v3" cargo build --profile release-v3 --no-default-features` (with `--target x86_64-pc-windows-gnu` for Windows). Stable Cargo can't set `target-cpu` in a profile, and it doesn't belong in a checked-in `.cargo/config.toml`, since Cargo concatenates the `rustflags` of all config files.
 - Dev builds use `opt-level = 1` for the crate and `3` for dependencies.
 
 Open work is collected in `TODO.md`; remove entries once they are done.

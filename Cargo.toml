@@ -133,3 +133,8 @@ opt-level = 3
 [profile.release]
 codegen-units = 1
 lto = "thin"
+
+# release build for x86-64-v3 CPUs (AVX2, FMA) in its own target/release-v3/; a profile can't set
+# the target CPU, so RUSTFLAGS adds it, see CLAUDE.md
+[profile.release-v3]
+inherits = "release"

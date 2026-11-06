@@ -41,6 +41,9 @@
 
 - Build release executables in CI on `v*` tags and attach them to the release: Linux natively,
   Windows cross-compiled with `x86_64-pc-windows-gnu` (MinGW and the target added to the CI image).
+  Decide whether to ship x86-64-v3 builds (profile `release-v3`, see CLAUDE.md) alongside or
+  instead of the baseline ones; measure first how much they gain (`cargo bench`, frame time with
+  many enemies).
   Before that:
   - Embed all assets in release builds, so the executable is a single file: a `build.rs` lists the
     files in `assets/` as `include_bytes!`, and outside the `dev` feature they replace the default
