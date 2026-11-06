@@ -1,3 +1,9 @@
+// shipped Windows builds start without a console window
+#![cfg_attr(
+    all(not(debug_assertions), not(feature = "dev")),
+    windows_subsystem = "windows"
+)]
+
 use std::num::NonZero;
 
 use avian2d::prelude::*;

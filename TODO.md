@@ -46,7 +46,6 @@
     files in `assets/` as `include_bytes!`, and outside the `dev` feature they replace the default
     asset source through Bevy's `MemoryAssetReader` (`bevy_embedded_assets` doesn't support Bevy
     0.20 yet). Check that `bevy_ecs_tiled` still finds the tileset and its image.
-  - Hide the console window on Windows with `#![windows_subsystem = "windows"]` in release builds.
   - Run the Windows build on Windows (or under Wine); it cross-compiles and links, see CLAUDE.md.
 
 ## Code
