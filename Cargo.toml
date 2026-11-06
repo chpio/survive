@@ -49,6 +49,8 @@ blitz-traits = "=0.3.0-beta.4"
 dioxus = { version = "=0.8.0-alpha.3", default-features = false, features = ["macro", "html", "signals", "hooks"] }
 dioxus-native-dom = "=0.8.0-alpha.3"
 fastrand = "2"
+# reads the figures' .glb files; Bevy's own glTF loader would pull in its 3D renderer
+gltf = { version = "1.4.1", default-features = false, features = ["names", "utils"] }
 ron = "0.12"
 serde = { version = "1", features = ["derive"] }
 # Blitz's style engine, the same version and features, to mark nodes for recomputation (ui::resize)
@@ -67,7 +69,9 @@ features = [
     "async_executor",
     # "android-game-activity",
     # "android_shared_stdcxx",
-    # "animation",
+    # skeletal animation of the figures (src/figure.rs)
+    "bevy_animation",
+    "bevy_curve",
     "bevy_asset",
     # "bevy_audio",
     # "bevy_color",

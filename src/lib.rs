@@ -2,6 +2,7 @@
 
 pub mod cells;
 pub mod combat;
+pub mod figure;
 pub mod flowfield;
 pub mod hot_reload;
 pub mod items;

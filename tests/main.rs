@@ -3,6 +3,7 @@
 mod combat;
 mod common;
 mod enemy;
+mod figure;
 mod flowfield;
 mod hud;
 mod items;

@@ -44,6 +44,7 @@ The details of each area are in `docs/architecture/`; read the area's file befor
 | Tiled map → ECS | observers in `src/main.rs` | `tiled.md` | `welt.md` |
 | Flow field | `src/flowfield/` | `flowfield.md` | |
 | Movement | `src/movement.rs` | `movement.md` | |
+| Figures (animated characters from Blender) | `src/figure.rs`, `art/` | `figure.md` | `ideen/ideen.md` |
 | Combat, swarm enemies | `src/combat/`, `src/objects/enemy/swarm/` | `combat.md` | `schwarm.md` |
 | HUD | `src/ui/` | `ui.md` | `ui-events.md` |
 | Items | `src/items/` | `items.md` | `items.md` |
