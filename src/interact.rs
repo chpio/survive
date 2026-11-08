@@ -1,6 +1,7 @@
 //! Things in the world the player can interact with by clicking them: items on the ground and
-//! chests. A click on one within reach and in sight triggers [`Interact`] on it, and each thing
-//! brings its own observer for it (an item is picked up, a chest opens). Hovering one outlines
+//! chests. A click on one within reach and in sight triggers [`Interact`] on it, and each kind of
+//! thing has a global observer for it that ignores other kinds (an item is picked up, a chest
+//! opens). Hovering one outlines
 //! it: red while the player can interact with it, white while it is too far away.
 //!
 //! The outline is a copy of each of the thing's meshes, grown by [`OUTLINE_WIDTH`] and drawn
@@ -51,8 +52,8 @@ impl Interactable {
     }
 }
 
-/// The player interacts with `entity`, an [`Interactable`] within its reach and in sight. Things
-/// observe it on their own entity to do what interacting with them means.
+/// The player interacts with `entity`, an [`Interactable`] within its reach and in sight. Each kind
+/// of thing observes it globally and acts if `entity` is one of its kind.
 #[derive(EntityEvent, Clone, Copy, Debug)]
 pub struct Interact {
     pub entity: Entity,

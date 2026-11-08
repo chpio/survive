@@ -48,37 +48,34 @@ struct Holder;
 
 /// The figure of the chest, child of its [`Holder`].
 #[derive(Component)]
-struct ChestFigure;
+pub struct ChestFigure;
 
 #[derive(Resource)]
 struct ChestAsset(Handle<Figure>);
 
-/// Makes the Tiled object `entity` a chest, which opens when the player interacts with it.
+/// Makes the Tiled object `entity` a chest.
 pub fn insert(commands: &mut Commands, entity: Entity, properties: &tiled::Properties) {
     let content = match properties.get("content") {
         Some(tiled::PropertyValue::StringValue(text)) => parse_content(text),
         _ => Vec::new(),
     };
-    commands
-        .entity(entity)
-        .insert((
-            Chest {
-                content,
-                open: false,
-            },
-            Name::new("Chest"),
-            RigidBody::Static,
-            Collider::rectangle(SIZE.x, SIZE.y),
-            CastsShadow(HEIGHT),
-            Visibility::default(),
-            // the outline needs it here; the figure's parts get their own for mesh picking
-            Pickable::default(),
-            Interactable {
-                reach: REACH,
-                radius: SIZE.y / 2.,
-            },
-        ))
-        .observe(open_on_interact);
+    commands.entity(entity).insert((
+        Chest {
+            content,
+            open: false,
+        },
+        Name::new("Chest"),
+        RigidBody::Static,
+        Collider::rectangle(SIZE.x, SIZE.y),
+        CastsShadow(HEIGHT),
+        Visibility::default(),
+        // the outline needs it here; the figure's parts get their own for mesh picking
+        Pickable::default(),
+        Interactable {
+            reach: REACH,
+            radius: SIZE.y / 2.,
+        },
+    ));
 }
 
 /// Gives new chests their figure, closed: the animation `open` held at its start.
@@ -122,9 +119,9 @@ fn hold_at_unit_z(
     }
 }
 
-/// Opens the chest the player interacts with: plays the figure's `open` and drops the content in
+/// Opens a chest the player interacts with: plays the figure's `open` and drops the content in
 /// front of it.
-fn open_on_interact(
+pub fn open_on_interact(
     interact: On<Interact>,
     mut commands: Commands,
     mut chests: Query<(&mut Chest, &GlobalTransform)>,
@@ -163,6 +160,7 @@ pub struct Plugin;
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, load)
-            .add_systems(Update, (add_figure, hold_at_unit_z));
+            .add_systems(Update, (add_figure, hold_at_unit_z))
+            .add_observer(open_on_interact);
     }
 }

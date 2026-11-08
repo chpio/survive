@@ -28,6 +28,8 @@ fn content_skips_what_does_not_parse() {
 #[test]
 fn interacting_opens_the_chest_once_and_drops_its_content() {
     let mut app = common::app_with(items::Plugin);
+    // `chest::Plugin` loads the figure, which needs the asset server
+    app.add_observer(chest::open_on_interact);
     let player = app.world_mut().spawn_empty().id();
     let entity = app
         .world_mut()

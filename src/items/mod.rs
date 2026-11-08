@@ -135,25 +135,28 @@ fn on_ground(position: Vec2) -> impl Bundle {
     )
 }
 
-/// Spawns a stack of `count` items of type `id` on the ground. Interacting with it picks it up.
+/// Spawns a stack of `count` items of type `id` on the ground.
 pub fn spawn_on_ground(commands: &mut Commands, id: &ItemId, count: u32, position: Vec2) {
-    commands
-        .spawn((
-            Name::new("Item"),
-            Item(id.clone()),
-            Stack(count),
-            on_ground(position),
-        ))
-        .observe(pick_up_on_interact);
+    commands.spawn((
+        Name::new("Item"),
+        Item(id.clone()),
+        Stack(count),
+        on_ground(position),
+    ));
 }
 
-/// Picks up the item the player interacts with. The item keeps this observer while it is held,
-/// but it can only be interacted with on the ground.
-fn pick_up_on_interact(interact: On<Interact>, mut pick_up: MessageWriter<PickUp>) {
-    pick_up.write(PickUp {
-        item: interact.entity,
-        by: interact.by,
-    });
+/// Picks up an item on the ground the player interacts with.
+fn pick_up_on_interact(
+    interact: On<Interact>,
+    items: Query<(), (With<Item>, Without<HeldBy>)>,
+    mut pick_up: MessageWriter<PickUp>,
+) {
+    if items.contains(interact.entity) {
+        pick_up.write(PickUp {
+            item: interact.entity,
+            by: interact.by,
+        });
+    }
 }
 
 /// Lets `by` pick up `item`, if it lies on the ground.
@@ -345,6 +348,7 @@ impl bevy::app::Plugin for Plugin {
             .add_message::<hotbar::AssignSlot>()
             .add_message::<hotbar::UseSlot>()
             .init_resource::<ItemDefinitions>()
+            .add_observer(pick_up_on_interact)
             .add_systems(
                 Update,
                 (
