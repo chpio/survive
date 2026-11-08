@@ -1,6 +1,7 @@
 use crate::common;
 use bevy::prelude::*;
 use std::collections::BTreeMap;
+use survival::interact::Interact;
 use survival::items::{
     self, DROP_DISTANCE, DropItem, Effect, HeldBy, Inventory, Item, ItemDefinition,
     ItemDefinitions, ItemId, ItemUsed, MERGE_RADIUS, PickUp, Stack, Unique, UseItem,
@@ -447,4 +448,23 @@ fn unique_items_do_not_stack_on_the_ground() {
     }
 
     assert_eq!(ground(&mut app).len(), 2);
+}
+
+#[test]
+fn interacting_with_an_item_picks_it_up() {
+    let mut app = app();
+    let owner = spawn_owner(&mut app, Vec2::ZERO);
+    let mut commands = app.world_mut().commands();
+    spawn_on_ground(&mut commands, &"sword".into(), 1, Vec2::X * 10.);
+    app.world_mut().flush();
+    app.update();
+    let item = ground(&mut app)[0].0;
+
+    app.world_mut().trigger(Interact {
+        entity: item,
+        by: owner,
+    });
+    app.update();
+
+    assert_eq!(app.world().get::<HeldBy>(item), Some(&HeldBy(owner)));
 }

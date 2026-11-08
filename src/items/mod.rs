@@ -14,7 +14,7 @@ pub mod hotbar;
 pub mod input;
 pub mod render;
 
-use crate::interact::Interactable;
+use crate::interact::{Interact, Interactable};
 use bevy::prelude::*;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -135,14 +135,25 @@ fn on_ground(position: Vec2) -> impl Bundle {
     )
 }
 
-/// Spawns a stack of `count` items of type `id` on the ground.
+/// Spawns a stack of `count` items of type `id` on the ground. Interacting with it picks it up.
 pub fn spawn_on_ground(commands: &mut Commands, id: &ItemId, count: u32, position: Vec2) {
-    commands.spawn((
-        Name::new("Item"),
-        Item(id.clone()),
-        Stack(count),
-        on_ground(position),
-    ));
+    commands
+        .spawn((
+            Name::new("Item"),
+            Item(id.clone()),
+            Stack(count),
+            on_ground(position),
+        ))
+        .observe(pick_up_on_interact);
+}
+
+/// Picks up the item the player interacts with. The item keeps this observer while it is held,
+/// but it can only be interacted with on the ground.
+fn pick_up_on_interact(interact: On<Interact>, mut pick_up: MessageWriter<PickUp>) {
+    pick_up.write(PickUp {
+        item: interact.entity,
+        by: interact.by,
+    });
 }
 
 /// Lets `by` pick up `item`, if it lies on the ground.

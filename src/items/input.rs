@@ -1,45 +1,13 @@
-//! The player's interaction with items in the world: clicking an item on the ground picks it up
-//! if it is within reach and not completely out of sight. Clicks on the HUD never get here, since the HUD
-//! blocks picking below it (see `docs/ui-events.md`). The hotbar's keys are handled by the HUD,
-//! since they depend on the inventory window.
+//! The player's input for items besides the HUD: the reach for picking them up (clicking one
+//! goes through [`crate::interact`]) and the debug key that spawns them. The hotbar's keys are
+//! handled by the HUD, since they depend on the inventory window.
 
-use super::{HeldBy, Item, ItemDefinitions, PickUp, spawn_on_ground};
-use crate::{interact::Interactable, objects::player::Player, sight::Sight};
-use bevy::{
-    picking::{events::PointerClick, pointer::PointerButton},
-    prelude::*,
-    window::PrimaryWindow,
-};
+use super::{ItemDefinitions, spawn_on_ground};
+use crate::objects::player::Player;
+use bevy::{prelude::*, window::PrimaryWindow};
 
 /// Distance in px from the player's center up to which it picks up items.
 pub const PICKUP_REACH: f32 = 24.;
-
-fn pick_up_on_click(
-    click: On<PointerClick>,
-    items: Query<(&Transform, &Interactable), (With<Item>, Without<HeldBy>)>,
-    player: Single<(Entity, &Transform), With<Player>>,
-    sight: Option<Res<Sight>>,
-    mut pick_up: MessageWriter<PickUp>,
-) {
-    if click.button != PointerButton::Primary {
-        return;
-    }
-    let Ok((item, interactable)) = items.get(click.entity) else {
-        return;
-    };
-    let (player, player_transform) = *player;
-    // the material hides an item out of sight, but picking would still hit it
-    if interactable.can_interact(
-        item.translation.xy(),
-        player_transform.translation.xy(),
-        sight.as_deref(),
-    ) {
-        pick_up.write(PickUp {
-            item: click.entity,
-            by: player,
-        });
-    }
-}
 
 /// F spawns an item at the mouse cursor (next to the player while the cursor is outside the
 /// window), each press the next type in the order of their ids.
@@ -74,7 +42,6 @@ pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(pick_up_on_click)
-            .add_systems(Update, spawn_item_on_key);
+        app.add_systems(Update, spawn_item_on_key);
     }
 }

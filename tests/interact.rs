@@ -31,7 +31,10 @@ fn sharp_corners_are_cut_short() {
     let grown = grown_outline(spike.clone(), 1.);
     assert_eq!(grown.len(), 3);
     for g in &grown {
-        let closest = spike.iter().map(|p| g.distance(*p)).fold(f32::MAX, f32::min);
+        let closest = spike
+            .iter()
+            .map(|p| g.distance(*p))
+            .fold(f32::MAX, f32::min);
         assert!(closest <= 2. + 1e-4, "{grown:?}");
     }
 }

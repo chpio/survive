@@ -1,20 +1,15 @@
-//! Chests placed in Tiled: a point object with the type `chest`. Clicking a closed chest within
-//! reach opens it: its lid swings open and its content falls out in front of it. Whether a chest
+//! Chests placed in Tiled: a point object with the type `chest`. Interacting with a closed chest
+//! (see [`crate::interact`]) opens it: its lid swings open and its content falls out in front of it. Whether a chest
 //! is open isn't saved; a map that is loaded again brings its chests back closed.
 
 use crate::{
     figure::{Figure, FigureControl, FigureRoot},
-    interact::Interactable,
+    interact::{Interact, Interactable},
     items::{self, ItemId},
     light::shadow::CastsShadow,
-    objects::player::Player,
-    sight::Sight,
 };
 use avian2d::prelude::*;
-use bevy::{
-    picking::{events::PointerClick, pointer::PointerButton},
-    prelude::*,
-};
+use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::tiled;
 
 /// Distance in px from the player's center to the chest's center up to which it opens.
@@ -58,23 +53,32 @@ struct ChestFigure;
 #[derive(Resource)]
 struct ChestAsset(Handle<Figure>);
 
-/// Makes the Tiled object `entity` a chest.
+/// Makes the Tiled object `entity` a chest, which opens when the player interacts with it.
 pub fn insert(commands: &mut Commands, entity: Entity, properties: &tiled::Properties) {
     let content = match properties.get("content") {
         Some(tiled::PropertyValue::StringValue(text)) => parse_content(text),
         _ => Vec::new(),
     };
-    commands.entity(entity).insert((
-        Chest {
-            content,
-            open: false,
-        },
-        Name::new("Chest"),
-        RigidBody::Static,
-        Collider::rectangle(SIZE.x, SIZE.y),
-        CastsShadow(HEIGHT),
-        Visibility::default(),
-    ));
+    commands
+        .entity(entity)
+        .insert((
+            Chest {
+                content,
+                open: false,
+            },
+            Name::new("Chest"),
+            RigidBody::Static,
+            Collider::rectangle(SIZE.x, SIZE.y),
+            CastsShadow(HEIGHT),
+            Visibility::default(),
+            // the outline needs it here; the figure's parts get their own for mesh picking
+            Pickable::default(),
+            Interactable {
+                reach: REACH,
+                radius: SIZE.y / 2.,
+            },
+        ))
+        .observe(open_on_interact);
 }
 
 /// Gives new chests their figure, closed: the animation `open` held at its start.
@@ -93,11 +97,8 @@ fn add_figure(mut commands: Commands, chests: Query<Entity, Added<Chest>>, asset
                     repeat: false,
                     ..default()
                 },
+                // makes the parts pickable; hovering and clicks bubble up to the chest
                 Pickable::default(),
-                Interactable {
-                    reach: REACH,
-                    radius: SIZE.y / 2.,
-                },
                 Transform::default(),
                 Visibility::default(),
             )],
@@ -121,38 +122,30 @@ fn hold_at_unit_z(
     }
 }
 
-fn open_on_click(
-    click: On<PointerClick>,
+/// Opens the chest the player interacts with: plays the figure's `open` and drops the content in
+/// front of it.
+fn open_on_interact(
+    interact: On<Interact>,
     mut commands: Commands,
     mut chests: Query<(&mut Chest, &GlobalTransform)>,
-    mut figures: Query<(&mut FigureControl, &Interactable, &ChildOf), With<ChestFigure>>,
-    holders: Query<&ChildOf, With<Holder>>,
-    player: Single<&Transform, With<Player>>,
-    sight: Option<Res<Sight>>,
+    mut figures: Query<&mut FigureControl, With<ChestFigure>>,
+    children: Query<&Children>,
 ) {
-    if click.button != PointerButton::Primary {
-        return;
-    }
-    // the click bubbles up from the parts; act once, on the figure
-    let Ok((mut control, interactable, holder)) = figures.get_mut(click.entity) else {
+    let Ok((mut chest, transform)) = chests.get_mut(interact.entity) else {
         return;
     };
-    let Ok(chest_entity) = holders.get(holder.parent()).map(ChildOf::parent) else {
-        return;
-    };
-    let Ok((mut chest, transform)) = chests.get_mut(chest_entity) else {
-        return;
-    };
-    let position = transform.translation().xy();
-    // the material hides a chest out of sight, but picking would still hit it
-    if chest.open || !interactable.can_interact(position, player.translation.xy(), sight.as_deref())
-    {
+    if chest.open {
         return;
     }
     chest.open = true;
     // nothing left to do with it
-    commands.entity(click.entity).remove::<Interactable>();
-    control.speed = 1.;
+    commands.entity(interact.entity).remove::<Interactable>();
+    for child in children.iter_descendants(interact.entity) {
+        if let Ok(mut control) = figures.get_mut(child) {
+            control.speed = 1.;
+        }
+    }
+    let position = transform.translation().xy();
     for (i, (id, count)) in chest.content.iter().enumerate() {
         // in a row in front of the chest
         let offset = (i as f32 - (chest.content.len() - 1) as f32 / 2.) * items::SIZE * 1.5;
@@ -170,7 +163,6 @@ pub struct Plugin;
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, load)
-            .add_systems(Update, (add_figure, hold_at_unit_z))
-            .add_observer(open_on_click);
+            .add_systems(Update, (add_figure, hold_at_unit_z));
     }
 }

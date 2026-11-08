@@ -1,6 +1,7 @@
 //! Things in the world the player can interact with by clicking them: items on the ground and
-//! chests. Hovering one outlines it: red while the player can interact with it (within reach and
-//! in sight), white while it is too far away.
+//! chests. A click on one within reach and in sight triggers [`Interact`] on it, and each thing
+//! brings its own observer for it (an item is picked up, a chest opens). Hovering one outlines
+//! it: red while the player can interact with it, white while it is too far away.
 //!
 //! The outline is a copy of each of the thing's meshes, grown by [`OUTLINE_WIDTH`] and drawn
 //! right behind it, so a figure gets one around its silhouette.
@@ -15,7 +16,7 @@ use crate::{
 use bevy::{
     asset::RenderAssetUsages,
     mesh::{Indices, MeshTag, PrimitiveTopology},
-    picking::hover::Hovered,
+    picking::{events::PointerClick, hover::Hovered, pointer::PointerButton},
     platform::collections::HashMap,
     prelude::*,
 };
@@ -47,6 +48,44 @@ impl Interactable {
     /// Whether the player at `player` can interact with it at `position`: in reach and in sight.
     pub fn can_interact(&self, position: Vec2, player: Vec2, sight: Option<&Sight>) -> bool {
         position.distance(player) <= self.reach && self.seen(position, sight)
+    }
+}
+
+/// The player interacts with `entity`, an [`Interactable`] within its reach and in sight. Things
+/// observe it on their own entity to do what interacting with them means.
+#[derive(EntityEvent, Clone, Copy, Debug)]
+pub struct Interact {
+    pub entity: Entity,
+    /// Who interacts, the player
+    pub by: Entity,
+}
+
+/// Turns a click on an interactable thing within reach and in sight into [`Interact`]. The click
+/// bubbles up from a figure's parts, so it acts where it reaches the [`Interactable`].
+fn interact_on_click(
+    click: On<PointerClick>,
+    mut commands: Commands,
+    things: Query<(&Interactable, &GlobalTransform)>,
+    player: Single<(Entity, &Transform), With<Player>>,
+    sight: Option<Res<Sight>>,
+) {
+    if click.button != PointerButton::Primary {
+        return;
+    }
+    let Ok((interactable, transform)) = things.get(click.entity) else {
+        return;
+    };
+    let (player, player_transform) = *player;
+    // the material hides a thing out of sight, but picking would still hit it
+    if interactable.can_interact(
+        transform.translation().xy(),
+        player_transform.translation.xy(),
+        sight.as_deref(),
+    ) {
+        commands.trigger(Interact {
+            entity: click.entity,
+            by: player,
+        });
     }
 }
 
@@ -237,12 +276,14 @@ fn update_outlines(
     }
 }
 
-/// Outlines hovered interactable things. Needs [`crate::sight::render::Plugin`].
+/// Turns clicks into [`Interact`] and outlines hovered interactable things. Needs
+/// [`crate::sight::render::Plugin`].
 pub struct Plugin;
 
 impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<OutlineAssets>()
-            .add_systems(Update, update_outlines);
+            .add_systems(Update, update_outlines)
+            .add_observer(interact_on_click);
     }
 }
