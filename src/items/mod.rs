@@ -14,6 +14,7 @@ pub mod hotbar;
 pub mod input;
 pub mod render;
 
+use crate::interact::Interactable;
 use bevy::prelude::*;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -127,6 +128,10 @@ fn on_ground(position: Vec2) -> impl Bundle {
         Transform::from_translation(position.extend(Z)),
         Visibility::Inherited,
         Pickable::default(),
+        Interactable {
+            reach: input::PICKUP_REACH,
+            radius: SIZE / 2.,
+        },
     )
 }
 

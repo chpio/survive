@@ -65,8 +65,8 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
 - `PickUp` versteckt das Item, entfernt `Pickable` und hängt es per `HeldBy` an den Besitzer.
   - Hat der Besitzer schon einen Stapel derselben ID und ist keins der beiden `Unique`, wird die
     Anzahl dort addiert und das aufgehobene Item despawnt.
-- Hervorhebung: Bei `PointerOver` bekommt das Item das hellere Material seines Typs, bei
-  `PointerOut` wieder das normale.
+- Hervorhebung: Ein Item unter der Maus bekommt einen Rand, rot, wenn der Spieler es aufheben
+  kann, sonst weiß. Truhen bekommen denselben Rand (`src/interact.rs`).
   Einen Tooltip mit Namen gibt es noch nicht.
 
 ## Fallenlassen

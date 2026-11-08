@@ -4,6 +4,7 @@
 
 use crate::{
     figure::{Figure, FigureControl, FigureRoot},
+    interact::Interactable,
     items::{self, ItemId},
     light::shadow::CastsShadow,
     objects::player::Player,
@@ -93,6 +94,10 @@ fn add_figure(mut commands: Commands, chests: Query<Entity, Added<Chest>>, asset
                     ..default()
                 },
                 Pickable::default(),
+                Interactable {
+                    reach: REACH,
+                    radius: SIZE.y / 2.,
+                },
                 Transform::default(),
                 Visibility::default(),
             )],
@@ -120,7 +125,7 @@ fn open_on_click(
     click: On<PointerClick>,
     mut commands: Commands,
     mut chests: Query<(&mut Chest, &GlobalTransform)>,
-    mut figures: Query<(&mut FigureControl, &ChildOf), With<ChestFigure>>,
+    mut figures: Query<(&mut FigureControl, &Interactable, &ChildOf), With<ChestFigure>>,
     holders: Query<&ChildOf, With<Holder>>,
     player: Single<&Transform, With<Player>>,
     sight: Option<Res<Sight>>,
@@ -129,7 +134,7 @@ fn open_on_click(
         return;
     }
     // the click bubbles up from the parts; act once, on the figure
-    let Ok((mut control, holder)) = figures.get_mut(click.entity) else {
+    let Ok((mut control, interactable, holder)) = figures.get_mut(click.entity) else {
         return;
     };
     let Ok(chest_entity) = holders.get(holder.parent()).map(ChildOf::parent) else {
@@ -140,11 +145,13 @@ fn open_on_click(
     };
     let position = transform.translation().xy();
     // the material hides a chest out of sight, but picking would still hit it
-    let seen = sight.is_none_or(|sight| sight.sees(position, SIZE.y / 2.));
-    if chest.open || !seen || position.distance(player.translation.xy()) > REACH {
+    if chest.open || !interactable.can_interact(position, player.translation.xy(), sight.as_deref())
+    {
         return;
     }
     chest.open = true;
+    // nothing left to do with it
+    commands.entity(click.entity).remove::<Interactable>();
     control.speed = 1.;
     for (i, (id, count)) in chest.content.iter().enumerate() {
         // in a row in front of the chest

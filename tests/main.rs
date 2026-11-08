@@ -7,6 +7,7 @@ mod enemy;
 mod figure;
 mod flowfield;
 mod hud;
+mod interact;
 mod items;
 mod light;
 mod movement;

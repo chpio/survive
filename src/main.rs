@@ -10,7 +10,7 @@ use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::*;
 use survival::{
-    combat, figure, flowfield, items, light, movement, objects, perf, settings, sight,
+    combat, figure, flowfield, interact, items, light, movement, objects, perf, settings, sight,
     spawning::{
         self,
         ambush::{AmbushTrigger, SpawnPoint},
@@ -79,6 +79,7 @@ fn main() {
             items::definitions::Plugin,
             items::input::Plugin,
             items::render::Plugin,
+            interact::Plugin,
         ))
         .add_plugins((
             sight::Plugin,

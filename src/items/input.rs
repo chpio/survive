@@ -3,8 +3,8 @@
 //! blocks picking below it (see `docs/ui-events.md`). The hotbar's keys are handled by the HUD,
 //! since they depend on the inventory window.
 
-use super::{HeldBy, Item, ItemDefinitions, PickUp, SIZE, spawn_on_ground};
-use crate::{objects::player::Player, sight::Sight};
+use super::{HeldBy, Item, ItemDefinitions, PickUp, spawn_on_ground};
+use crate::{interact::Interactable, objects::player::Player, sight::Sight};
 use bevy::{
     picking::{events::PointerClick, pointer::PointerButton},
     prelude::*,
@@ -16,7 +16,7 @@ pub const PICKUP_REACH: f32 = 24.;
 
 fn pick_up_on_click(
     click: On<PointerClick>,
-    items: Query<&Transform, (With<Item>, Without<HeldBy>)>,
+    items: Query<(&Transform, &Interactable), (With<Item>, Without<HeldBy>)>,
     player: Single<(Entity, &Transform), With<Player>>,
     sight: Option<Res<Sight>>,
     mut pick_up: MessageWriter<PickUp>,
@@ -24,14 +24,16 @@ fn pick_up_on_click(
     if click.button != PointerButton::Primary {
         return;
     }
-    let Ok(item) = items.get(click.entity) else {
+    let Ok((item, interactable)) = items.get(click.entity) else {
         return;
     };
     let (player, player_transform) = *player;
-    let position = item.translation.xy();
     // the material hides an item out of sight, but picking would still hit it
-    let seen = sight.is_none_or(|sight| sight.sees(position, SIZE / 2.));
-    if seen && position.distance(player_transform.translation.xy()) <= PICKUP_REACH {
+    if interactable.can_interact(
+        item.translation.xy(),
+        player_transform.translation.xy(),
+        sight.as_deref(),
+    ) {
         pick_up.write(PickUp {
             item: click.entity,
             by: player,

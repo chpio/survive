@@ -47,7 +47,7 @@ The details of each area are in `docs/architecture/`; read the area's file befor
 | Figures (animated characters from Blender) | `src/figure.rs`, `art/` | `figure.md` | `ideen/ideen.md` |
 | Combat, swarm enemies | `src/combat/`, `src/objects/enemy/swarm/` | `combat.md` | `schwarm.md` |
 | HUD | `src/ui/` | `ui.md` | `ui-events.md` |
-| Items | `src/items/` | `items.md` | `items.md` |
+| Items, interacting, chests | `src/items/`, `src/interact.rs`, `src/objects/chest.rs` | `items.md` | `items.md` |
 | Sight | `src/sight/` | `sight.md` | `sicht.md` |
 | Day and night, shadows, color grading | `src/light/` | `light.md` | `licht.md` |
 | Spawning | `src/spawning/` | `spawning.md` | `spawnen.md` |
