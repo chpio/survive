@@ -413,7 +413,8 @@ impl AssetLoader for FigureLoader {
 }
 
 /// Shows the figure as children of this entity, which needs a `Transform` and `Visibility`. The
-/// entity's z is set to sort it by its height on screen (see [`sorted_z`]).
+/// entity's z is set to sort it by its height on screen (see [`sorted_z`]). With `Pickable` on
+/// this entity, its parts can be clicked, and the clicks bubble up to it.
 #[derive(Component, Clone, Debug)]
 #[require(FigureControl)]
 pub struct FigureRoot(pub Handle<Figure>);
@@ -427,6 +428,8 @@ pub struct FigureControl {
     pub facing: Vec2,
     /// Speed of the animation, 1 for its own pace
     pub speed: f32,
+    /// Whether the animation loops; otherwise it stops on its last frame
+    pub repeat: bool,
 }
 
 impl Default for FigureControl {
@@ -436,6 +439,7 @@ impl Default for FigureControl {
             // towards the viewer
             facing: Vec2::NEG_Y,
             speed: 1.,
+            repeat: true,
         }
     }
 }
@@ -469,6 +473,7 @@ fn update(
         &mut Transform,
         Option<&mut Instance>,
         Option<&mut AnimationPlayer>,
+        Has<Pickable>,
     )>,
     camera: Query<&GlobalTransform, (With<Camera2d>, Without<FigureRoot>)>,
     figures: Res<Assets<Figure>>,
@@ -477,7 +482,9 @@ fn update(
     mask: Res<SightMask>,
 ) {
     let camera_y = camera.single().map_or(0., |c| c.translation().y);
-    for (root, FigureRoot(handle), control, global, mut transform, instance, player) in &mut roots {
+    for (root, FigureRoot(handle), control, global, mut transform, instance, player, pickable) in
+        &mut roots
+    {
         let Some(figure) = figures.get(handle) else {
             continue;
         };
@@ -517,9 +524,7 @@ fn update(
                     continue;
                 };
                 instance.animation = animation.to_owned();
-                commands
-                    .entity(root)
-                    .insert(new_player(clip, 0., control.speed));
+                commands.entity(root).insert(new_player(clip, 0., control));
                 continue;
             }
             commands.entity(instance.top).despawn();
@@ -566,17 +571,18 @@ fn update(
                 .entry(key)
                 .or_insert_with(|| materials.add(SightMaterial::new(*color, &mask)))
                 .clone();
-            parts.push(
-                commands
-                    .spawn((
-                        Mesh2d(mesh.clone()),
-                        MeshMaterial2d(material),
-                        MeshTag::new(tag),
-                        Transform::from_xyz(0., 0., *z),
-                        ChildOf(entities[node - range.start]),
-                    ))
-                    .id(),
-            );
+            let mut part = commands.spawn((
+                Mesh2d(mesh.clone()),
+                MeshMaterial2d(material),
+                MeshTag::new(tag),
+                Transform::from_xyz(0., 0., *z),
+                ChildOf(entities[node - range.start]),
+            ));
+            if pickable {
+                // clicks on a part bubble up to the root
+                part.insert(Pickable::default());
+            }
+            parts.push(part.id());
         }
         commands.entity(root).insert((
             Instance {
@@ -586,15 +592,19 @@ fn update(
                 parts,
                 tag,
             },
-            new_player(clip, time, control.speed),
+            new_player(clip, time, control),
             AnimationGraphHandle(figure.graph.clone()),
         ));
     }
 }
 
-fn new_player(clip: AnimationNodeIndex, time: f32, speed: f32) -> AnimationPlayer {
+fn new_player(clip: AnimationNodeIndex, time: f32, control: &FigureControl) -> AnimationPlayer {
     let mut player = AnimationPlayer::default();
-    player.play(clip).repeat().seek_to(time).set_speed(speed);
+    let active = player.play(clip);
+    if control.repeat {
+        active.repeat();
+    }
+    active.seek_to(time).set_speed(control.speed);
     player
 }
 
