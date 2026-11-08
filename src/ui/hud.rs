@@ -1,7 +1,7 @@
 use super::stylesheet::Stylesheet;
 use crate::{
     combat::Health,
-    items::{ItemId, hotbar::SLOTS},
+    items::{Effect, ItemId, hotbar::SLOTS},
     light::Phase,
     perf::Averages,
     settings::Settings,
@@ -62,6 +62,8 @@ pub struct InventoryRow {
     pub weight: f32,
     /// Whether the item has an effect when used
     pub usable: bool,
+    /// What using one does
+    pub effect: Option<Effect>,
 }
 
 /// The item type in a slot of the hotbar.
@@ -168,18 +170,30 @@ struct Pointer {
     press: Signal<Option<Press>>,
     /// Item type of the tile or slot under the pointer, highlighted in both
     hovered: Signal<Option<ItemId>>,
+    /// The tile or slot under the pointer, which shows the tooltip
+    over: Signal<Option<Target>>,
 }
 
 impl Pointer {
-    fn enter(mut self, id: &ItemId) {
-        if self.hovered.peek().as_ref() != Some(id) {
+    fn enter(mut self, target: Target, id: Option<&ItemId>) {
+        if let Some(id) = id
+            && self.hovered.peek().as_ref() != Some(id)
+        {
             self.hovered.set(Some(id.clone()));
+        }
+        if *self.over.peek() != Some(target) {
+            self.over.set(Some(target));
         }
     }
 
-    fn leave(mut self, id: &ItemId) {
-        if self.hovered.peek().as_ref() == Some(id) {
+    fn leave(mut self, target: Target, id: Option<&ItemId>) {
+        if let Some(id) = id
+            && self.hovered.peek().as_ref() == Some(id)
+        {
             self.hovered.set(None);
+        }
+        if *self.over.peek() == Some(target) {
+            self.over.set(None);
         }
     }
 
@@ -222,6 +236,7 @@ pub fn app() -> Element {
     let pointer = Pointer {
         press,
         hovered: use_signal(|| None),
+        over: use_signal(|| None),
     };
     // after the hooks, which have to run on every render. Without styles, the HUD would show up
     // unstyled until the stylesheet is loaded.
@@ -518,6 +533,11 @@ fn cell(
     let entered = content.as_ref().map(|content| content.id.clone());
     let left = entered.clone();
     let details = content.clone().filter(|_| is_selected);
+    // the details without buttons while the pointer is over it, unless they are shown already or
+    // a tile or slot is pressed or dragged
+    let tooltip = content
+        .clone()
+        .filter(|_| !is_selected && *pointer.over.read() == Some(target) && press.read().is_none());
     let slot_key = match target {
         Target::Slot(slot) => Some(slot),
         Target::Tile(_) => content.as_ref().and_then(|content| content.slot),
@@ -545,15 +565,11 @@ fn cell(
                 }
             },
             onpointerenter: move |_| {
-                if let Some(id) = &entered {
-                    pointer.enter(id);
-                }
+                pointer.enter(target, entered.as_ref());
                 send(Action::Hover { target, over: true });
             },
             onpointerleave: move |_| {
-                if let Some(id) = &left {
-                    pointer.leave(id);
-                }
+                pointer.leave(target, left.as_ref());
                 send(Action::Hover { target, over: false });
             },
             if let Some(slot) = slot_key {
@@ -565,7 +581,41 @@ fn cell(
             if let Some(details) = details {
                 {item_details(details, send)}
             }
+            if let Some(tooltip) = tooltip {
+                {item_tooltip(tooltip)}
+            }
         }
+    }
+}
+
+/// What using an item does, for its details.
+fn effect_text(effect: Effect) -> String {
+    match effect {
+        Effect::Heal(health) => format!("Heilt {health:.0} Leben"),
+    }
+}
+
+/// Name, count, weight and effect of an item, the content of the popup and the tooltip.
+fn item_info(cell: &Cell) -> Element {
+    rsx! {
+        span { class: "name", "{cell.name}" }
+        if let Some(held) = &cell.held {
+            span { class: "info", "{held.count}× · {held.weight:.1} kg" }
+            if let Some(effect) = held.effect {
+                span { class: "info", {effect_text(effect)} }
+            }
+        } else {
+            span { class: "info", "Keine im Inventar" }
+        }
+    }
+}
+
+/// The details of the tile or slot under the pointer, looking like the popup but without its
+/// buttons. It takes no pointer events (`pointer-events: none`), so they reach what is below it,
+/// which may show its own tooltip.
+fn item_tooltip(cell: Cell) -> Element {
+    rsx! {
+        div { class: "details tooltip", {item_info(&cell)} }
     }
 }
 
@@ -573,13 +623,13 @@ fn cell(
 /// tile or slot, so the inventory window keeps its size. Its pointer events stay with it, so they
 /// don't count as presses on the tile or slot.
 fn item_details(cell: Cell, send: Callback<Action>) -> Element {
+    let held = cell.held.clone();
     rsx! {
         div { class: "details",
             onpointerdown: move |event| event.stop_propagation(),
             onpointerup: move |event| event.stop_propagation(),
-            span { class: "name", "{cell.name}" }
-            if let Some(held) = cell.held {
-                span { class: "info", "{held.count}× · {held.weight:.1} kg" }
+            {item_info(&cell)}
+            if let Some(held) = held {
                 div { class: "buttons",
                     if held.usable {
                         button { onclick: move |_| send(Action::UseItem(held.item)), "Benutzen" }
@@ -589,8 +639,6 @@ fn item_details(cell: Cell, send: Callback<Action>) -> Element {
                     }
                     button { onclick: move |_| send(Action::DropItem { item: held.item, count: held.count }), "Ablegen" }
                 }
-            } else {
-                span { class: "info", "Keine im Inventar" }
             }
         }
     }

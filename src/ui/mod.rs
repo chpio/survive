@@ -563,6 +563,7 @@ fn sync_state(
                 count,
                 weight: definition.map_or(0., |d| d.weight) * count as f32,
                 usable: definition.is_some_and(|d| d.effect.is_some()),
+                effect: definition.and_then(|d| d.effect),
             })
         })
         .collect();

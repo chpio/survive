@@ -13,7 +13,7 @@ use dioxus::prelude::*;
 use dioxus_native_dom::DioxusDocument;
 use std::sync::mpsc;
 use survival::{
-    items::ItemId,
+    items::{Effect, ItemId},
     ui::{
         hud::{self, Action, HotbarSlot, InventoryRow, Target},
         put_down,
@@ -128,6 +128,7 @@ fn state() -> (hud::State, Entity, Entity) {
         count: 1,
         weight: 1.,
         usable,
+        effect: usable.then_some(Effect::Heal(30.)),
     };
     let potion_row = row(potion, "potion", true);
     let mut hotbar: [Option<HotbarSlot>; 5] = Default::default();
@@ -375,4 +376,64 @@ fn tiles_show_the_key_of_their_hotbar_slot() {
     let keys = doc.query_selector_all(".tile .key").unwrap();
     assert_eq!(keys.len(), 1);
     assert_eq!(doc.get_node(keys[0]).unwrap().text_content(), "1");
+}
+
+#[test]
+fn hovering_a_tile_or_slot_shows_its_tooltip() {
+    let (state, ..) = state();
+    let mut hud = hud(state);
+    let count = |hud: &Hud, selector| hud.doc.inner().query_selector_all(selector).unwrap().len();
+
+    hud.pointer(UiEvent::PointerMove, hud.center(".tile", 0), false);
+    assert_eq!(count(&hud, ".tile .tooltip"), 1);
+    assert_eq!(count(&hud, ".tooltip"), 1);
+    // like the popup, without buttons
+    assert_eq!(count(&hud, ".tooltip .name"), 1);
+    assert_eq!(count(&hud, ".tooltip button"), 0);
+
+    hud.pointer(UiEvent::PointerMove, hud.center(".slot", 0), false);
+    assert_eq!(count(&hud, ".slot .tooltip"), 1);
+    assert_eq!(count(&hud, ".tooltip"), 1);
+
+    hud.pointer(UiEvent::PointerMove, Vec2::new(400., 100.), false);
+    assert_eq!(count(&hud, ".tooltip"), 0);
+}
+
+#[test]
+fn tooltip_lets_the_pointer_through_to_what_is_below() {
+    let (state, ..) = state();
+    let mut hud = hud(state);
+
+    hud.pointer(UiEvent::PointerMove, hud.center(".tile", 0), false);
+    let at = hud.center(".tooltip", 0);
+    {
+        let doc = hud.doc.inner();
+        let tooltip = doc.query_selector_all(".tooltip").unwrap()[0];
+        let hit = doc.elements_from_point(at.x, at.y);
+        assert!(!hit.is_empty());
+        assert!(!hit.contains(&tooltip), "the tooltip was hit");
+    }
+
+    // moving onto the tooltip, above its tile, leaves the tile
+    hud.pointer(UiEvent::PointerMove, at, false);
+    assert_eq!(
+        hud.doc
+            .inner()
+            .query_selector_all(".tooltip")
+            .unwrap()
+            .len(),
+        0
+    );
+}
+
+#[test]
+fn no_tooltip_on_the_selected_tile() {
+    let (mut state, potion, _) = state();
+    state.selected = Some(Target::Tile(potion));
+    let mut hud = hud(state);
+
+    hud.pointer(UiEvent::PointerMove, hud.center(".tile", 0), false);
+    let doc = hud.doc.inner();
+    assert_eq!(doc.query_selector_all(".tile .details").unwrap().len(), 1);
+    assert_eq!(doc.query_selector_all(".tooltip").unwrap().len(), 0);
 }

@@ -219,6 +219,12 @@ input[type="checkbox"] {
     white-space: nowrap;
 }
 
+/* The details of the tile or slot under the pointer, without buttons; pointer events go through
+   it to what is below */
+.details.tooltip {
+    pointer-events: none;
+}
+
 .details .name {
     font-weight: bold;
     font-size: 14px;

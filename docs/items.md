@@ -103,11 +103,15 @@ Modell ist so angelegt, dass diese Punkte ohne Umbau dazukommen (siehe [ideen.md
   kein Slot-Limit, die Grenze ist das Gewicht. Sortiert wird automatisch: benutzbare Items zuerst,
   dann nach Name. Manuelles Sortieren gibt es nicht, ohne Abbauen und Bauen gibt es wenige
   Item-Arten.
-- Ein Klick auf eine Kachel wählt sie aus. Ein Popup über der Kachel zeigt Name, Anzahl und
-  Gewicht mit den Buttons „Benutzen“ (bei Items mit Wirkung), „1 ablegen“ (bei Stapeln) und „Ablegen“. Sie
+- Ein Klick auf eine Kachel wählt sie aus. Ein Popup über der Kachel zeigt Name, Anzahl,
+  Gewicht und Wirkung mit den Buttons „Benutzen“ (bei Items mit Wirkung), „1 ablegen“ (bei Stapeln) und „Ablegen“. Sie
   schicken `hud::Action::UseItem(item)` bzw. `hud::Action::DropItem { item, count }`, das Spiel
   schreibt daraus `UseItem` bzw. `DropItem`. Als Popup verändert es die Größe des Fensters
   nicht, sodass die Kacheln an ihrem Platz bleiben.
+- Fährt der Zeiger über eine Kachel oder einen Slot, zeigt ein Tooltip dieselben Angaben wie das
+  Popup (Name, Anzahl, Gewicht, Wirkung), aber ohne Buttons. Er nimmt keine Pointer-Events an
+  (`pointer-events: none`), sie gehen an das, was darunter liegt, das dann gegebenenfalls seinen
+  eigenen Tooltip zeigt. Auf der ausgewählten Kachel und beim Drücken oder Ziehen gibt es keinen.
 - Ein Rechtsklick auf eine Kachel benutzt das Item direkt. Bei offenem Inventar ist das der
   einzige Weg zu benutzen, die Leiste belegt dann nur.
 - Auswahl und die Kachel unter dem Zeiger kennt das Spiel (`hud::Action::Select`,
@@ -187,4 +191,3 @@ Drei Plugins, damit die Tests ohne Asset-System und Eingabe auskommen:
 
 - Gewicht als Masse des Spielers. Überladung macht auch langsamer (siehe [ideen.md](ideen/ideen.md)).
 - Gegner-Drops mit Loot-Tabellen.
-- Tooltip mit Namen beim Hover.
