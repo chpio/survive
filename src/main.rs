@@ -65,6 +65,7 @@ fn main() {
             objects::enemy::swarm::values::Plugin,
             objects::player::Plugin,
             objects::well::Plugin,
+            objects::chest::Plugin,
         ))
         .add_plugins((
             flowfield::Plugin,
@@ -229,15 +230,14 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 else {
                     return;
                 };
-                #[expect(
-                    clippy::single_match,
-                    reason = "new map-driven objects get an arm here"
-                )]
                 match object.user_type.as_str() {
                     "ambush_spawn" => {
                         commands
                             .entity(event.origin)
                             .insert(SpawnPoint::from_object(layer, &object.properties));
+                    }
+                    "chest" => {
+                        objects::chest::insert(&mut commands, event.origin, &object.properties);
                     }
                     _ => {}
                 }

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use survival::figure::{self, FigureData, Keyframes, anchor_tag, direction_for, sorted_z};
+use survival::objects::chest;
 
 fn load(name: &str) -> FigureData {
     let path = format!(
@@ -83,7 +84,7 @@ fn walk_cycle_takes_two_thirds_of_a_second() {
 
 #[test]
 fn parents_come_before_their_children() {
-    for figure in [load("beetle"), load("player")] {
+    for figure in [load("beetle"), load("player"), load("chest")] {
         for (i, node) in figure.nodes.iter().enumerate() {
             if let Some(parent) = node.parent {
                 assert!(parent < i, "{} comes before its parent", node.name);
@@ -94,7 +95,7 @@ fn parents_come_before_their_children() {
 
 #[test]
 fn parts_stay_within_a_thousandth_of_z() {
-    for figure in [load("beetle"), load("player")] {
+    for figure in [load("beetle"), load("player"), load("chest")] {
         for part in &figure.parts {
             assert!(part.positions.iter().all(|p| p[2] == 0.));
         }
@@ -126,6 +127,25 @@ fn player_stands_on_its_feet() {
             "direction {d}: {rect:?}"
         );
     }
+}
+
+#[test]
+fn chest_facing_the_viewer_covers_its_collider() {
+    let chest = load("chest");
+    assert_eq!(
+        names(&chest),
+        (0..8).map(|d| format!("open/{d}")).collect::<Vec<_>>()
+    );
+    // direction 6 faces the viewer (-Y), as the game shows chests
+    let rect = bounds(&chest, 6);
+    let half = chest::SIZE / 2.;
+    assert!(
+        (rect.min.x + half.x).abs() < 1. && (rect.max.x - half.x).abs() < 1.,
+        "{rect:?}"
+    );
+    // the front edge on the ground at the collider's lower edge, the lid above
+    assert!((rect.min.y + half.y).abs() < 1., "{rect:?}");
+    assert!(rect.max.y > 10., "{rect:?}");
 }
 
 #[test]
