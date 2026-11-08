@@ -2,7 +2,7 @@
 (
     // the player has 100 health
     damage: 4.,
-    // relative to the normal speed of enemies (`enemy::MOVE_SPEED`, 100 px/s)
+    // relative to the normal speed of enemies (`enemy::MOVE_SPEED`, 50 px/s)
     approach_speed: 1.5,
     circle_speed: 0.6,
     retreat_speed: 1.,

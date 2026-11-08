@@ -19,7 +19,7 @@ use std::{
 pub mod swarm;
 
 /// How fast enemies walk, in px/s. Swarm enemies walk faster or slower depending on their state.
-pub const MOVE_SPEED: f32 = 100.;
+pub const MOVE_SPEED: f32 = 50.;
 
 /// How fast enemies turn towards their [`Heading`], in rad/s.
 pub const TURN_SPEED: f32 = TAU;

@@ -44,7 +44,7 @@ fn move_player(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut desired: Single<&mut DesiredVelocity, With<Player>>,
 ) {
-    const MOVE_SPEED: f32 = 200.;
+    const MOVE_SPEED: f32 = 100.;
 
     let mut direction = Vec2::ZERO;
 

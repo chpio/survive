@@ -30,7 +30,7 @@ pub const MAX_RADIUS: f32 = 5.;
 const REACHED: f32 = 4.;
 
 /// Speed in px/s below which a retreating enemy counts as not moving.
-const STUCK_SPEED: f32 = 10.;
+const STUCK_SPEED: f32 = 5.;
 
 /// How long a retreating enemy may not move before it gives up, longer than it takes to turn
 /// around after a hit.
