@@ -46,7 +46,7 @@ pub fn parse_content(text: &str) -> Vec<(ItemId, u32)> {
 #[derive(Component)]
 struct Holder;
 
-/// The figure of the chest, child of its [`Holder`].
+/// The figure of the chest, child of an entity that holds it at the units' z.
 #[derive(Component)]
 pub struct ChestFigure;
 
