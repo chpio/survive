@@ -1,0 +1,47 @@
+{
+    "sandbox": {
+        "enabled": true,
+        "autoAllowBashIfSandboxed": false,
+        "allowUnsandboxedCommands": false,
+        "excludedCommands": ["git commit-tree *"],
+        "network": {
+            "allowManagedDomainsOnly": true,
+            "allowedDomains": ["crates.io"]
+        },
+        "filesystem": {
+            "denyRead": [
+                "~/.ssh",
+                "~/.gnupg/private-keys-v1.d",
+                "~/.kube",
+                "./_out",
+                "./build",
+                "./kubeconfig",
+                "./talos/secrets.yaml",
+                "./**/*.agekey",
+                "./**/*.dec.yaml"
+            ],
+            "denyWrite": ["./.claude/access"]
+        }
+    },
+    "permissions": {
+        "deny": [
+            "Read(~/.ssh/**)",
+            "Read(~/.gnupg/private-keys-v1.d/**)",
+            "Read(~/.kube/**)",
+            "Read(./_out/**)",
+            "Read(./build/**)",
+            "Read(./kubeconfig)",
+            "Read(./talos/secrets.yaml)",
+            "Read(./**/*.agekey)",
+            "Read(./**/*.dec.yaml)",
+            "Edit(./.claude/access/**)",
+            "Write(./.claude/access/**)",
+            "Edit(./.claude/settings.json)",
+            "Write(./.claude/settings.json)",
+            "Edit(./.claude/settings.local.json)",
+            "Write(./.claude/settings.local.json)",
+            "Edit(~/.claude/settings.json)",
+            "Write(~/.claude/settings.json)"
+        ]
+    }
+}
