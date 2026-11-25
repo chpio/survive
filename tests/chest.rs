@@ -35,10 +35,10 @@ fn interacting_opens_the_chest_once_and_drops_its_content() {
         .world_mut()
         .spawn(Transform::from_xyz(100., 50., 0.))
         .id();
-    let mut properties = bevy_ecs_tiled::prelude::tiled::Properties::new();
+    let mut properties = bevy_ecs_tiled::tiled::Properties::new();
     properties.insert(
         "content".to_owned(),
-        bevy_ecs_tiled::prelude::tiled::PropertyValue::StringValue("apple*3, sword".to_owned()),
+        bevy_ecs_tiled::tiled::PropertyValue::StringValue("apple*3, sword".to_owned()),
     );
     let mut commands = app.world_mut().commands();
     chest::insert(&mut commands, entity, &properties);

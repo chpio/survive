@@ -29,7 +29,7 @@
 
 ## Laden und Entladen
 
-- `TiledWorldChunking::new(x, y)` an der World gibt die **halbe** Breite und Höhe eines Rechtecks
+- `TiledWorldStreaming::new(x, y)` an der World gibt die **halbe** Breite und Höhe eines Rechtecks
   um die Kamera an. Karten, deren Rechteck es schneidet, werden gespawnt, alle anderen samt Kindern
   (Ebenen, Objekte, Kollider) despawnt.
 - bevy_ecs_tiled prüft das in jedem Frame, das kostet nur einen Rechteck-Test pro Karte. Gemessen
@@ -40,7 +40,7 @@
     (`flowfield::REACH`, derzeit 340 px), sonst fehlen am Rand des Fensters Hindernisse,
   - das Fenster der Sicht (`sight::REACH`, kleiner),
   - später den Deaktivierungs-Radius aus [ideen.md](ideen/ideen.md).
-- `world::update_chunking` setzt `TiledWorldChunking` auf das Maximum aus diesen Werten, wenn es
+- `world::update_streaming` setzt `TiledWorldStreaming` auf das Maximum aus diesen Werten, wenn es
   sich ändert, also mit Fenstergröße und Zoom.
 
 ## Hindernisse pro Karte
@@ -111,7 +111,7 @@ sie durch die fehlenden Kollider.
 ## Code
 
 - `main.rs`: `TiledWorld` statt `TiledMap`, Einstellungen und Observer an der World.
-- `world`: `MapArea`, `rasterize` für die Raster pro Karte, `update_chunking`.
+- `world`: `MapArea`, `rasterize` für die Raster pro Karte, `update_streaming`.
 - `cells`: das gemeinsame Zellraster (`CellRect`, `Raster`) von Flowfield und Sicht.
 - `assets/`: `world.world` mit `map.tmx` und der Testkarte `map_east.tmx` östlich davon, erreichbar
   über eine Landbrücke am Ostufer von `map.tmx`.
@@ -134,7 +134,7 @@ sie durch die fehlenden Kollider.
 
 - **Ein- und Ausladen an der Grenze:** bevy_ecs_tiled lädt und entlädt mit demselben Rechteck.
   Läuft der Spieler an der Grenze hin und her, wird eine Karte ständig neu gespawnt. Erst
-  beobachten. Hilft nur eigenes Chunking (`TiledWorldChunking(None)` und eigene Logik) mit
+  beobachten. Hilft nur eigenes Streaming (`TiledWorldStreaming::Disabled` und eigene Logik) mit
   größerem Rechteck fürs Entladen.
 - **Kosten beim Spawnen:** Eine Karte zu spawnen trianguliert ihre Kollider im Hauptthread. Bei
   Rucklern Karten kleiner halten oder vorladen.

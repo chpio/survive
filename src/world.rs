@@ -1,9 +1,10 @@
 //! The world: Tiled maps placed next to each other in a `.world` file, of which only those around
 //! the camera are loaded (see `docs/welt.md`).
 //!
-//! bevy_ecs_tiled spawns and despawns the maps by [`TiledWorldChunking`], which [`update_chunking`]
-//! keeps large enough. Each loaded map gets its [`MapArea`], and the flow field and the sight keep
-//! a raster of the map's colliders on its entity ([`MapRaster`]), so they disappear with it.
+//! bevy_ecs_tiled spawns and despawns the maps by [`TiledWorldStreaming`], which
+//! [`update_streaming`] keeps large enough. Each loaded map gets its [`MapArea`], and the flow
+//! field and the sight keep a raster of the map's colliders on its entity ([`MapRaster`]), so they
+//! disappear with it.
 
 use crate::{flowfield, light, sight};
 use avian2d::prelude::*;
@@ -157,18 +158,18 @@ pub const MIN_LOADED_DISTANCE: f32 = if flowfield::REACH > sight::REACH {
 
 /// Loads the maps that the view (with the shadows falling into it) or [`MIN_LOADED_DISTANCE`]
 /// around the camera touch, whichever is larger, so it follows the window size and the zoom.
-pub fn update_chunking(
+pub fn update_streaming(
     projection: Single<&Projection, With<Camera2d>>,
-    mut worlds: Query<&mut TiledWorldChunking>,
+    mut worlds: Query<&mut TiledWorldStreaming>,
 ) {
     let Projection::Orthographic(projection) = *projection else {
         return;
     };
     let half_size = (projection.area.half_size() + light::shadow::MAX_SHADOW_LENGTH)
         .max(Vec2::splat(MIN_LOADED_DISTANCE));
-    for mut chunking in &mut worlds {
-        if chunking.0 != Some(half_size) {
-            *chunking = TiledWorldChunking(Some(half_size));
+    for mut streaming in &mut worlds {
+        if streaming.area() != Some(half_size) {
+            *streaming = TiledWorldStreaming::Area(half_size);
         }
     }
 }
@@ -179,7 +180,7 @@ impl bevy::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_systems(PreUpdate, insert_map_area).add_systems(
             PostUpdate,
-            update_chunking.before(TiledPostUpdateSystems::HandleWorldChunking),
+            update_streaming.before(TiledPostUpdateSystems::HandleWorldStreaming),
         );
     }
 }

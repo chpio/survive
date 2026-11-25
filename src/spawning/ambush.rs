@@ -19,7 +19,7 @@ use crate::{
 };
 use avian2d::prelude::*;
 use bevy::{platform::collections::HashSet, prelude::*};
-use bevy_ecs_tiled::prelude::*;
+use bevy_ecs_tiled::tiled;
 use std::time::Duration;
 
 /// Shortest walking distance in px from the player of a used spawn point. Measured along the flow

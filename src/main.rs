@@ -8,7 +8,7 @@ use std::num::NonZero;
 
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use bevy_ecs_tiled::prelude::*;
+use bevy_ecs_tiled::{prelude::*, tiled};
 use survival::{
     combat, figure, flowfield, interact, items, light, movement, objects, perf, settings, sight,
     spawning::{
@@ -128,8 +128,8 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn((
             TiledWorld(asset_server.load("world.world")),
-            // grows with the view in `world::update_chunking`
-            TiledWorldChunking::new(world::MIN_LOADED_DISTANCE, world::MIN_LOADED_DISTANCE),
+            // grows with the view in `world::update_streaming`
+            TiledWorldStreaming::new(world::MIN_LOADED_DISTANCE, world::MIN_LOADED_DISTANCE),
             TilemapRenderSettings {
                 render_chunk_size: UVec2::new(3, 1),
                 y_sort: true,
@@ -139,40 +139,53 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
             // layers 2 apart: y-sorting moves the chunks by up to 1.5, and the upper layers stay
             // below the darkening outside the sight (z = 8), the items and the units
             TiledMapLayerZOffset(2.),
-            // filled colliders as in Tiled, the default polyline backend only keeps the outlines
+            // filled colliders as in Tiled, the default polyline strategy only keeps the outlines
             TiledPhysicsSettings::<TiledPhysicsAvianBackend> {
-                backend: TiledPhysicsAvianBackend::Triangulation,
+                collider_strategy: TiledColliderStrategy::Triangulation,
                 ..default()
             },
         ))
         .observe(
             |collider_created: On<TiledEvent<ColliderCreated>>,
              mut commands: Commands,
-             assets: Res<Assets<TiledMapAsset>>| {
-                let mut collider = commands.entity(collider_created.event().origin);
+             assets: Res<Assets<TiledMapAsset>>,
+             properties: Query<&TiledProperties>,
+             objects: Query<&TiledObject>| {
+                let event = collider_created.event();
+                // the layer or object the collider is for; with the triangulation and the merged
+                // geometry, it holds the only collider itself
+                let mut collider = commands.entity(event.source_entity());
 
                 // Automatically insert a `RigidBody::Static` component on all the colliders entities from the map
                 collider.insert(RigidBody::Static);
 
                 // a tile layer's colliders are merged into one, so the properties apply to the
                 // whole layer. Objects can have them themselves or on their tile.
-                let object = collider_created.event().object(&assets);
-                let layer = collider_created.event().layer(&assets);
+                let object = event
+                    .object_entity()
+                    .and_then(|obj| properties.get(obj).ok());
+                let layer = event
+                    .layer_entity()
+                    .and_then(|layer| properties.get(layer).ok());
+                let tile = event
+                    .object_entity()
+                    .and_then(|obj| match objects.get(obj) {
+                        Ok(&TiledObject::Tile {
+                            tileset_id,
+                            tile_id,
+                            ..
+                        }) => Some((tileset_id, tile_id)),
+                        _ => None,
+                    })
+                    .and_then(|(tileset_id, tile_id)| {
+                        event.map_asset(&assets)?.tile(tileset_id, tile_id)
+                    });
                 let property = |name| {
                     object
-                        .as_ref()
-                        .and_then(|obj| {
-                            obj.properties.get(name).cloned().or_else(|| {
-                                obj.get_tile()
-                                    .and_then(|obj_tile| obj_tile.get_tile())
-                                    .and_then(|tile| tile.properties.get(name).cloned())
-                            })
-                        })
-                        .or_else(|| {
-                            layer
-                                .as_ref()
-                                .and_then(|layer| layer.properties.get(name).cloned())
-                        })
+                        .and_then(|obj| obj.properties.get(name))
+                        .or_else(|| tile.as_ref().and_then(|tile| tile.properties.get(name)))
+                        .or_else(|| layer.and_then(|layer| layer.properties.get(name)))
+                        .cloned()
                 };
                 if matches!(
                     property("blocks_sight"),
@@ -190,48 +203,43 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
                     _ => {}
                 }
 
-                if let Some(obj) = object {
-                    let user_type = Some(obj.user_type.clone())
-                        .filter(|t| !t.is_empty())
-                        .or_else(|| {
-                            obj.get_tile()
-                                .and_then(|obj_tile| obj_tile.get_tile())
-                                .map(|tile| tile.user_type.clone())
-                                .filter(|t| !t.is_empty())
-                        });
-
-                    match user_type.as_deref() {
-                        Some("well") => {
-                            collider.insert((objects::well::Well, Sensor, CollisionEventsEnabled));
-                        }
-                        // the ambush is the object layer the zone is on
-                        Some("ambush_trigger") => {
-                            if let (Some(layer), Some(layer_data)) = (
-                                collider_created.event().layer_entity(),
-                                collider_created.event().layer(&assets),
-                            ) {
-                                collider.insert((
-                                    AmbushTrigger::from_layer(layer, &layer_data.properties),
-                                    Sensor,
-                                ));
-                            }
-                        }
-                        _ => {}
+                let user_type = object
+                    .map(|obj| obj.class.as_str())
+                    .filter(|t| !t.is_empty())
+                    .or_else(|| {
+                        tile.as_ref()
+                            .map(|tile| tile.user_type.as_str())
+                            .filter(|t| !t.is_empty())
+                    });
+                match user_type {
+                    Some("well") => {
+                        collider.insert((objects::well::Well, Sensor, CollisionEventsEnabled));
                     }
-                };
+                    // the ambush is the object layer the zone is on
+                    Some("ambush_trigger") => {
+                        if let (Some(layer_entity), Some(layer)) = (event.layer_entity(), layer) {
+                            collider.insert((
+                                AmbushTrigger::from_layer(layer_entity, &layer.properties),
+                                Sensor,
+                            ));
+                        }
+                    }
+                    _ => {}
+                }
             },
         )
         // objects without a collider, like points
         .observe(
             |object_created: On<TiledEvent<ObjectCreated>>,
              mut commands: Commands,
-             assets: Res<Assets<TiledMapAsset>>| {
+             properties: Query<&TiledProperties>| {
                 let event = object_created.event();
-                let (Some(object), Some(layer)) = (event.object(&assets), event.layer_entity())
+                let (Ok(object), Some(layer)) =
+                    (properties.get(event.origin), event.layer_entity())
                 else {
                     return;
                 };
-                match object.user_type.as_str() {
+                match object.class.as_str() {
                     "ambush_spawn" => {
                         commands
                             .entity(event.origin)

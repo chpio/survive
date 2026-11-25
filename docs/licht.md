@@ -130,7 +130,7 @@ fürs Ausbalancieren.
 - Zuerst lief die Suche pro Pixel im Shader, Richtung Sonne über die Höhen. Das kostete bei 4K
   8–14 ms pro Frame, da eine Zelle dort Hunderte Pixel groß ist und alle dasselbe rechneten; jetzt
   kostet die Licht-Ebene etwa 0,5 ms.
-- Schatten können bis 64 px in die Ansicht fallen, daher lädt `world::update_chunking` die Karten
+- Schatten können bis 64 px in die Ansicht fallen, daher lädt `world::update_streaming` die Karten
   so weit über die Ansicht hinaus.
 - Die Zellen der Schattenwerfer selbst bleiben hell, wie Hindernisse in der Sicht ihre Kante
   zeigen, sonst läge ein Dach im eigenen Schatten.
@@ -211,7 +211,7 @@ fürs Ausbalancieren.
   Maske. Vorteile: Die Sonne wandert jeden Frame weich statt in 1-px-Schritten, die CPU rechnet
   nichts, die Kosten hängen nicht an der Zahl der Schattenwerfer, und Lichtquellen mit Schatten
   könnten denselben Weg nehmen. Nachteile: Alles, was genau eine `Camera2d` erwartet
-  (`update_camera_position`, `world::update_chunking`, HUD, Einstellungen, `follow_camera`),
+  (`update_camera_position`, `world::update_streaming`, HUD, Einstellungen, `follow_camera`),
   braucht eine Markierung der Hauptkamera; Textur und Kamera müssen nachgeführt werden, wenn sich
   die geladenen Karten ändern; der Schatten ist dann nicht mehr per Test prüfbar. Lohnt sich bei
   viel mehr Schattenwerfern oder Lichtquellen mit Schatten.

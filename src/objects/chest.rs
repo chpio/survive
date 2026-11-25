@@ -10,7 +10,7 @@ use crate::{
 };
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use bevy_ecs_tiled::prelude::tiled;
+use bevy_ecs_tiled::tiled;
 
 /// Distance in px from the player's center to the chest's center up to which it opens.
 pub const REACH: f32 = 24.;
