@@ -41,11 +41,11 @@ default = ["dev"]
 dev = ["bevy/dynamic_linking", "bevy/file_watcher"]
 
 [dependencies]
-anyrender_vello = "0.15"
+anyrender_vello = "0.16"
 avian2d = "0.8"
-blitz-dom = "=0.3.0-beta.4"
-blitz-paint = "=0.3.0-beta.4"
-blitz-traits = "=0.3.0-beta.4"
+blitz-dom = "=0.3.0-beta.5"
+blitz-paint = "=0.3.0-beta.5"
+blitz-traits = "=0.3.0-beta.5"
 dioxus = { version = "=0.8.0-alpha.3", default-features = false, features = ["macro", "html", "signals", "hooks"] }
 dioxus-native-dom = "=0.8.0-alpha.3"
 fastrand = "2"
@@ -55,7 +55,7 @@ ron = "0.12"
 serde = { version = "1", features = ["derive"] }
 # Blitz's style engine, the same version and features, to mark nodes for recomputation (ui::resize)
 style = { package = "stylo", version = "0.22" }
-vello = { version = "0.11", default-features = false, features = ["wgpu"] }
+vello = { version = "0.12", default-features = false, features = ["wgpu"] }
 
 [dev-dependencies]
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
